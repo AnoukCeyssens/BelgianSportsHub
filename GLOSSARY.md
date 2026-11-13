@@ -65,3 +65,12 @@ _Avoid_: nominated (no separate nomination step)
 
 The selector's final naming of Entries for a competition: the national federation for a Championship, the Belgian Olympic Committee board (on the federation's proposal) for the Games.
 _Avoid_: nomination
+
+## Active
+
+An **Athlete** or **Team** that is currently followed: shown in the default list, given **Qualification tracks** and a **Qualification status**, and counted towards a likely **Participation**. It is active while its latest senior international performance is less than 12 months old, in every sport, or while a **Hold** is in place. Only appearing in the official result counts (DNF and DSQ included); DNS, entry or start lists, unnamed reserves and upcoming Selections do not. It becomes **inactive** at once on retirement (for a Team, when the partnership dissolves) or on a change of sporting nationality. Inactive Athletes and Teams keep their full record and can still be found. A new performance makes them active again, clearing a retirement or dissolution, except after a change of sporting nationality. A Team's status is its own, independent of its roster members.
+_Avoid_: archived
+
+## Hold
+
+A curated keep-active-until date, with a reason, that keeps an **Athlete** or **Team** **Active** through a known absence such as injury, pregnancy or a sabbatical. After that date the 12-month rule applies again.
