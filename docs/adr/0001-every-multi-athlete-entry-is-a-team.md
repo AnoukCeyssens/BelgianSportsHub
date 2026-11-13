@@ -1,0 +1,3 @@
+# Every multi-athlete entry is a Team
+
+An **Entry** is either an Athlete or a Team; there is no separate "crew" for relays, pairs, doubles or boats. We weighed a two-concept model (a standing national Team plus an ad-hoc crew per result) and chose a single Team concept because it is easier to curate by hand. To make one concept fit both cases, a Team is identified by Belgium + event by default and keeps its identity as its roster changes per competition (Red Lions, relays). Where Belgium can field several at once (beach volleyball pairs, doubles, boats), each standing partnership is its own Team. Team players are Athletes at roster level only, with no per-match stats. See [Team vs crew modelling](https://github.com/AnoukCeyssens/BelgianSportsHub/issues/8).
