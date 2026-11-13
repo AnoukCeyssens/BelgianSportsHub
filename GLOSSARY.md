@@ -18,7 +18,16 @@ A title event in an Olympic sport at continental level (Europeans) or world leve
 
 ## Expectation
 
-A forecast of an **Entry**'s outcome at a competition, recorded before it takes place. It is either **external** (world ranking, seeding, published projections, Belgian Olympic Committee targets) or **personal** (the user's own pick). It is compared afterwards with the **outcome**.
+A forecast of an **Entry**'s finishing place (or place range, such as 5th–8th) at a **Championship** or the Olympic Games, recorded before it takes place; other competitions have no Expectations. It is either **external** (a **Seed** or a published projection) or **personal** (the user's own pick). A forecast medal colour is a place: gold is 1st. It is compared afterwards with the **outcome**, giving a **Verdict**. Belgian Olympic Committee targets are not Expectations: they are delegation-level counts, compared with Belgium's totals.
+
+## Seed
+
+The default external **Expectation**: an Entry's position within the actual field of a competition, taken from the international federation's seeding where one exists, otherwise derived by ranking the entry list by world ranking or season's best. It is taken right before the competition starts; until the entry list exists, the Entry's world-ranking position is recorded monthly instead, to show how the forecast moved.
+_Avoid_: projection, rank expectation
+
+## Verdict
+
+The result of comparing one **Expectation** with the Entry's outcome: **Beat** (a better place than expected), **Met** (the expected place, or inside the expected range) or **Missed** (a worse place, or no place at all: DNF, DNS, DSQ, or eliminated before a place is given). There are no points or scores.
 
 ## Participation
 
