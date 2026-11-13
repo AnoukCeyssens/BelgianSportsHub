@@ -1,0 +1,422 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Wayfinder ticket "Core screens prototype" (#9).
+  Question: what should the core screens look like and do?
+  Three structurally different variants (A Ledger, B Timeline, C Scoreboard), each rendering
+  all four core screens, switchable via ?variant=A|B|C and ?screen=athlete|calendar|championship|games.
+  Run: python3 -m http.server 8009 --directory prototype/core-screens
+  All results, ranks and Expectations below are MOCK data.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Core screens</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .mock { position: fixed; top: 0; right: 0; z-index: 99; background: #ff0; color: #000; font: 700 10px/1 monospace; padding: 4px 6px; }
+  /* ---------- floating switcher (not part of any design) ---------- */
+  #switcher { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 100;
+    display: flex; align-items: center; gap: 6px; background: #111; color: #fff; border-radius: 999px;
+    padding: 6px 8px; box-shadow: 0 4px 18px rgba(0,0,0,.35); font: 600 13px/1 monospace; }
+  #switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; }
+  #switcher span { padding: 0 8px; white-space: nowrap; }
+
+  /* ================= VARIANT A: LEDGER (dense, tabular, bottom tabs) ================= */
+  .vA { background: #f6f5f1; color: #1c1c1c; min-height: 100vh; font-family: "Iowan Old Style", Georgia, serif; padding-bottom: 130px; }
+  .vA .wrap { max-width: 720px; margin: 0 auto; padding: 12px 14px; }
+  .vA h1 { font-size: 26px; margin: 8px 0 2px; font-weight: 600; }
+  .vA h2 { font: 700 11px/1 -apple-system, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #8a6d1d; border-bottom: 1px solid #1c1c1c; padding-bottom: 5px; margin: 22px 0 6px; }
+  .vA .meta { font: 13px -apple-system, sans-serif; color: #555; }
+  .vA table { width: 100%; border-collapse: collapse; font: 13px -apple-system, sans-serif; }
+  .vA th { text-align: left; font-weight: 600; color: #777; font-size: 11px; padding: 4px 4px; border-bottom: 1px solid #ccc; }
+  .vA td { padding: 7px 4px; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
+  .vA td.n, .vA th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .vA .up { color: #1b7a35; font-weight: 700; } .vA .down { color: #b3261e; font-weight: 700; } .vA .eq { color: #777; }
+  .vA .sub { color: #888; font-size: 11px; }
+  .vA .ladder { display: grid; grid-template-columns: 110px 1fr; font: 13px -apple-system, sans-serif; border-top: 1px solid #ccc; }
+  .vA .ladder div { padding: 7px 4px; border-bottom: 1px solid #e3e0d6; }
+  .vA .ladder .k { color: #777; }
+  .vA .tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #1c1c1c; padding-bottom: 60px; }
+  .vA .tabs a { flex: 1; text-align: center; color: #aaa; text-decoration: none; font: 600 11px -apple-system, sans-serif; padding: 10px 0; }
+  .vA .tabs a.on { color: #f2c94c; }
+  .vA .wk { font: 700 12px -apple-system, sans-serif; background: #e9e6dc; padding: 4px 6px; margin-top: 10px; }
+  .vA .champ { font-weight: 700; }
+  .vA .gridscroll { overflow-x: auto; }
+  .vA .sched { border-collapse: collapse; min-width: 900px; }
+  .vA .sched td, .vA .sched th { border: 1px solid #ddd; font-size: 11px; min-width: 120px; }
+  .vA .tag { display: inline-block; font: 600 10px -apple-system, sans-serif; padding: 1px 4px; border: 1px solid currentColor; border-radius: 2px; }
+
+  /* ================= VARIANT B: TIMELINE (one vertical river of time, top segmented nav) ================= */
+  .vB { background: #0f1720; color: #e8eef4; min-height: 100vh; padding-bottom: 90px; }
+  .vB .top { position: sticky; top: 0; z-index: 5; background: rgba(15,23,32,.95); backdrop-filter: blur(6px); padding: 10px 14px 8px; border-bottom: 1px solid #22303d; }
+  .vB .seg { display: flex; background: #1b2633; border-radius: 10px; padding: 3px; }
+  .vB .seg a { flex: 1; text-align: center; padding: 7px 0; color: #8aa0b4; text-decoration: none; font-size: 12px; font-weight: 600; border-radius: 8px; }
+  .vB .seg a.on { background: #e8eef4; color: #0f1720; }
+  .vB .wrap { max-width: 560px; margin: 0 auto; padding: 0 14px; }
+  .vB .hero { padding: 18px 0 6px; }
+  .vB .hero h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
+  .vB .hero p { margin: 4px 0; color: #8aa0b4; font-size: 13px; }
+  .vB .river { position: relative; margin-left: 10px; border-left: 2px solid #2a3a4a; padding-left: 18px; }
+  .vB .node { position: relative; padding: 10px 0 14px; }
+  .vB .node::before { content: ""; position: absolute; left: -26px; top: 15px; width: 12px; height: 12px; border-radius: 50%; background: #0f1720; border: 2px solid #5b7a96; }
+  .vB .node.past::before { background: #5b7a96; }
+  .vB .node.now::before { background: #ffd23f; border-color: #ffd23f; box-shadow: 0 0 0 5px rgba(255,210,63,.2); }
+  .vB .node.big .title { color: #ffd23f; }
+  .vB .date { font-size: 11px; color: #8aa0b4; text-transform: uppercase; letter-spacing: .08em; }
+  .vB .title { font-weight: 700; font-size: 15px; margin: 2px 0; }
+  .vB .line { font-size: 13px; color: #c3d0dc; }
+  .vB .nowbar { margin: 4px 0 4px -36px; font: 700 11px monospace; color: #ffd23f; letter-spacing: .1em; }
+  .vB .exp { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; }
+  .vB .track { position: relative; flex: 1; height: 18px; background: #1b2633; border-radius: 9px; }
+  .vB .track .e, .vB .track .o, .vB .track .p { position: absolute; top: 2px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-50%); font: 700 9px/14px sans-serif; text-align: center; }
+  .vB .track .e { background: #5b7a96; color: #fff; } .vB .track .p { background: #a77bff; color: #fff; } .vB .track .o { background: #ffd23f; color: #000; }
+  .vB .legend { font-size: 11px; color: #8aa0b4; display: flex; gap: 12px; margin: 8px 0 4px; }
+  .vB .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+  .vB .quals { display: flex; gap: 0; margin: 12px 0 18px; }
+  .vB .quals div { flex: 1; padding: 8px; font-size: 11px; background: #1b2633; border-right: 2px solid #0f1720; }
+  .vB .quals div:first-child { border-radius: 8px 0 0 8px; } .vB .quals div:last-child { border-radius: 0 8px 8px 0; border: 0; }
+  .vB .quals b { display: block; font-size: 12px; margin-bottom: 2px; }
+  .vB .quals .ok { box-shadow: inset 0 3px 0 #3ddc84; } .vB .quals .wait { box-shadow: inset 0 3px 0 #ffd23f; } .vB .quals .none { box-shadow: inset 0 3px 0 #5b7a96; }
+  .vB .days { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; }
+  .vB .days a { flex: 0 0 auto; text-align: center; padding: 6px 10px; border-radius: 10px; background: #1b2633; color: #c3d0dc; text-decoration: none; font-size: 11px; }
+  .vB .days a b { display: block; font-size: 16px; }
+  .vB .days a.on { background: #ffd23f; color: #000; }
+  .vB .days a .dot { display: block; height: 4px; margin-top: 3px; }
+  .vB .chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
+  .vB .chip.g { background: #3ddc84; color: #000; } .vB .chip.y { background: #ffd23f; color: #000; } .vB .chip.r { background: #ff6b6b; color: #000; }
+
+  /* ================= VARIANT C: SCOREBOARD (bold cards, hamburger drawer, grid on wide) ================= */
+  .vC { background: #fff; color: #111; min-height: 100vh; padding-bottom: 90px; font-family: "Helvetica Neue", Arial, sans-serif; }
+  .vC .bar { display: flex; align-items: center; gap: 10px; background: #e30613; color: #fff; padding: 12px 14px; position: sticky; top: 0; z-index: 5; }
+  .vC .bar .burger { font-size: 22px; cursor: pointer; background: none; border: 0; color: #fff; }
+  .vC .bar b { font-size: 15px; letter-spacing: .02em; text-transform: uppercase; }
+  .vC .drawer { display: none; position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.4); }
+  .vC .drawer.open { display: block; }
+  .vC .drawer nav { background: #111; width: 260px; height: 100%; padding: 20px 0; }
+  .vC .drawer nav a { display: block; color: #fff; text-decoration: none; padding: 14px 22px; font-weight: 700; font-size: 18px; }
+  .vC .drawer nav a.on { background: #e30613; }
+  .vC .wrap { max-width: 1000px; margin: 0 auto; padding: 14px; }
+  .vC .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 760px) { .vC .grid { grid-template-columns: 1fr 1fr; } .vC .grid3 { grid-template-columns: 1fr 1fr 1fr; } }
+  .vC .card { border: 2px solid #111; border-radius: 4px; padding: 12px; }
+  .vC .card h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+  .vC .big { font-size: 46px; font-weight: 900; line-height: 1; letter-spacing: -.03em; }
+  .vC .heroC { background: #111; color: #fff; border-radius: 4px; padding: 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+  .vC .heroC h1 { margin: 0; font-size: 24px; } .vC .heroC p { margin: 4px 0 0; color: #bbb; font-size: 13px; }
+  .vC .lights { display: flex; gap: 8px; }
+  .vC .light { flex: 1; text-align: center; font-size: 11px; font-weight: 700; }
+  .vC .light i { display: block; width: 34px; height: 34px; border-radius: 50%; margin: 0 auto 4px; border: 3px solid #111; }
+  .vC .light.g i { background: #1db954; } .vC .light.y i { background: #ffcc00; } .vC .light.x i { background: #eee; }
+  .vC .score { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px 10px; font-size: 13px; align-items: center; }
+  .vC .score .h { font-size: 10px; color: #777; font-weight: 700; text-transform: uppercase; }
+  .vC .pill { display: inline-block; min-width: 36px; text-align: center; font-weight: 900; border-radius: 3px; padding: 2px 5px; }
+  .vC .pill.up { background: #1db954; color: #fff; } .vC .pill.down { background: #e30613; color: #fff; } .vC .pill.eq { background: #ddd; }
+  .vC .tile { border: 2px solid #111; border-radius: 4px; padding: 10px; }
+  .vC .tile .ev { font-size: 11px; text-transform: uppercase; color: #777; font-weight: 700; }
+  .vC .tile .who { font-weight: 800; font-size: 15px; margin: 2px 0; }
+  .vC .medal { display: inline-block; width: 22px; height: 22px; border-radius: 50%; text-align: center; font: 900 12px/22px sans-serif; }
+  .vC .m1 { background: #f2c230; } .vC .m2 { background: #c7c7c7; } .vC .m3 { background: #cd8a4a; }
+  .vC .medals { display: flex; gap: 14px; font-size: 32px; font-weight: 900; }
+  .vC .month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; font-size: 10px; }
+  .vC .month div { min-height: 58px; background: #f3f3f3; padding: 3px; }
+  .vC .month .dh { min-height: 0; background: none; font-weight: 700; text-align: center; }
+  .vC .month .ev { background: #111; color: #fff; padding: 1px 3px; border-radius: 2px; margin-top: 2px; font-size: 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .vC .month .ev.c { background: #e30613; }
+  .vC .month .today { outline: 2px solid #e30613; }
+  .vC .nownext { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .vC .slot { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; border-bottom: 2px solid #111; padding: 10px 0; }
+  .vC .slot .t { font-weight: 900; font-size: 18px; }
+  .vC .daypills { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; }
+  .vC .daypills a { flex: 0 0 auto; border: 2px solid #111; padding: 6px 10px; text-decoration: none; color: #111; font-weight: 800; font-size: 12px; border-radius: 3px; }
+  .vC .daypills a.on { background: #111; color: #fff; }
+  .vC .st { font-size: 10px; font-weight: 800; padding: 2px 5px; border-radius: 3px; text-transform: uppercase; }
+  .vC .st.g { background: #1db954; color: #fff; } .vC .st.y { background: #ffcc00; } .vC .st.r { background: #e30613; color: #fff; }
+</style>
+</head>
+<body>
+<div class="mock">PROTOTYPE · MOCK DATA</div>
+<div id="app"></div>
+<div id="switcher">
+  <button id="prev" title="Previous variant (←)">‹</button>
+  <span id="label"></span>
+  <button id="next" title="Next variant (→)">›</button>
+</div>
+<script>
+// ======================= MOCK DATA (domain terms from GLOSSARY.md) =======================
+const TODAY = '2026-11-13';
+const ATHLETE = {
+  name: 'Nafissatou Thiam', sport: 'Athletics', event: 'Heptathlon', born: '1994-08-19',
+  ids: 'World Athletics 14290553 · Wikidata Q2370613', worldRank: 2, sb: '6 812 pts', since: '2013 (Worlds Moscow)',
+  updated: 'Results: auto, weekly · Qualification status: curated, 2 Nov',
+  // Qualification = quota place (NOC-owned) separate from athlete path, BOIC selection layer on top
+  qual: {
+    cycle: 'LA 2028',
+    quota: { state: 'none', label: 'Not yet', detail: 'Window opens 1 Feb 2027. 24 places: entry standard 6 480 pts or World Ranking.' },
+    path:  { state: 'ok',   label: 'On track', detail: 'World Ranking #2; 6 812 pts already above the standard (counts once the window opens).' },
+    boic:  { state: 'wait', label: 'Criteria TBA', detail: 'BOIC selection criteria for LA28 not yet published (monthly check).' },
+  },
+  // ext = external Expectation (rank/seed at entry deadline); mine = personal pick; out = outcome (place)
+  results: [
+    { date: '2026-08-14', comp: 'European Championships, Birmingham', champ: true, ev: 'Heptathlon', ext: 1, mine: 1, out: 2, perf: '6 640 pts' },
+    { date: '2026-05-31', comp: 'Hypo-Meeting Götzis', champ: false, ev: 'Heptathlon', ext: 2, mine: 1, out: 1, perf: '6 812 pts' },
+    { date: '2026-03-20', comp: 'World Indoor Championships, Toruń', champ: true, ev: 'Pentathlon', ext: 1, mine: 2, out: 1, perf: '4 920 pts' },
+    { date: '2025-09-20', comp: 'World Championships, Tokyo', champ: true, ev: 'Heptathlon', ext: 2, mine: 2, out: 3, perf: '6 588 pts' },
+  ],
+  upcoming: [
+    { date: '2027-03-05', comp: 'European Indoor Championships', champ: true, ev: 'Pentathlon', ext: null, mine: null, note: 'Entry list not out; pick open' },
+    { date: '2027-05-29', comp: 'Hypo-Meeting Götzis', champ: false, ev: 'Heptathlon', ext: null, mine: 1, note: 'Your pick: 1' },
+    { date: '2027-09-11', comp: 'World Championships, Beijing', champ: true, ev: 'Heptathlon', ext: null, mine: null, note: 'Expected entry' },
+  ],
+};
+const CAL = [
+  { d: '2026-11-14', end: '2026-11-16', comp: 'Short Track World Tour, Montréal', sport: 'Short track', who: 'Hanne Desmet, Stijn Desmet, Women\'s relay (Team)', champ: false },
+  { d: '2026-11-20', end: '2026-11-22', comp: 'Speed Skating World Cup, Calgary', sport: 'Speed skating', who: 'Sandrine Tas, Mathias Vosté', champ: false },
+  { d: '2026-11-22', end: null, comp: 'Alpine Skiing World Cup, Gurgl', sport: 'Alpine', who: 'Armand Marchant (slalom)', champ: false },
+  { d: '2026-11-27', end: '2026-11-29', comp: 'FIH Pro League, Antwerp', sport: 'Hockey', who: 'Red Lions (Team) v NED, v GER', champ: false },
+  { d: '2026-12-01', end: '2026-12-06', comp: 'European Short Course Swimming Championships', sport: 'Swimming', who: 'Lucas Henveaux, Roos Vanotterdijk +4', champ: true },
+  { d: '2026-12-11', end: '2026-12-13', comp: 'Track Cycling Nations Cup', sport: 'Track cycling', who: 'Lindsay De Vylder, Men\'s madison (Team)', champ: false },
+  { d: '2027-01-15', end: '2027-01-17', comp: 'European Short Track Championships', sport: 'Short track', who: 'Hanne Desmet, Stijn Desmet +3', champ: true },
+  { d: '2027-01-22', end: '2027-01-24', comp: 'Biathlon World Cup, Antholz', sport: 'Biathlon', who: 'Florent Claude, Lotte Lie', champ: false },
+];
+// Championship view: European Athletics Championships Birmingham 2026 (completed)
+const CHAMP = {
+  name: 'European Athletics Championships', place: 'Birmingham', dates: '10–16 Aug 2026', status: 'Completed',
+  medals: { g: 1, s: 2, b: 1 },
+  entries: [
+    { day: 'Mon 10', ev: 'Men 400 m', who: 'Alexander Doom', team: false, ext: 2, mine: 2, out: 3, perf: '44.71' },
+    { day: 'Tue 11', ev: 'Women 1500 m', who: 'Elise Vanderelst', team: false, ext: 8, mine: 6, out: 'SF', perf: 'SF 4:06.2' },
+    { day: 'Wed 12', ev: 'Women 400 m', who: 'Cynthia Bolingo', team: false, ext: 6, mine: 5, out: 5, perf: '50.84' },
+    { day: 'Thu 13', ev: 'Men pole vault', who: 'Ben Broeders', team: false, ext: 5, mine: 4, out: 7, perf: '5.65' },
+    { day: 'Fri 14', ev: 'Heptathlon', who: 'Nafissatou Thiam', team: false, ext: 1, mine: 1, out: 2, perf: '6 640 pts' },
+    { day: 'Fri 14', ev: 'Heptathlon', who: 'Noor Vidts', team: false, ext: 3, mine: 4, out: 4, perf: '6 402 pts' },
+    { day: 'Sun 16', ev: 'Men 4×400 m', who: 'Belgian Tornados', team: true, roster: 'Sacoor, D. Borlée, Doom, Watrin (heats: Iguacel)', ext: 2, mine: 1, out: 1, perf: '2:59.12' },
+    { day: 'Sun 16', ev: 'Mixed 4×400 m', who: 'Mixed 4×400 m relay', team: true, roster: 'Sacoor, Bolingo, Watrin, Gilles', ext: 3, mine: 3, out: 2, perf: '3:10.04' },
+  ],
+};
+// Games day-by-day: LA 2028, pre-Games view (entries are expected; status = qualification status)
+const GAMES = {
+  name: 'LA 2028', start: '14 Jul 2028',
+  days: [
+    { key: 'Sat 15', n: 1, items: [
+      { t: '09:00', ev: 'Cycling road · Men road race', who: 'Remco Evenepoel, Wout van Aert, +1', st: 'g', stl: 'Quota secured', ext: 1 },
+      { t: '13:30', ev: 'Hockey · Men pool B', who: 'Red Lions (Team) v ARG', st: 'g', stl: 'Quota secured', ext: null },
+      { t: '18:00', ev: 'Swimming · Men 400 m free heats', who: 'Lucas Henveaux', st: 'y', stl: 'On track', ext: 9 } ] },
+    { key: 'Sun 16', n: 2, items: [
+      { t: '08:00', ev: 'Cycling road · Women road race', who: 'Lotte Kopecky, +2', st: 'g', stl: 'Quota secured', ext: 2 },
+      { t: '11:00', ev: 'Triathlon · Women', who: 'Claire Michel', st: 'r', stl: 'At risk', ext: 24 } ] },
+    { key: 'Mon 17', n: 3, items: [
+      { t: '10:00', ev: 'Hockey · Women pool A', who: 'Red Panthers (Team) v NED', st: 'y', stl: 'On track', ext: null },
+      { t: '16:00', ev: 'Judo · Men −73 kg', who: 'Matthias Casse', st: 'g', stl: 'Live tracker: in', ext: 2 } ] },
+    { key: 'Tue 18', n: 4, items: [] },
+    { key: 'Wed 19', n: 5, items: [
+      { t: '12:00', ev: '3x3 basketball · Men pool', who: '3x3 Lions (Team) v SRB', st: 'y', stl: 'On track', ext: 3 } ] },
+    { key: 'Sat 22', n: 8, items: [
+      { t: '19:00', ev: 'Athletics · Heptathlon day 1', who: 'Nafissatou Thiam, Noor Vidts', st: 'y', stl: 'Window not open', ext: 1 },
+      { t: '20:30', ev: 'Athletics · Men 400 m heats', who: 'Alexander Doom', st: 'y', stl: 'On track', ext: 6 } ] },
+  ],
+};
+
+// ======================= helpers =======================
+const SCREENS = [['athlete','Athlete'],['calendar','Calendar'],['championship','Championship'],['games','Games']];
+const VARIANTS = [['A','Ledger'],['B','Timeline'],['C','Scoreboard']];
+const qs = () => new URLSearchParams(location.search);
+const cur = () => ({ v: qs().get('variant') || 'A', s: qs().get('screen') || 'athlete', day: qs().get('day') || 'Sat 15' });
+const href = (o) => { const p = qs(); for (const k in o) p.set(k, o[k]); return '?' + p.toString(); };
+const fmt = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtS = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const delta = (ext, out) => (typeof out !== 'number' || ext == null) ? null : ext - out; // + = beat expectation
+const dCls = (x) => x == null ? 'eq' : x > 0 ? 'up' : x < 0 ? 'down' : 'eq';
+const dTxt = (x) => x == null ? '–' : x > 0 ? '+' + x : x < 0 ? '' + x : '=';
+const ord = (n) => typeof n !== 'number' ? n : n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+
+// ======================= VARIANT A — LEDGER =======================
+const A = {
+  athlete() {
+    const a = ATHLETE, q = a.qual;
+    return `<h1>${a.name}</h1>
+      <div class="meta">${a.sport} · ${a.event} · born ${fmt(a.born)} · Athlete since ${a.since}</div>
+      <div class="meta sub">${a.ids}</div>
+      <h2>Qualification · ${q.cycle}</h2>
+      <div class="ladder">
+        <div class="k">Quota place</div><div><b>${q.quota.label}</b><br><span class="sub">${q.quota.detail}</span></div>
+        <div class="k">Athlete path</div><div><b>${q.path.label}</b><br><span class="sub">${q.path.detail}</span></div>
+        <div class="k">BOIC selection</div><div><b>${q.boic.label}</b><br><span class="sub">${q.boic.detail}</span></div>
+      </div>
+      <h2>Upcoming</h2>
+      <table><tr><th>Date</th><th>Competition</th><th class="n">Ext.</th><th class="n">Mine</th></tr>
+      ${a.upcoming.map(r => `<tr><td>${fmtS(r.date)}<div class="sub">${r.date.slice(0,4)}</div></td><td class="${r.champ?'champ':''}">${r.comp}<div class="sub">${r.ev} · ${r.note}</div></td><td class="n">${r.ext ?? '–'}</td><td class="n">${r.mine ?? '<u>pick</u>'}</td></tr>`).join('')}
+      </table>
+      <h2>Results · Expectation vs outcome</h2>
+      <table><tr><th>Date</th><th>Competition</th><th class="n">Ext.</th><th class="n">Mine</th><th class="n">Out</th><th class="n">±Ext</th></tr>
+      ${a.results.map(r => { const d = delta(r.ext, r.out); return `<tr><td>${fmtS(r.date)}<div class="sub">${r.date.slice(0,4)}</div></td><td class="${r.champ?'champ':''}">${r.comp}<div class="sub">${r.ev} · ${r.perf}</div></td><td class="n">${r.ext}</td><td class="n">${r.mine}</td><td class="n"><b>${r.out}</b></td><td class="n ${dCls(d)}">${dTxt(d)}</td></tr>`; }).join('')}
+      <tr><td></td><td class="sub">Season record vs external Expectation</td><td colspan="4" class="n"><b>1 beat · 0 matched · 3 short</b></td></tr>
+      </table>
+      <p class="sub" style="font-family:sans-serif">${a.updated}</p>`;
+  },
+  calendar() {
+    let wk = '';
+    return `<h1>Calendar</h1><div class="meta">Belgian Entries, next 10 weeks · <b>bold</b> = Championship</div>` +
+      CAL.map(e => {
+        const w = 'Week of ' + fmtS(e.d); const head = w !== wk ? `<div class="wk">${w}</div>` : ''; wk = w;
+        return head + `<table><tr><td style="width:80px">${fmtS(e.d)}${e.end ? '–<br>' + fmtS(e.end) : ''}</td><td class="${e.champ?'champ':''}">${e.comp}<div class="sub">${e.sport} · ${e.who}</div></td></tr></table>`;
+      }).join('') + `<p class="sub" style="font-family:sans-serif">↧ Subscribe (iCal) · Filter: All sports ▾</p>`;
+  },
+  championship() {
+    const c = CHAMP;
+    return `<h1>${c.name}</h1><div class="meta">${c.place} · ${c.dates} · ${c.status} · Belgium: ${c.medals.g} gold, ${c.medals.s} silver, ${c.medals.b} bronze</div>
+      <h2>Belgian Entries</h2>
+      <table><tr><th>Day</th><th>Event / Entry</th><th class="n">Ext.</th><th class="n">Mine</th><th class="n">Out</th><th class="n">±</th></tr>
+      ${c.entries.map(e => { const d = delta(e.ext, e.out); return `<tr><td>${e.day}</td><td>${e.who}${e.team ? ' <span class="tag">TEAM</span>' : ''}<div class="sub">${e.ev} · ${e.perf}${e.roster ? '<br>Roster: ' + e.roster : ''}</div></td><td class="n">${e.ext}</td><td class="n">${e.mine}</td><td class="n"><b>${e.out}</b></td><td class="n ${dCls(d)}">${dTxt(d)}</td></tr>`; }).join('')}
+      </table>`;
+  },
+  games() {
+    const g = GAMES;
+    return `<h1>${g.name} · day by day</h1><div class="meta">Expected Belgian Entries per day · status = qualification status today · scroll →</div>
+      <div class="gridscroll"><table class="sched"><tr>${g.days.map(d => `<th>Day ${d.n}<br>${d.key} Jul</th>`).join('')}</tr>
+      <tr>${g.days.map(d => `<td>${d.items.length ? d.items.map(i => `<div style="margin-bottom:8px"><b>${i.t}</b> ${i.ev}<br>${i.who}<br><span class="tag" style="color:${i.st==='g'?'#1b7a35':i.st==='y'?'#8a6d1d':'#b3261e'}">${i.stl}</span>${i.ext ? ' <span class="sub">exp ' + ord(i.ext) + '</span>' : ''}</div>`).join('') : '<span class="sub">No Belgians</span>'}</td>`).join('')}</tr></table></div>`;
+  },
+  render(s) {
+    return `<div class="vA"><div class="wrap">${this[s]()}</div>
+      <nav class="tabs">${SCREENS.map(([k, l]) => `<a href="${href({ screen: k })}" class="${k===s?'on':''}">${l}</a>`).join('')}</nav></div>`;
+  },
+};
+
+// ======================= VARIANT B — TIMELINE =======================
+const B = {
+  track(ext, mine, out, n = 8) {
+    const pos = (v) => typeof v === 'number' ? Math.min(v, n) / n * 92 + 4 : 96;
+    return `<div class="exp"><span style="width:28px;color:#8aa0b4">1st</span><div class="track">
+      ${ext != null ? `<span class="e" style="left:${pos(ext)}%">${ext}</span>` : ''}
+      ${mine != null ? `<span class="p" style="left:${pos(mine)}%">${mine}</span>` : ''}
+      ${out != null ? `<span class="o" style="left:${pos(out)}%">${typeof out === 'number' ? out : '×'}</span>` : ''}
+      </div><span style="width:28px;color:#8aa0b4;text-align:right">${n}th</span></div>`;
+  },
+  legend: `<div class="legend"><span><i style="background:#5b7a96"></i>External</span><span><i style="background:#a77bff"></i>My pick</span><span><i style="background:#ffd23f"></i>Outcome</span></div>`,
+  athlete() {
+    const a = ATHLETE, q = a.qual;
+    const items = [...a.upcoming.slice().reverse().map(r => ({ ...r, past: false })), { now: true }, ...a.results.map(r => ({ ...r, past: true }))];
+    return `<div class="hero"><h1>${a.name}</h1><p>${a.event} · World #${a.worldRank} · SB ${a.sb}</p></div>
+      <div class="quals">
+        <div class="${q.quota.state}"><b>Quota place</b>${q.quota.label}</div>
+        <div class="${q.path.state}"><b>Athlete path</b>${q.path.label}</div>
+        <div class="${q.boic.state}"><b>BOIC</b>${q.boic.label}</div>
+      </div>
+      ${this.legend}
+      <div class="river">${items.map(r => r.now ? `<div class="node now"><div class="nowbar">━━ TODAY · ${fmtS(TODAY)} ━━</div></div>` : `
+        <div class="node ${r.past ? 'past' : ''} ${r.champ ? 'big' : ''}">
+          <div class="date">${fmt(r.date)}</div>
+          <div class="title">${r.comp}</div>
+          <div class="line">${r.ev}${r.past ? ` · <b>${ord(r.out)}</b> · ${r.perf}` : ` · ${r.note}`}</div>
+          ${this.track(r.ext, r.mine, r.past ? r.out : null)}
+        </div>`).join('')}</div>`;
+  },
+  calendar() {
+    return `<div class="hero"><h1>What's next</h1><p>Belgian Entries from today · Championships in yellow</p></div>
+      <div class="river"><div class="node now"><div class="nowbar">━━ TODAY · ${fmtS(TODAY)} ━━</div></div>
+      ${CAL.map(e => `<div class="node ${e.champ ? 'big' : ''}"><div class="date">${fmtS(e.d)}${e.end ? ' – ' + fmtS(e.end) : ''} · ${e.sport}</div><div class="title">${e.comp}</div><div class="line">${e.who}</div></div>`).join('')}</div>`;
+  },
+  championship() {
+    const c = CHAMP;
+    return `<div class="hero"><h1>${c.name}</h1><p>${c.place} · ${c.dates} · 🥇${c.medals.g} 🥈${c.medals.s} 🥉${c.medals.b}</p></div>
+      ${this.legend}
+      <div class="river">${c.entries.map(e => `<div class="node past ${typeof e.out === 'number' && e.out <= 3 ? 'big' : ''}">
+        <div class="date">${e.day} Aug · ${e.ev}</div>
+        <div class="title">${e.who} · ${ord(e.out)}${e.team ? ' <span class="chip y">Team</span>' : ''}</div>
+        <div class="line">${e.perf}${e.roster ? ' · ' + e.roster : ''}</div>
+        ${this.track(e.ext, e.mine, e.out)}</div>`).join('')}</div>`;
+  },
+  games(day) {
+    const g = GAMES, d = g.days.find(x => x.key === day) || g.days[0];
+    return `<div class="hero"><h1>${g.name}</h1><p>Opening ${g.start} · swipe the days · expected Belgian Entries</p></div>
+      <div class="days">${g.days.map(x => `<a href="${href({ day: x.key })}" class="${x.key===d.key?'on':''}">Day ${x.n}<b>${x.key.split(' ')[1]}</b>${x.key.split(' ')[0]}<span class="dot" style="background:${x.items.length ? '#3ddc84' : 'transparent'}"></span></a>`).join('')}</div>
+      <div class="river">${d.items.length ? d.items.map(i => `<div class="node"><div class="date">${i.t} local</div><div class="title">${i.ev}</div><div class="line">${i.who} <span class="chip ${i.st}">${i.stl}</span></div>${i.ext ? `<div class="line" style="color:#8aa0b4;margin-top:4px">External Expectation: ${ord(i.ext)} · <u>add my pick</u></div>` : ''}</div>`).join('') : '<div class="node"><div class="line">No Belgian Entries this day.</div></div>'}</div>`;
+  },
+  render(s, day) {
+    return `<div class="vB"><div class="top"><div class="seg">${SCREENS.map(([k, l]) => `<a href="${href({ screen: k })}" class="${k===s?'on':''}">${l}</a>`).join('')}</div></div>
+      <div class="wrap">${this[s](day)}</div></div>`;
+  },
+};
+
+// ======================= VARIANT C — SCOREBOARD =======================
+const C = {
+  athlete() {
+    const a = ATHLETE, q = a.qual;
+    const beat = a.results.filter(r => delta(r.ext, r.out) > 0).length, short = a.results.filter(r => delta(r.ext, r.out) < 0).length;
+    const lc = (s) => s === 'ok' ? 'g' : s === 'wait' ? 'y' : 'x';
+    return `<div class="heroC"><div><h1>${a.name}</h1><p>${a.event} · ${a.sport}</p></div><div style="text-align:right"><div class="big">#${a.worldRank}</div><p>World Ranking</p></div></div>
+      <div class="grid" style="margin-top:12px">
+        <div class="card"><h3>Road to ${q.cycle}</h3>
+          <div class="lights">
+            <div class="light ${lc(q.quota.state)}"><i></i>Quota place<br><span style="font-weight:400">${q.quota.label}</span></div>
+            <div class="light ${lc(q.path.state)}"><i></i>Athlete path<br><span style="font-weight:400">${q.path.label}</span></div>
+            <div class="light ${lc(q.boic.state)}"><i></i>BOIC<br><span style="font-weight:400">${q.boic.label}</span></div>
+          </div><p style="font-size:12px;color:#555;margin:10px 0 0">${q.quota.detail}</p></div>
+        <div class="card"><h3>Next up</h3><div style="font-weight:800;font-size:18px">${a.upcoming[0].comp}</div><div style="font-size:13px;color:#555">${fmt(a.upcoming[0].date)} · ${a.upcoming[0].ev}</div>
+          <button style="margin-top:10px;background:#e30613;color:#fff;border:0;padding:10px 14px;font-weight:800;border-radius:3px">Make my pick</button></div>
+        <div class="card" style="grid-column:1/-1"><h3>Expectation vs outcome · last 4</h3>
+          <div style="display:flex;gap:18px;margin-bottom:10px"><div><div class="big" style="color:#1db954">${beat}</div><small>beat</small></div><div><div class="big" style="color:#e30613">${short}</div><small>short</small></div></div>
+          <div class="score"><span class="h">Competition</span><span class="h">Ext</span><span class="h">Out</span><span class="h">±</span>
+          ${a.results.map(r => { const d = delta(r.ext, r.out); return `<span><b>${r.comp}</b><br><small>${fmtS(r.date)} ${r.date.slice(0,4)} · ${r.perf} · my pick ${r.mine}</small></span><span>${r.ext}</span><span><b>${r.out}</b></span><span class="pill ${dCls(d)}">${dTxt(d)}</span>`; }).join('')}
+          </div></div>
+      </div>`;
+  },
+  calendar() {
+    const first = new Date('2026-11-01T12:00'); const off = (first.getDay() + 6) % 7; const cells = [];
+    for (let i = 0; i < off; i++) cells.push('<div></div>');
+    for (let d = 1; d <= 30; d++) {
+      const ds = '2026-11-' + String(d).padStart(2, '0');
+      const evs = CAL.filter(e => e.d <= ds && (e.end || e.d) >= ds);
+      cells.push(`<div class="${ds === TODAY ? 'today' : ''}"><b>${d}</b>${evs.map(e => `<div class="ev ${e.champ ? 'c' : ''}">${e.sport}</div>`).join('')}</div>`);
+    }
+    return `<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">November 2026</h2><span>‹ ›</span></div>
+      <div class="month" style="margin-top:8px">${['M','T','W','T','F','S','S'].map(x => `<div class="dh">${x}</div>`).join('')}${cells.join('')}</div>
+      <div class="grid grid3" style="margin-top:14px">${CAL.slice(0, 6).map(e => `<div class="tile"><div class="ev">${fmtS(e.d)} · ${e.sport}${e.champ ? ' · <span style="color:#e30613">Championship</span>' : ''}</div><div class="who">${e.comp}</div><div style="font-size:12px">${e.who}</div></div>`).join('')}</div>`;
+  },
+  championship() {
+    const c = CHAMP;
+    return `<div class="heroC"><div><h1>${c.name}</h1><p>${c.place} · ${c.dates} · ${c.status}</p></div></div>
+      <div class="card" style="margin:12px 0"><h3>Belgium medal count</h3><div class="medals"><span><span class="medal m1">G</span> ${c.medals.g}</span><span><span class="medal m2">S</span> ${c.medals.s}</span><span><span class="medal m3">B</span> ${c.medals.b}</span></div></div>
+      <div class="grid grid3">${c.entries.map(e => { const d = delta(e.ext, e.out); return `<div class="tile">
+        <div class="ev">${e.ev} · ${e.day}</div>
+        <div class="who">${typeof e.out === 'number' && e.out <= 3 ? `<span class="medal m${e.out}">${e.out}</span> ` : ''}${e.who}</div>
+        ${e.roster ? `<div style="font-size:11px;color:#555">Team · ${e.roster}</div>` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:13px"><span>Exp ${ord(e.ext)} → <b>${ord(e.out)}</b></span><span class="pill ${dCls(d)}">${dTxt(d)}</span></div></div>`; }).join('')}</div>`;
+  },
+  games(day) {
+    const g = GAMES, d = g.days.find(x => x.key === day) || g.days[0];
+    return `<div class="heroC"><div><h1>${g.name}</h1><p>Day ${d.n} · ${d.key} Jul 2028 · ${d.items.length} Belgian Entries expected</p></div><div style="text-align:right"><div class="big">${g.days.reduce((s, x) => s + x.items.length, 0)}</div><p>Entries in view</p></div></div>
+      <div class="daypills" style="margin-top:12px">${g.days.map(x => `<a href="${href({ day: x.key })}" class="${x.key===d.key?'on':''}">D${x.n} · ${x.key}</a>`).join('')}</div>
+      <div class="nownext">${d.items.length ? d.items.map(i => `<div class="slot"><span class="t">${i.t}</span><span><b>${i.who}</b><br><small>${i.ev}</small></span><span style="text-align:right"><span class="st ${i.st}">${i.stl}</span>${i.ext ? `<br><small>exp ${ord(i.ext)}</small>` : ''}</span></div>`).join('') : '<p>No Belgian Entries this day.</p>'}</div>`;
+  },
+  render(s, day) {
+    return `<div class="vC"><div class="bar"><button class="burger" onclick="document.querySelector('.drawer').classList.add('open')">☰</button><b>${SCREENS.find(x => x[0] === s)[1]}</b></div>
+      <div class="drawer" onclick="this.classList.remove('open')"><nav>${SCREENS.map(([k, l]) => `<a href="${href({ screen: k })}" class="${k===s?'on':''}">${l}</a>`).join('')}</nav></div>
+      <div class="wrap">${this[s](day)}</div></div>`;
+  },
+};
+
+// ======================= switcher =======================
+const R = { A, B, C };
+function render() {
+  const { v, s, day } = cur();
+  document.getElementById('app').innerHTML = (R[v] || A).render(s, day);
+  const name = (VARIANTS.find(x => x[0] === v) || VARIANTS[0])[1];
+  document.getElementById('label').textContent = `${v} (${name}) · ${s}`;
+}
+function step(dir) {
+  const i = VARIANTS.findIndex(x => x[0] === cur().v);
+  const n = VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length][0];
+  history.replaceState(null, '', href({ variant: n })); render();
+}
+document.getElementById('prev').onclick = () => step(-1);
+document.getElementById('next').onclick = () => step(1);
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input,textarea,[contenteditable]')) return;
+  if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1);
+});
+render();
+</script>
+</body>
+</html>
