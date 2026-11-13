@@ -44,3 +44,18 @@ One of the four stages that every **Championship** and Olympic Games passes thro
 ## Qualification track
 
 One route or requirement an Entry has to meet to compete at a Championship or Games: an entry standard, a world-ranking position, a quota place, a federation or Belgian Olympic Committee selection, and so on. Each track records what is needed, what the Entry has so far, and whether it is met. An Athlete's record tracks qualification for two targets: the next Olympic Games in their **Olympic cycle**, and their next Championship.
+
+## Quota place
+
+One place for Belgium in one event at one Olympic Games, as allocated by the international federation under the IOC qualification system. It is either **NOC-owned** (Belgium decides who fills it) or **named** to the Entry that earned it. It moves from **Provisional** (held on today's list or ranking) to **Allocated** (confirmed by the federation) to **Accepted** (Belgium confirms it will use it) to **Entered** (filled by a selected Entry at the entries deadline), or ends as **Declined** or **Lost**. Championships have no quota places, only per-nation entry caps.
+_Avoid_: slot, spot, ticket
+
+## Qualification status
+
+Where one Entry stands for one target (the next Olympic Games or the next Championship): **Not in contention**, **At risk** (outside the places if qualifying closed today), **On track** (inside them), **Eligible** (meets the federation's criteria but competes with other Belgians for an NOC-owned place), **Qualified** (holds a named place, or is the only Belgian candidate for an NOC-owned one), **Selected**, **Not selected** or **Withdrawn**. It belongs to the Athlete or Team, never to individual roster members. Every status records its source and the date it was last checked.
+_Avoid_: nominated (no separate nomination step)
+
+## Selection
+
+The selector's final naming of Entries for a competition: the national federation for a Championship, the Belgian Olympic Committee board (on the federation's proposal) for the Games.
+_Avoid_: nomination
