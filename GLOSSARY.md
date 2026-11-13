@@ -56,6 +56,11 @@ One of the five stages that every **Championship** and Olympic Games passes thro
 - **Live:** from the competition's first session (for the Games as a whole, the first session in any sport, often before the opening ceremony; for one sport, its own first session): what Belgian Entries do day by day, plus the medal table. Personal Expectations lock as the competition goes Live; at the Games, every sport's picks lock together at the Games' first session.
 - **After:** Expectations compared with outcomes, and Belgium's best results. Expectations are compared only here, never on an Athlete's own record.
 
+## Session
+
+A timed block of a competition's schedule (a date, start and end time, and venue) in which one or more event rounds take place. At the Olympic Games these are the organiser's coded sessions. At a Championship they are the timetable's published blocks, or each event round with its own start time where the timetable has no blocks. A Belgian **Entry** is placed in the schedule by event and round. Later rounds count as "if through" until the Entry advances. The first session starts the **Live** phase. Where it has no published start time, the first competition day begins at midnight venue time.
+_Avoid_: Slot, programme block
+
 ## Qualification track
 
 One route or requirement an Entry has to meet to compete at a Championship or Games: an entry standard, a world-ranking position, a quota place, a federation or Belgian Olympic Committee selection, and so on. Each track records what is needed, what the Entry has so far, and whether it is met. An Athlete's record tracks qualification for two targets: the next Olympic Games in their **Olympic cycle**, shown throughout the cycle, and their next Championship, shown only for the one coming up next.
