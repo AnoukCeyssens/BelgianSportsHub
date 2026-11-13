@@ -14,11 +14,16 @@ The period leading up to one Olympic Games, ending with that Games. Two cycles r
 
 ## Championship
 
-A title event in an Olympic sport at continental level (Europeans) or world level (Worlds), as opposed to the Olympic Games themselves or series and circuit events. This includes the FIFA World Cup and UEFA Euros in football, and every division of the IIHF World Championship in ice hockey.
+A title event in an Olympic sport at continental level (Europeans) or world level (Worlds), as opposed to the Olympic Games themselves or series and circuit events. This includes the FIFA World Cup and UEFA Euros in football, and every division of the IIHF World Championship in ice hockey. Where a sport holds separate title events by venue or format (indoor and outdoor, short course and long course), each is its own Championship, as are the Europeans and the Worlds.
 
 ## Expectation
 
 A forecast of an **Entry**'s outcome at a competition, recorded before it takes place. It is either **external** (world ranking, seeding, published projections, Belgian Olympic Committee targets) or **personal** (the user's own pick). It is compared afterwards with the **outcome**.
+
+## Participation
+
+Belgium taking part in a competition with at least one **Entry**. It is **confirmed** once an entry list, start list, **Selection** or result names a Belgian Entry, and **likely** when a Belgian Entry took part in the previous edition or is in contention, or when the user adds it by hand. A competition appears in the calendar only with a confirmed or likely Participation; Championships and the Olympic Games always appear.
+_Avoid_: expected (that is an **Expectation**)
 
 ## Entry
 
@@ -34,16 +39,17 @@ The Athletes credited on a Team's entry at one competition, as the official resu
 
 ## Phase
 
-One of the four stages that every **Championship** and Olympic Games passes through, in order: **Qualification**, **Selection**, **Live** and **After**. Championships and Games use the same phases. The Games can also be viewed one sport at a time.
+One of the five stages that every **Championship** and Olympic Games passes through, in order: **Standards**, **Qualification**, **Selection**, **Live** and **After**. Championships and Games use the same phases. The Games can also be viewed one sport at a time.
 
+- **Standards:** from the start of the cycle until the qualification system or entry standards are published. Nothing is shown before publication except the expected publication date, if known. Once published, the standards remain visible as what each **Qualification track** needs.
 - **Qualification:** each potential Entry's current qualification status and its **Qualification tracks**.
-- **Selection:** the final list of Entries, as named by the selector (the national federation for a Championship, the Belgian Olympic Committee for the Games). Personal **Expectations** are entered here.
+- **Selection:** the final list of Entries, as named by the selector (the national federation for a Championship, the Belgian Olympic Committee for the Games) and confirmed by the international federation's entry list. Personal **Expectations** are entered here.
 - **Live:** what Belgian Entries do day by day, plus the medal table.
 - **After:** Expectations compared with outcomes, and Belgium's best results. Expectations are compared only here, never on an Athlete's own record.
 
 ## Qualification track
 
-One route or requirement an Entry has to meet to compete at a Championship or Games: an entry standard, a world-ranking position, a quota place, a federation or Belgian Olympic Committee selection, and so on. Each track records what is needed, what the Entry has so far, and whether it is met. An Athlete's record tracks qualification for two targets: the next Olympic Games in their **Olympic cycle**, and their next Championship.
+One route or requirement an Entry has to meet to compete at a Championship or Games: an entry standard, a world-ranking position, a quota place, a federation or Belgian Olympic Committee selection, and so on. Each track records what is needed, what the Entry has so far, and whether it is met. An Athlete's record tracks qualification for two targets: the next Olympic Games in their **Olympic cycle**, shown throughout the cycle, and their next Championship, shown only for the one coming up next.
 
 ## Quota place
 
