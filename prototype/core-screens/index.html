@@ -1,421 +1,474 @@
 <!doctype html>
 <!--
-  PROTOTYPE — throwaway. Wayfinder ticket "Core screens prototype" (#9).
-  Question: what should the core screens look like and do?
-  Three structurally different variants (A Ledger, B Timeline, C Scoreboard), each rendering
-  all four core screens, switchable via ?variant=A|B|C and ?screen=athlete|calendar|championship|games.
+  PROTOTYPE — throwaway. Wayfinder ticket "Core screens prototype" (#9). Iteration 2.
+  Direction from the owner after iteration 1:
+   - Athlete page in the Ledger style: results only (no Expectations), plus qualification
+     tracking for the next Olympics AND the next Championship.
+   - Calendar: a real calendar; multi-day events span their days; one colour per sport.
+   - Championship and Games share one phase model: Qualification → Selection → Live → After.
+     Games can show all sports combined or be filtered to some.
+  Three variants realise that direction differently (?variant=A|B|C, ?screen=athlete|calendar|championship|games).
   Run: python3 -m http.server 8009 --directory prototype/core-screens
-  All results, ranks and Expectations below are MOCK data.
+  All data is MOCK. Live/After phases show a simulated future.
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PROTOTYPE · Core screens</title>
+<title>PROTOTYPE · Core screens v2</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .mock { position: fixed; top: 0; right: 0; z-index: 99; background: #ff0; color: #000; font: 700 10px/1 monospace; padding: 4px 6px; }
-  /* ---------- floating switcher (not part of any design) ---------- */
-  #switcher { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 100;
-    display: flex; align-items: center; gap: 6px; background: #111; color: #fff; border-radius: 999px;
-    padding: 6px 8px; box-shadow: 0 4px 18px rgba(0,0,0,.35); font: 600 13px/1 monospace; }
-  #switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; }
-  #switcher span { padding: 0 8px; white-space: nowrap; }
+  body { margin: 0; background: #f6f5f1; color: #1c1c1c; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .mock { position: fixed; top: 0; right: 0; z-index: 99; background: #ff0; font: 700 10px/1 monospace; padding: 4px 6px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 12px 14px 150px; }
+  h1 { font: 600 26px/1.15 "Iowan Old Style", Georgia, serif; margin: 8px 0 2px; }
+  h2 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #8a6d1d; border-bottom: 1px solid #1c1c1c; padding-bottom: 5px; margin: 22px 0 6px; }
+  h3 { font: 600 16px "Iowan Old Style", Georgia, serif; margin: 14px 0 4px; }
+  .meta { font-size: 13px; color: #555; } .sub { color: #888; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 600; color: #777; font-size: 11px; padding: 4px; border-bottom: 1px solid #bbb; }
+  td { padding: 7px 4px; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
+  .n { text-align: right; font-variant-numeric: tabular-nums; }
+  .up { color: #1b7a35; font-weight: 700; } .down { color: #b3261e; font-weight: 700; } .eq { color: #777; }
+  .ok { color: #1b7a35; } .no { color: #b3261e; } .pend { color: #8a6d1d; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .b-q { background: #1b7a35; color: #fff; } .b-t { background: #f2c94c; } .b-r { background: #b3261e; color: #fff; } .b-x { background: #ccc; }
+  .chip { display: inline-block; padding: 4px 10px; border: 1px solid #1c1c1c; border-radius: 999px; margin: 0 4px 6px 0; font-size: 12px; text-decoration: none; color: #1c1c1c; white-space: nowrap; }
+  .chip.on { background: #1c1c1c; color: #f6f5f1; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+  input.mine { width: 52px; padding: 4px; font: inherit; text-align: right; border: 1px solid #1c1c1c; background: #fff; }
+  .tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #1c1c1c; padding-bottom: 60px; z-index: 10; }
+  .tabs a { flex: 1; text-align: center; color: #aaa; text-decoration: none; font-weight: 600; font-size: 11px; padding: 10px 0; }
+  .tabs a.on { color: #f2c94c; }
+  .scrollx { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .note { background: #ece8da; padding: 6px 8px; font-size: 12px; margin: 8px 0; }
+  /* switcher */
+  #switcher { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; align-items: center; gap: 6px;
+    background: #fff; color: #111; border: 2px solid #111; border-radius: 999px; padding: 4px 6px; box-shadow: 0 4px 18px rgba(0,0,0,.35); font: 600 12px/1 monospace; }
+  #switcher button { background: #111; color: #fff; border: 0; border-radius: 999px; width: 28px; height: 28px; cursor: pointer; font-size: 15px; }
+  #switcher span { padding: 0 6px; white-space: nowrap; }
 
-  /* ================= VARIANT A: LEDGER (dense, tabular, bottom tabs) ================= */
-  .vA { background: #f6f5f1; color: #1c1c1c; min-height: 100vh; font-family: "Iowan Old Style", Georgia, serif; padding-bottom: 130px; }
-  .vA .wrap { max-width: 720px; margin: 0 auto; padding: 12px 14px; }
-  .vA h1 { font-size: 26px; margin: 8px 0 2px; font-weight: 600; }
-  .vA h2 { font: 700 11px/1 -apple-system, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #8a6d1d; border-bottom: 1px solid #1c1c1c; padding-bottom: 5px; margin: 22px 0 6px; }
-  .vA .meta { font: 13px -apple-system, sans-serif; color: #555; }
-  .vA table { width: 100%; border-collapse: collapse; font: 13px -apple-system, sans-serif; }
-  .vA th { text-align: left; font-weight: 600; color: #777; font-size: 11px; padding: 4px 4px; border-bottom: 1px solid #ccc; }
-  .vA td { padding: 7px 4px; border-bottom: 1px solid #e3e0d6; vertical-align: top; }
-  .vA td.n, .vA th.n { text-align: right; font-variant-numeric: tabular-nums; }
-  .vA .up { color: #1b7a35; font-weight: 700; } .vA .down { color: #b3261e; font-weight: 700; } .vA .eq { color: #777; }
-  .vA .sub { color: #888; font-size: 11px; }
-  .vA .ladder { display: grid; grid-template-columns: 110px 1fr; font: 13px -apple-system, sans-serif; border-top: 1px solid #ccc; }
-  .vA .ladder div { padding: 7px 4px; border-bottom: 1px solid #e3e0d6; }
-  .vA .ladder .k { color: #777; }
-  .vA .tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #1c1c1c; padding-bottom: 60px; }
-  .vA .tabs a { flex: 1; text-align: center; color: #aaa; text-decoration: none; font: 600 11px -apple-system, sans-serif; padding: 10px 0; }
-  .vA .tabs a.on { color: #f2c94c; }
-  .vA .wk { font: 700 12px -apple-system, sans-serif; background: #e9e6dc; padding: 4px 6px; margin-top: 10px; }
-  .vA .champ { font-weight: 700; }
-  .vA .gridscroll { overflow-x: auto; }
-  .vA .sched { border-collapse: collapse; min-width: 900px; }
-  .vA .sched td, .vA .sched th { border: 1px solid #ddd; font-size: 11px; min-width: 120px; }
-  .vA .tag { display: inline-block; font: 600 10px -apple-system, sans-serif; padding: 1px 4px; border: 1px solid currentColor; border-radius: 2px; }
+  /* --- A: two ladders side by side --- */
+  .twocol { display: grid; grid-template-columns: 1fr; gap: 0 18px; }
+  @media (min-width: 640px) { .twocol { grid-template-columns: 1fr 1fr; } }
+  .ladder { display: grid; grid-template-columns: 105px 1fr; border-top: 1px solid #bbb; font-size: 13px; }
+  .ladder div { padding: 6px 4px; border-bottom: 1px solid #e3e0d6; }
+  .ladder .k { color: #777; }
+  /* --- C: progress bars --- */
+  .bar { height: 8px; background: #e3e0d6; position: relative; margin: 4px 0 2px; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #1c1c1c; }
+  .bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #b3261e; }
+  .seg { display: flex; border: 1px solid #1c1c1c; margin: 8px 0; }
+  .seg a { flex: 1; text-align: center; padding: 7px 4px; text-decoration: none; color: #1c1c1c; font-size: 12px; font-weight: 600; }
+  .seg a.on { background: #1c1c1c; color: #f6f5f1; }
 
-  /* ================= VARIANT B: TIMELINE (one vertical river of time, top segmented nav) ================= */
-  .vB { background: #0f1720; color: #e8eef4; min-height: 100vh; padding-bottom: 90px; }
-  .vB .top { position: sticky; top: 0; z-index: 5; background: rgba(15,23,32,.95); backdrop-filter: blur(6px); padding: 10px 14px 8px; border-bottom: 1px solid #22303d; }
-  .vB .seg { display: flex; background: #1b2633; border-radius: 10px; padding: 3px; }
-  .vB .seg a { flex: 1; text-align: center; padding: 7px 0; color: #8aa0b4; text-decoration: none; font-size: 12px; font-weight: 600; border-radius: 8px; }
-  .vB .seg a.on { background: #e8eef4; color: #0f1720; }
-  .vB .wrap { max-width: 560px; margin: 0 auto; padding: 0 14px; }
-  .vB .hero { padding: 18px 0 6px; }
-  .vB .hero h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
-  .vB .hero p { margin: 4px 0; color: #8aa0b4; font-size: 13px; }
-  .vB .river { position: relative; margin-left: 10px; border-left: 2px solid #2a3a4a; padding-left: 18px; }
-  .vB .node { position: relative; padding: 10px 0 14px; }
-  .vB .node::before { content: ""; position: absolute; left: -26px; top: 15px; width: 12px; height: 12px; border-radius: 50%; background: #0f1720; border: 2px solid #5b7a96; }
-  .vB .node.past::before { background: #5b7a96; }
-  .vB .node.now::before { background: #ffd23f; border-color: #ffd23f; box-shadow: 0 0 0 5px rgba(255,210,63,.2); }
-  .vB .node.big .title { color: #ffd23f; }
-  .vB .date { font-size: 11px; color: #8aa0b4; text-transform: uppercase; letter-spacing: .08em; }
-  .vB .title { font-weight: 700; font-size: 15px; margin: 2px 0; }
-  .vB .line { font-size: 13px; color: #c3d0dc; }
-  .vB .nowbar { margin: 4px 0 4px -36px; font: 700 11px monospace; color: #ffd23f; letter-spacing: .1em; }
-  .vB .exp { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; }
-  .vB .track { position: relative; flex: 1; height: 18px; background: #1b2633; border-radius: 9px; }
-  .vB .track .e, .vB .track .o, .vB .track .p { position: absolute; top: 2px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-50%); font: 700 9px/14px sans-serif; text-align: center; }
-  .vB .track .e { background: #5b7a96; color: #fff; } .vB .track .p { background: #a77bff; color: #fff; } .vB .track .o { background: #ffd23f; color: #000; }
-  .vB .legend { font-size: 11px; color: #8aa0b4; display: flex; gap: 12px; margin: 8px 0 4px; }
-  .vB .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
-  .vB .quals { display: flex; gap: 0; margin: 12px 0 18px; }
-  .vB .quals div { flex: 1; padding: 8px; font-size: 11px; background: #1b2633; border-right: 2px solid #0f1720; }
-  .vB .quals div:first-child { border-radius: 8px 0 0 8px; } .vB .quals div:last-child { border-radius: 0 8px 8px 0; border: 0; }
-  .vB .quals b { display: block; font-size: 12px; margin-bottom: 2px; }
-  .vB .quals .ok { box-shadow: inset 0 3px 0 #3ddc84; } .vB .quals .wait { box-shadow: inset 0 3px 0 #ffd23f; } .vB .quals .none { box-shadow: inset 0 3px 0 #5b7a96; }
-  .vB .days { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; }
-  .vB .days a { flex: 0 0 auto; text-align: center; padding: 6px 10px; border-radius: 10px; background: #1b2633; color: #c3d0dc; text-decoration: none; font-size: 11px; }
-  .vB .days a b { display: block; font-size: 16px; }
-  .vB .days a.on { background: #ffd23f; color: #000; }
-  .vB .days a .dot { display: block; height: 4px; margin-top: 3px; }
-  .vB .chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px; margin-left: 4px; }
-  .vB .chip.g { background: #3ddc84; color: #000; } .vB .chip.y { background: #ffd23f; color: #000; } .vB .chip.r { background: #ff6b6b; color: #000; }
+  /* --- calendar A: month grid with spanning bars --- */
+  .mhead { display: flex; justify-content: space-between; align-items: baseline; }
+  .mhead a { text-decoration: none; color: #1c1c1c; font-size: 20px; padding: 0 8px; }
+  .dow { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 10px; color: #777; text-align: center; margin-top: 6px; }
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(18px, auto); border-top: 1px solid #ccc; min-height: 76px; position: relative; row-gap: 2px; padding-bottom: 4px; }
+  .week .dn { font-size: 11px; padding: 2px 4px; color: #555; grid-row: 1; }
+  .week .dn.out { color: #ccc; } .week .dn.today { background: #1c1c1c; color: #fff; border-radius: 3px; justify-self: start; }
+  .ev { font-size: 10px; color: #fff; padding: 1px 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0 1px; border-radius: 2px; opacity: .78; }
+  .ev.champ { opacity: 1; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(0,0,0,.35); }
+  .ev.cl { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; } .ev.cr { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+  /* --- calendar B: sport lanes --- */
+  .lanes { display: grid; font-size: 10px; min-width: 760px; }
+  .lanes .lh { text-align: center; color: #777; border-bottom: 1px solid #bbb; padding: 2px 0; }
+  .lanes .lh.we { background: #ece8da; } .lanes .lh.today { background: #1c1c1c; color: #fff; }
+  .lanes .sp { font-weight: 700; font-size: 11px; padding: 6px 4px; border-bottom: 1px solid #e3e0d6; position: sticky; left: 0; background: #f6f5f1; z-index: 1; }
+  .lanes .cell { border-bottom: 1px solid #e3e0d6; border-left: 1px solid #efece3; }
+  .lanes .ev { align-self: center; margin: 3px 1px; }
+  /* --- calendar C: multi-month planner --- */
+  .plan { display: grid; grid-template-columns: 34px repeat(31, 1fr); gap: 1px; font-size: 9px; }
+  .plan .ml { font-weight: 700; font-size: 11px; align-self: center; }
+  .plan .c { height: 24px; background: #fff; position: relative; }
+  .plan .c.na { background: transparent; }
+  .plan .c.we { background: #ece8da; }
+  .plan .c.champ { outline: 2px solid #1c1c1c; outline-offset: -2px; z-index: 1; }
+  .plan .c.today::after { content: ""; position: absolute; left: 50%; top: -3px; width: 2px; bottom: -3px; background: #b3261e; }
+  .plan .hd { text-align: center; color: #777; }
 
-  /* ================= VARIANT C: SCOREBOARD (bold cards, hamburger drawer, grid on wide) ================= */
-  .vC { background: #fff; color: #111; min-height: 100vh; padding-bottom: 90px; font-family: "Helvetica Neue", Arial, sans-serif; }
-  .vC .bar { display: flex; align-items: center; gap: 10px; background: #e30613; color: #fff; padding: 12px 14px; position: sticky; top: 0; z-index: 5; }
-  .vC .bar .burger { font-size: 22px; cursor: pointer; background: none; border: 0; color: #fff; }
-  .vC .bar b { font-size: 15px; letter-spacing: .02em; text-transform: uppercase; }
-  .vC .drawer { display: none; position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.4); }
-  .vC .drawer.open { display: block; }
-  .vC .drawer nav { background: #111; width: 260px; height: 100%; padding: 20px 0; }
-  .vC .drawer nav a { display: block; color: #fff; text-decoration: none; padding: 14px 22px; font-weight: 700; font-size: 18px; }
-  .vC .drawer nav a.on { background: #e30613; }
-  .vC .wrap { max-width: 1000px; margin: 0 auto; padding: 14px; }
-  .vC .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-  @media (min-width: 760px) { .vC .grid { grid-template-columns: 1fr 1fr; } .vC .grid3 { grid-template-columns: 1fr 1fr 1fr; } }
-  .vC .card { border: 2px solid #111; border-radius: 4px; padding: 12px; }
-  .vC .card h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
-  .vC .big { font-size: 46px; font-weight: 900; line-height: 1; letter-spacing: -.03em; }
-  .vC .heroC { background: #111; color: #fff; border-radius: 4px; padding: 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
-  .vC .heroC h1 { margin: 0; font-size: 24px; } .vC .heroC p { margin: 4px 0 0; color: #bbb; font-size: 13px; }
-  .vC .lights { display: flex; gap: 8px; }
-  .vC .light { flex: 1; text-align: center; font-size: 11px; font-weight: 700; }
-  .vC .light i { display: block; width: 34px; height: 34px; border-radius: 50%; margin: 0 auto 4px; border: 3px solid #111; }
-  .vC .light.g i { background: #1db954; } .vC .light.y i { background: #ffcc00; } .vC .light.x i { background: #eee; }
-  .vC .score { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px 10px; font-size: 13px; align-items: center; }
-  .vC .score .h { font-size: 10px; color: #777; font-weight: 700; text-transform: uppercase; }
-  .vC .pill { display: inline-block; min-width: 36px; text-align: center; font-weight: 900; border-radius: 3px; padding: 2px 5px; }
-  .vC .pill.up { background: #1db954; color: #fff; } .vC .pill.down { background: #e30613; color: #fff; } .vC .pill.eq { background: #ddd; }
-  .vC .tile { border: 2px solid #111; border-radius: 4px; padding: 10px; }
-  .vC .tile .ev { font-size: 11px; text-transform: uppercase; color: #777; font-weight: 700; }
-  .vC .tile .who { font-weight: 800; font-size: 15px; margin: 2px 0; }
-  .vC .medal { display: inline-block; width: 22px; height: 22px; border-radius: 50%; text-align: center; font: 900 12px/22px sans-serif; }
-  .vC .m1 { background: #f2c230; } .vC .m2 { background: #c7c7c7; } .vC .m3 { background: #cd8a4a; }
-  .vC .medals { display: flex; gap: 14px; font-size: 32px; font-weight: 900; }
-  .vC .month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; font-size: 10px; }
-  .vC .month div { min-height: 58px; background: #f3f3f3; padding: 3px; }
-  .vC .month .dh { min-height: 0; background: none; font-weight: 700; text-align: center; }
-  .vC .month .ev { background: #111; color: #fff; padding: 1px 3px; border-radius: 2px; margin-top: 2px; font-size: 9px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .vC .month .ev.c { background: #e30613; }
-  .vC .month .today { outline: 2px solid #e30613; }
-  .vC .nownext { display: grid; grid-template-columns: 1fr; gap: 10px; }
-  .vC .slot { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; border-bottom: 2px solid #111; padding: 10px 0; }
-  .vC .slot .t { font-weight: 900; font-size: 18px; }
-  .vC .daypills { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; }
-  .vC .daypills a { flex: 0 0 auto; border: 2px solid #111; padding: 6px 10px; text-decoration: none; color: #111; font-weight: 800; font-size: 12px; border-radius: 3px; }
-  .vC .daypills a.on { background: #111; color: #fff; }
-  .vC .st { font-size: 10px; font-weight: 800; padding: 2px 5px; border-radius: 3px; text-transform: uppercase; }
-  .vC .st.g { background: #1db954; color: #fff; } .vC .st.y { background: #ffcc00; } .vC .st.r { background: #e30613; color: #fff; }
+  /* --- event A: stepper --- */
+  .stepper { display: flex; margin: 12px 0 4px; border: 1px solid #1c1c1c; }
+  .stepper a { flex: 1; text-align: center; padding: 8px 2px; text-decoration: none; color: #1c1c1c; font-size: 12px; font-weight: 600; border-right: 1px solid #1c1c1c; position: relative; }
+  .stepper a:last-child { border-right: 0; }
+  .stepper a.on { background: #1c1c1c; color: #f2c94c; }
+  .stepper a .now { display: block; font-size: 9px; font-weight: 400; color: #8a6d1d; }
+  .stepper a.on .now { color: #f2c94c; }
+  /* --- event B: stacked sections --- */
+  details.ph { border-top: 2px solid #1c1c1c; margin-top: 10px; }
+  details.ph > summary { list-style: none; cursor: pointer; padding: 10px 0; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  details.ph > summary::-webkit-details-marker { display: none; }
+  details.ph > summary b { font: 600 18px "Iowan Old Style", Georgia, serif; }
+  details.ph > summary::before { content: "▸"; margin-right: 6px; } details.ph[open] > summary::before { content: "▾"; }
+  details.ph.future > summary { color: #999; }
+  select { font: inherit; padding: 6px; border: 1px solid #1c1c1c; background: #fff; }
+  /* --- event C: entry × phase matrix --- */
+  .matrix { min-width: 640px; }
+  .matrix th a { color: inherit; text-decoration: none; } .matrix th.sel { background: #1c1c1c; color: #f2c94c; }
+  .matrix td.sel { background: #fffbe8; }
+  .matrix td { font-size: 12px; }
+  .grp td { background: #e9e6dc; font-weight: 700; font-size: 11px; padding: 3px 4px; }
+  .day { display: inline-block; text-align: center; padding: 4px 7px; border: 1px solid #1c1c1c; margin: 0 3px 4px 0; text-decoration: none; color: #1c1c1c; font-size: 11px; min-width: 42px; }
+  .day b { display: block; font-size: 14px; } .day.on { background: #1c1c1c; color: #f6f5f1; } .day.past { background: #e9e6dc; }
+  .day.has::after { content: "•"; display: block; line-height: .6; color: #b3261e; }
+  .medal { display: inline-block; width: 16px; height: 16px; border-radius: 50%; font: 700 9px/16px sans-serif; text-align: center; vertical-align: 1px; }
+  .m1 { background: #f2c230; } .m2 { background: #c7c7c7; } .m3 { background: #cd8a4a; }
+  tr.bel td { background: #fff3c4; font-weight: 700; }
 </style>
 </head>
 <body>
 <div class="mock">PROTOTYPE · MOCK DATA</div>
 <div id="app"></div>
-<div id="switcher">
-  <button id="prev" title="Previous variant (←)">‹</button>
-  <span id="label"></span>
-  <button id="next" title="Next variant (→)">›</button>
-</div>
+<div id="switcher"><button id="prev" title="Previous variant (←)">‹</button><span id="label"></span><button id="next" title="Next variant (→)">›</button></div>
 <script>
-// ======================= MOCK DATA (domain terms from GLOSSARY.md) =======================
+// ======================= MOCK DATA =======================
 const TODAY = '2026-11-13';
+const COL = { 'Athletics': '#e8590c', 'Cycling road': '#2f9e44', 'Track cycling': '#74b816', 'Hockey': '#1c7ed6', 'Judo': '#5f3dc4',
+  'Swimming': '#0c8599', 'Triathlon': '#e64980', '3x3 basketball': '#f08c00', 'Short track': '#3b5bdb', 'Speed skating': '#4dabf7',
+  'Alpine skiing': '#868e96', 'Biathlon': '#a61e4d' };
+
 const ATHLETE = {
-  name: 'Nafissatou Thiam', sport: 'Athletics', event: 'Heptathlon', born: '1994-08-19',
-  ids: 'World Athletics 14290553 · Wikidata Q2370613', worldRank: 2, sb: '6 812 pts', since: '2013 (Worlds Moscow)',
-  updated: 'Results: auto, weekly · Qualification status: curated, 2 Nov',
-  // Qualification = quota place (NOC-owned) separate from athlete path, BOIC selection layer on top
-  qual: {
-    cycle: 'LA 2028',
-    quota: { state: 'none', label: 'Not yet', detail: 'Window opens 1 Feb 2027. 24 places: entry standard 6 480 pts or World Ranking.' },
-    path:  { state: 'ok',   label: 'On track', detail: 'World Ranking #2; 6 812 pts already above the standard (counts once the window opens).' },
-    boic:  { state: 'wait', label: 'Criteria TBA', detail: 'BOIC selection criteria for LA28 not yet published (monthly check).' },
-  },
-  // ext = external Expectation (rank/seed at entry deadline); mine = personal pick; out = outcome (place)
-  results: [
-    { date: '2026-08-14', comp: 'European Championships, Birmingham', champ: true, ev: 'Heptathlon', ext: 1, mine: 1, out: 2, perf: '6 640 pts' },
-    { date: '2026-05-31', comp: 'Hypo-Meeting Götzis', champ: false, ev: 'Heptathlon', ext: 2, mine: 1, out: 1, perf: '6 812 pts' },
-    { date: '2026-03-20', comp: 'World Indoor Championships, Toruń', champ: true, ev: 'Pentathlon', ext: 1, mine: 2, out: 1, perf: '4 920 pts' },
-    { date: '2025-09-20', comp: 'World Championships, Tokyo', champ: true, ev: 'Heptathlon', ext: 2, mine: 2, out: 3, perf: '6 588 pts' },
+  name: 'Nafissatou Thiam', sport: 'Athletics', event: 'Heptathlon', born: '1994-08-19', since: '2013 (Worlds Moscow)', rank: 2,
+  ids: 'World Athletics 14290553 · Wikidata Q2370613',
+  // Two qualification targets: next Olympics and next Championship. Each track: need / has / state ok|no|pend; pct for progress bars.
+  targets: [
+    { key: 'oly', label: 'Next Olympics', name: 'LA 2028', dates: '14–30 Jul 2028', status: 't', window: 'Window 1 Feb 2027 – 29 Jun 2028', closes: '2028-06-29',
+      tracks: [
+        { k: 'Quota place', need: 'One of 24 places', has: 'Not allocated yet (window not open)', st: 'pend', pct: 0 },
+        { k: 'Entry standard', need: '6 480 pts', has: 'Best 6 812, counts from 1 Feb 2027', st: 'pend', pct: 100 },
+        { k: 'World Ranking', need: 'Top 24', has: '#2', st: 'ok', pct: 100 },
+        { k: 'BOIC selection', need: 'Criteria TBA', has: 'Monthly check · last 2 Nov', st: 'pend', pct: 0 } ] },
+    { key: 'ch', label: 'Next Championship', name: 'World Championships, Beijing', dates: '11–19 Sep 2027', status: 'q', window: 'Window 31 Jul 2026 – 24 Aug 2027', closes: '2027-08-24',
+      tracks: [
+        { k: 'Entry standard', need: '6 500 pts', has: '6 640 · Birmingham, Aug 2026', st: 'ok', pct: 100 },
+        { k: 'World Ranking', need: 'Top 24', has: '#2', st: 'ok', pct: 100 },
+        { k: 'Federation selection', need: 'Belgian Athletics, Aug 2027', has: 'Pending', st: 'pend', pct: 0 } ] },
   ],
   upcoming: [
-    { date: '2027-03-05', comp: 'European Indoor Championships', champ: true, ev: 'Pentathlon', ext: null, mine: null, note: 'Entry list not out; pick open' },
-    { date: '2027-05-29', comp: 'Hypo-Meeting Götzis', champ: false, ev: 'Heptathlon', ext: null, mine: 1, note: 'Your pick: 1' },
-    { date: '2027-09-11', comp: 'World Championships, Beijing', champ: true, ev: 'Heptathlon', ext: null, mine: null, note: 'Expected entry' },
+    { date: '2027-03-05', comp: 'European Indoor Championships', champ: true, ev: 'Pentathlon', note: 'Expected entry' },
+    { date: '2027-05-29', comp: 'Hypo-Meeting Götzis', champ: false, ev: 'Heptathlon', note: 'Entered' },
+    { date: '2027-09-17', comp: 'World Championships, Beijing', champ: true, ev: 'Heptathlon', note: 'Qualified' },
+  ],
+  results: [
+    { date: '2026-08-14', comp: 'European Championships, Birmingham', champ: true, ev: 'Heptathlon', out: 2, perf: '6 640 pts' },
+    { date: '2026-05-31', comp: 'Hypo-Meeting Götzis', champ: false, ev: 'Heptathlon', out: 1, perf: '6 812 pts · WL' },
+    { date: '2026-03-20', comp: 'World Indoor Championships, Toruń', champ: true, ev: 'Pentathlon', out: 1, perf: '4 920 pts' },
+    { date: '2025-09-20', comp: 'World Championships, Tokyo', champ: true, ev: 'Heptathlon', out: 3, perf: '6 588 pts' },
   ],
 };
+
 const CAL = [
-  { d: '2026-11-14', end: '2026-11-16', comp: 'Short Track World Tour, Montréal', sport: 'Short track', who: 'Hanne Desmet, Stijn Desmet, Women\'s relay (Team)', champ: false },
-  { d: '2026-11-20', end: '2026-11-22', comp: 'Speed Skating World Cup, Calgary', sport: 'Speed skating', who: 'Sandrine Tas, Mathias Vosté', champ: false },
-  { d: '2026-11-22', end: null, comp: 'Alpine Skiing World Cup, Gurgl', sport: 'Alpine', who: 'Armand Marchant (slalom)', champ: false },
-  { d: '2026-11-27', end: '2026-11-29', comp: 'FIH Pro League, Antwerp', sport: 'Hockey', who: 'Red Lions (Team) v NED, v GER', champ: false },
-  { d: '2026-12-01', end: '2026-12-06', comp: 'European Short Course Swimming Championships', sport: 'Swimming', who: 'Lucas Henveaux, Roos Vanotterdijk +4', champ: true },
-  { d: '2026-12-11', end: '2026-12-13', comp: 'Track Cycling Nations Cup', sport: 'Track cycling', who: 'Lindsay De Vylder, Men\'s madison (Team)', champ: false },
-  { d: '2027-01-15', end: '2027-01-17', comp: 'European Short Track Championships', sport: 'Short track', who: 'Hanne Desmet, Stijn Desmet +3', champ: true },
-  { d: '2027-01-22', end: '2027-01-24', comp: 'Biathlon World Cup, Antholz', sport: 'Biathlon', who: 'Florent Claude, Lotte Lie', champ: false },
+  { s: '2026-11-13', e: '2026-11-15', name: 'Short Track World Tour, Montréal', sport: 'Short track', who: 'Hanne Desmet, Stijn Desmet, women\'s relay' },
+  { s: '2026-11-20', e: '2026-11-22', name: 'Speed Skating World Cup, Calgary', sport: 'Speed skating', who: 'Sandrine Tas, Mathias Vosté' },
+  { s: '2026-11-22', e: '2026-11-22', name: 'Alpine World Cup, Gurgl', sport: 'Alpine skiing', who: 'Armand Marchant' },
+  { s: '2026-11-27', e: '2026-11-29', name: 'FIH Pro League, Antwerp', sport: 'Hockey', who: 'Red Lions, Red Panthers' },
+  { s: '2026-11-28', e: '2026-12-06', name: 'Biathlon World Cup, Östersund', sport: 'Biathlon', who: 'Florent Claude, Lotte Lie' },
+  { s: '2026-12-01', e: '2026-12-06', name: 'European Short Course Swimming Championships', sport: 'Swimming', who: 'Lucas Henveaux +5', champ: true },
+  { s: '2026-12-11', e: '2026-12-13', name: 'Track Cycling Nations Cup', sport: 'Track cycling', who: 'Lindsay De Vylder, men\'s madison' },
+  { s: '2026-12-12', e: '2026-12-13', name: 'Short Track World Tour, Seoul', sport: 'Short track', who: 'Hanne Desmet' },
+  { s: '2026-12-18', e: '2026-12-20', name: 'Judo World Masters', sport: 'Judo', who: 'Matthias Casse' },
+  { s: '2027-01-08', e: '2027-01-10', name: 'European Speed Skating Championships', sport: 'Speed skating', who: 'Sandrine Tas', champ: true },
+  { s: '2027-01-15', e: '2027-01-17', name: 'European Short Track Championships', sport: 'Short track', who: 'Hanne Desmet, Stijn Desmet +3', champ: true },
+  { s: '2027-01-22', e: '2027-01-24', name: 'Biathlon World Cup, Antholz', sport: 'Biathlon', who: 'Florent Claude' },
+  { s: '2027-02-02', e: '2027-02-14', name: 'Alpine World Championships, Crans-Montana', sport: 'Alpine skiing', who: 'Armand Marchant, Sam Maes', champ: true },
+  { s: '2027-02-12', e: '2027-02-14', name: 'Judo Grand Slam, Paris', sport: 'Judo', who: 'Matthias Casse, Jorre Verstraeten' },
 ];
-// Championship view: European Athletics Championships Birmingham 2026 (completed)
+
+// tracks: [label, need, has, ok:true|false|null]
 const CHAMP = {
-  name: 'European Athletics Championships', place: 'Birmingham', dates: '10–16 Aug 2026', status: 'Completed',
-  medals: { g: 1, s: 2, b: 1 },
+  name: 'World Athletics Championships', place: 'Beijing', dates: '11–19 Sep 2027', start: '2027-09-11', days: 9, simDay: 6,
+  selector: 'Belgian Athletics', selDate: '27 Aug 2027', window: 'Qualification window closes 24 Aug 2027', current: 'qual',
   entries: [
-    { day: 'Mon 10', ev: 'Men 400 m', who: 'Alexander Doom', team: false, ext: 2, mine: 2, out: 3, perf: '44.71' },
-    { day: 'Tue 11', ev: 'Women 1500 m', who: 'Elise Vanderelst', team: false, ext: 8, mine: 6, out: 'SF', perf: 'SF 4:06.2' },
-    { day: 'Wed 12', ev: 'Women 400 m', who: 'Cynthia Bolingo', team: false, ext: 6, mine: 5, out: 5, perf: '50.84' },
-    { day: 'Thu 13', ev: 'Men pole vault', who: 'Ben Broeders', team: false, ext: 5, mine: 4, out: 7, perf: '5.65' },
-    { day: 'Fri 14', ev: 'Heptathlon', who: 'Nafissatou Thiam', team: false, ext: 1, mine: 1, out: 2, perf: '6 640 pts' },
-    { day: 'Fri 14', ev: 'Heptathlon', who: 'Noor Vidts', team: false, ext: 3, mine: 4, out: 4, perf: '6 402 pts' },
-    { day: 'Sun 16', ev: 'Men 4×400 m', who: 'Belgian Tornados', team: true, roster: 'Sacoor, D. Borlée, Doom, Watrin (heats: Iguacel)', ext: 2, mine: 1, out: 1, perf: '2:59.12' },
-    { day: 'Sun 16', ev: 'Mixed 4×400 m', who: 'Mixed 4×400 m relay', team: true, roster: 'Sacoor, Bolingo, Watrin, Gilles', ext: 3, mine: 3, out: 2, perf: '3:10.04' },
+    { id: 'thiam', sport: 'Athletics', ev: 'Heptathlon', who: 'Nafissatou Thiam', st: 'q', tracks: [['Entry standard', '6 500', '6 640', true], ['World Ranking', 'top 24', '#2', true]], sel: true, ext: 1, mine: 1, out: 1, perf: '6 755 pts' },
+    { id: 'vidts', sport: 'Athletics', ev: 'Heptathlon', who: 'Noor Vidts', st: 'q', tracks: [['Entry standard', '6 500', '6 520', true], ['World Ranking', 'top 24', '#9', true]], sel: true, ext: 4, mine: 3, out: 5, perf: '6 410 pts' },
+    { id: 'doom', sport: 'Athletics', ev: 'Men 400 m', who: 'Alexander Doom', st: 'q', tracks: [['Entry standard', '44.85', '44.71', true], ['World Ranking', 'top 48', '#7', true]], sel: true, ext: 3, mine: 2, out: 2, perf: '44.38 NR' },
+    { id: 'bolingo', sport: 'Athletics', ev: 'Women 400 m', who: 'Cynthia Bolingo', st: 't', tracks: [['Entry standard', '50.75', '50.84', false], ['World Ranking', 'top 48', '#31', true]], sel: true, ext: 9, mine: 7, out: 'SF', perf: '50.92 (SF)' },
+    { id: 'broeders', sport: 'Athletics', ev: 'Men pole vault', who: 'Ben Broeders', st: 't', tracks: [['Entry standard', '5.82', '5.75', false], ['World Ranking', 'top 36', '#29', true]], sel: true, ext: 8, mine: 6, out: 6, perf: '5.80 SB' },
+    { id: 'abdi', sport: 'Athletics', ev: 'Men marathon', who: 'Bashir Abdi', st: 'q', tracks: [['Entry standard', '2:06:30', '2:05:12', true]], sel: true, ext: 6, mine: 4, out: 11, perf: '2:10:44' },
+    { id: 'tornados', sport: 'Athletics', ev: 'Men 4×400 m', who: 'Belgian Tornados', team: true, roster: 'Sacoor, D. Borlée, Doom, Watrin', st: 'q', tracks: [['World Relays', 'top 14', '4th', true]], sel: true, ext: 3, mine: 2, out: 3, perf: '2:58.40' },
+    { id: 'vanderelst', sport: 'Athletics', ev: 'Women 1500 m', who: 'Elise Vanderelst', st: 'r', tracks: [['Entry standard', '4:01.50', '4:04.10', false], ['World Ranking', 'top 56', '#52', true]], sel: false },
+    { id: 'mixed', sport: 'Athletics', ev: 'Mixed 4×400 m', who: 'Mixed 4×400 m relay', team: true, st: 'x', tracks: [['World Relays', 'top 14', '11th', false], ['Top list', 'top 16', '#18', false]], sel: false },
   ],
+  sessions: [
+    { d: 1, t: '07:30', id: 'abdi', r: 'Final', res: '11th · 2:10:44' }, { d: 1, t: '19:10', id: 'doom', r: 'Round 1', res: 'Q · 44.92' },
+    { d: 2, t: '19:40', id: 'bolingo', r: 'Round 1', res: 'Q · 51.10' }, { d: 3, t: '10:00', id: 'broeders', r: 'Qualification', res: 'q · 5.70' },
+    { d: 3, t: '20:05', id: 'doom', r: 'Semi-final', res: 'Q · 44.55' }, { d: 4, t: '20:15', id: 'bolingo', r: 'Semi-final', res: 'Out · 50.92' },
+    { d: 5, t: '19:30', id: 'broeders', r: 'Final', res: '6th · 5.80 SB' }, { d: 5, t: '21:50', id: 'doom', r: 'Final', res: 'Silver · 44.38 NR', medal: 2 },
+    { d: 6, t: '09:05', id: 'thiam', r: 'Heptathlon day 1', res: '1st after 4 · 4 012' }, { d: 6, t: '09:05', id: 'vidts', r: 'Heptathlon day 1', res: '6th after 4 · 3 820' },
+    { d: 7, t: '20:40', id: 'thiam', r: 'Heptathlon day 2', res: 'Gold · 6 755', medal: 1 }, { d: 7, t: '20:40', id: 'vidts', r: 'Heptathlon day 2', res: '5th · 6 410' },
+    { d: 8, t: '19:00', id: 'tornados', r: 'Heats', res: 'Q · 3:00.21' }, { d: 9, t: '21:30', id: 'tornados', r: 'Final', res: 'Bronze · 2:58.40', medal: 3 },
+  ],
+  nations: [['USA', 16, 5, 8], ['Kenya', 7, 4, 3], ['Jamaica', 3, 6, 3], ['Canada', 3, 3, 1], ['China', 2, 3, 4], ['Great Britain', 2, 4, 6], ['Netherlands', 1, 2, 3]],
 };
-// Games day-by-day: LA 2028, pre-Games view (entries are expected; status = qualification status)
+
 const GAMES = {
-  name: 'LA 2028', start: '14 Jul 2028',
-  days: [
-    { key: 'Sat 15', n: 1, items: [
-      { t: '09:00', ev: 'Cycling road · Men road race', who: 'Remco Evenepoel, Wout van Aert, +1', st: 'g', stl: 'Quota secured', ext: 1 },
-      { t: '13:30', ev: 'Hockey · Men pool B', who: 'Red Lions (Team) v ARG', st: 'g', stl: 'Quota secured', ext: null },
-      { t: '18:00', ev: 'Swimming · Men 400 m free heats', who: 'Lucas Henveaux', st: 'y', stl: 'On track', ext: 9 } ] },
-    { key: 'Sun 16', n: 2, items: [
-      { t: '08:00', ev: 'Cycling road · Women road race', who: 'Lotte Kopecky, +2', st: 'g', stl: 'Quota secured', ext: 2 },
-      { t: '11:00', ev: 'Triathlon · Women', who: 'Claire Michel', st: 'r', stl: 'At risk', ext: 24 } ] },
-    { key: 'Mon 17', n: 3, items: [
-      { t: '10:00', ev: 'Hockey · Women pool A', who: 'Red Panthers (Team) v NED', st: 'y', stl: 'On track', ext: null },
-      { t: '16:00', ev: 'Judo · Men −73 kg', who: 'Matthias Casse', st: 'g', stl: 'Live tracker: in', ext: 2 } ] },
-    { key: 'Tue 18', n: 4, items: [] },
-    { key: 'Wed 19', n: 5, items: [
-      { t: '12:00', ev: '3x3 basketball · Men pool', who: '3x3 Lions (Team) v SRB', st: 'y', stl: 'On track', ext: 3 } ] },
-    { key: 'Sat 22', n: 8, items: [
-      { t: '19:00', ev: 'Athletics · Heptathlon day 1', who: 'Nafissatou Thiam, Noor Vidts', st: 'y', stl: 'Window not open', ext: 1 },
-      { t: '20:30', ev: 'Athletics · Men 400 m heats', who: 'Alexander Doom', st: 'y', stl: 'On track', ext: 6 } ] },
+  name: 'LA 2028', place: 'Los Angeles', dates: '14–30 Jul 2028', start: '2028-07-15', days: 16, simDay: 8, games: true,
+  selector: 'BOIC', selDate: '6 Jul 2028', window: 'Most windows close 11 Jun 2028', current: 'qual',
+  entries: [
+    { id: 'thiam', sport: 'Athletics', ev: 'Heptathlon', who: 'Nafissatou Thiam', st: 't', tracks: [['Quota place', '1 of 24', 'window opens Feb 2027', null], ['Athlete path', '6 480 or rank', '#2', true], ['BOIC', 'TBA', '–', null]], sel: true, ext: 1, mine: 1, out: 2, perf: '6 690 pts' },
+    { id: 'doom', sport: 'Athletics', ev: 'Men 400 m', who: 'Alexander Doom', st: 't', tracks: [['Quota place', '1 of 48', 'not yet', null], ['Athlete path', '44.80 or rank', '#7', true], ['BOIC', 'TBA', '–', null]], sel: true, ext: 6, mine: 4, out: 5, perf: '44.29 NR' },
+    { id: 'tornados', sport: 'Athletics', ev: 'Men 4×400 m', who: 'Belgian Tornados', team: true, roster: 'Sacoor, D. Borlée, Doom, Watrin', st: 't', tracks: [['Quota place', 'World Relays top 14', '2028 edition', null], ['BOIC', 'TBA', '–', null]], sel: true, ext: 4, mine: 3, out: 3, perf: '2:57.80' },
+    { id: 'remco', sport: 'Cycling road', ev: 'Men road race', who: 'Remco Evenepoel', st: 't', tracks: [['Quota place', 'UCI nation ranking', 'BEL 2nd → 3 places', true], ['Athlete path', 'Named by BOIC', '–', null]], sel: true, ext: 1, mine: 1, out: 1, perf: '' },
+    { id: 'kopecky', sport: 'Cycling road', ev: 'Women road race', who: 'Lotte Kopecky', st: 't', tracks: [['Quota place', 'UCI nation ranking', 'BEL 3rd → 3 places', true], ['Athlete path', 'Named by BOIC', '–', null]], sel: true, ext: 2, mine: 1, out: 2, perf: '' },
+    { id: 'lions', sport: 'Hockey', ev: 'Men', who: 'Red Lions', team: true, st: 't', tracks: [['Quota place', 'Continental or qualifier', 'EuroHockey 2027', null]], sel: true, ext: 2, mine: 1, out: 1, perf: 'Final W 3–2' },
+    { id: 'panthers', sport: 'Hockey', ev: 'Women', who: 'Red Panthers', team: true, st: 't', tracks: [['Quota place', 'Continental or qualifier', 'EuroHockey 2027', null]], sel: true, ext: 4, mine: 4, out: 'QF', perf: 'QF L 1–3' },
+    { id: 'casse', sport: 'Judo', ev: 'Men −73 kg', who: 'Matthias Casse', st: 'q', tracks: [['Quota place', 'IJF ranking top 17', '#3 · live tracker', true], ['BOIC', 'TBA', '–', null]], sel: true, ext: 2, mine: 2, out: 3, perf: '' },
+    { id: 'henveaux', sport: 'Swimming', ev: 'Men 400 m free', who: 'Lucas Henveaux', st: 't', tracks: [['Athlete path', 'OQT 3:46.78', '3:44.10', true], ['BOIC', 'TBA', '–', null]], sel: true, ext: 9, mine: 7, out: 6, perf: '3:43.80' },
+    { id: 'michel', sport: 'Triathlon', ev: 'Women', who: 'Claire Michel', st: 'r', tracks: [['Quota place', 'Olympic list top 55', '#61', false]], sel: false },
+    { id: '3x3', sport: '3x3 basketball', ev: 'Men', who: '3x3 Lions', team: true, st: 'r', tracks: [['Quota place', 'Qualifying tournament', 'May 2028', null]], sel: false },
   ],
+  sessions: [
+    { d: 1, t: '09:00', id: 'lions', r: 'Pool B v ARG', res: 'W 3–1' }, { d: 2, t: '08:00', id: 'kopecky', r: 'Final', res: 'Silver', medal: 2 },
+    { d: 3, t: '10:00', id: 'panthers', r: 'Pool A v NED', res: 'L 0–2' }, { d: 3, t: '17:40', id: 'casse', r: 'Final block', res: 'Bronze', medal: 3 },
+    { d: 4, t: '07:30', id: 'remco', r: 'Final', res: 'Gold', medal: 1 }, { d: 5, t: '11:00', id: 'henveaux', r: 'Heats', res: 'Q · 3:44.90' },
+    { d: 5, t: '19:30', id: 'henveaux', r: 'Final', res: '6th · 3:43.80' }, { d: 6, t: '12:00', id: 'lions', r: 'Pool B v GER', res: 'D 2–2' },
+    { d: 8, t: '10:00', id: 'lions', r: 'Quarter-final', res: 'W 2–1' }, { d: 8, t: '14:00', id: 'panthers', r: 'Quarter-final', res: 'L 1–3' },
+    { d: 9, t: '10:00', id: 'thiam', r: 'Heptathlon day 1', res: '2nd after 4' }, { d: 10, t: '20:10', id: 'thiam', r: 'Heptathlon day 2', res: 'Silver · 6 690', medal: 2 },
+    { d: 10, t: '18:00', id: 'lions', r: 'Semi-final', res: 'W 4–2' }, { d: 11, t: '19:30', id: 'doom', r: 'Semi-final', res: 'Q · 44.40' },
+    { d: 12, t: '19:00', id: 'lions', r: 'Final', res: 'Gold · W 3–2', medal: 1 }, { d: 13, t: '20:45', id: 'doom', r: 'Final', res: '5th · 44.29 NR' },
+    { d: 15, t: '20:30', id: 'tornados', r: 'Final', res: 'Bronze · 2:57.80', medal: 3 },
+  ],
+  nations: [['USA', 40, 44, 42], ['China', 38, 30, 25], ['Australia', 18, 19, 16], ['Great Britain', 15, 18, 20], ['France', 14, 16, 18], ['Netherlands', 15, 7, 12], ['Japan', 16, 11, 14]],
 };
 
 // ======================= helpers =======================
-const SCREENS = [['athlete','Athlete'],['calendar','Calendar'],['championship','Championship'],['games','Games']];
-const VARIANTS = [['A','Ledger'],['B','Timeline'],['C','Scoreboard']];
-const qs = () => new URLSearchParams(location.search);
-const cur = () => ({ v: qs().get('variant') || 'A', s: qs().get('screen') || 'athlete', day: qs().get('day') || 'Sat 15' });
-const href = (o) => { const p = qs(); for (const k in o) p.set(k, o[k]); return '?' + p.toString(); };
-const fmt = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const fmtS = (d) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-const delta = (ext, out) => (typeof out !== 'number' || ext == null) ? null : ext - out; // + = beat expectation
-const dCls = (x) => x == null ? 'eq' : x > 0 ? 'up' : x < 0 ? 'down' : 'eq';
+const SCREENS = [['athlete', 'Athlete'], ['calendar', 'Calendar'], ['championship', 'Championship'], ['games', 'Games']];
+const PHASES = [['qual', 'Qualification'], ['sel', 'Selection'], ['live', 'Live'], ['after', 'After']];
+const VARIANTS = [['A', 'Stepper'], ['B', 'Stacked'], ['C', 'Matrix']];
+const P = () => new URLSearchParams(location.search);
+const g = (k, d) => P().get(k) ?? d;
+const href = (o) => { const p = P(); for (const k in o) o[k] == null ? p.delete(k) : p.set(k, o[k]); return '?' + p.toString(); };
+const D = (s) => new Date(s + 'T12:00');
+const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const fmt = (s) => D(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtS = (s) => D(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const dayDate = (ev, n) => { const d = D(ev.start); d.setDate(d.getDate() + n - 1); return d; };
+const dayLbl = (ev, n) => dayDate(ev, n).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+const ord = (n) => typeof n !== 'number' ? n : n + ([, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
+const delta = (e, o) => typeof o === 'number' && e != null ? e - o : null;
 const dTxt = (x) => x == null ? '–' : x > 0 ? '+' + x : x < 0 ? '' + x : '=';
-const ord = (n) => typeof n !== 'number' ? n : n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+const dCls = (x) => x == null ? 'eq' : x > 0 ? 'up' : x < 0 ? 'down' : 'eq';
+const ST = { q: 'Qualified', t: 'On track', r: 'At risk', x: 'Not qualified' };
+const badge = (s) => `<span class="badge b-${s}">${ST[s]}</span>`;
+const mark = (ok) => ok === true ? '<span class="ok">✓</span>' : ok === false ? '<span class="no">✗</span>' : '<span class="pend">…</span>';
+const sdot = (sp) => `<span class="dot" style="background:${COL[sp]}"></span>`;
+const who = (e) => `${e.who}${e.team ? ' <span class="sub">TEAM</span>' : ''}`;
+const MINE = {}; // personal Expectations typed into Selection (in memory only)
+const mineInput = (ev, e) => `<input class="mine" type="number" min="1" placeholder="–" value="${MINE[ev.name + e.id] ?? ''}" oninput="MINE['${ev.name}'+'${e.id}']=this.value">`;
+const filt = (ev, sports) => sports && sports.length ? ev.entries.filter(e => sports.includes(e.sport)) : ev.entries;
+const sportsOf = (ev) => [...new Set(ev.entries.map(e => e.sport))];
+const medalsBel = (ev, upto, ids) => { const m = [0, 0, 0]; ev.sessions.filter(s => s.medal && s.d <= upto && (!ids || ids.includes(s.id))).forEach(s => m[s.medal - 1]++); return m; };
+const athleteHead = (a) => `<h1>${a.name}</h1><div class="meta">${a.sport} · ${a.event} · born ${fmt(a.born)} · Athlete since ${a.since}</div><div class="sub">${a.ids}</div>`;
+const upcomingTbl = (a) => `<table><tr><th>Date</th><th>Competition</th><th>Status</th></tr>${a.upcoming.map(r => `<tr><td>${fmtS(r.date)}<div class="sub">${r.date.slice(0, 4)}</div></td><td>${r.champ ? '<b>' + r.comp + '</b>' : r.comp}<div class="sub">${r.ev}</div></td><td class="sub">${r.note}</td></tr>`).join('')}</table>`;
+const resultsTbl = (a) => `<table><tr><th>Date</th><th>Competition</th><th class="n">Place</th><th class="n">Performance</th></tr>${a.results.map(r => `<tr><td>${fmtS(r.date)}<div class="sub">${r.date.slice(0, 4)}</div></td><td>${r.champ ? '<b>' + r.comp + '</b>' : r.comp}<div class="sub">${r.ev}</div></td><td class="n"><b>${ord(r.out)}</b></td><td class="n">${r.perf}</td></tr>`).join('')}</table>`;
+const daysUntil = (s) => Math.round((D(s) - D(TODAY)) / 864e5);
 
-// ======================= VARIANT A — LEDGER =======================
+// ---- shared phase content blocks (variants differ in how they arrange / navigate them) ----
+function qualBlock(ev, es) {
+  return `<div class="note">${ev.window} · status curated from the trackers</div><table><tr><th>Entry</th><th>Qualification tracks</th><th>Status</th></tr>
+    ${es.map(e => `<tr><td>${ev.games ? sdot(e.sport) : ''}${who(e)}<div class="sub">${e.ev}</div></td><td>${e.tracks.map(t => `<div>${mark(t[3])} ${t[0]} <span class="sub">need ${t[1]} · has ${t[2]}</span></div>`).join('')}</td><td>${badge(e.st)}</td></tr>`).join('')}</table>`;
+}
+function selBlock(ev, es) {
+  const s = es.filter(e => e.sel), out = es.filter(e => !e.sel);
+  return `<div class="note">Final list named by ${ev.selector} on ${ev.selDate} · fill in your Expectation (place); locks when the event starts</div>
+    <table><tr><th>Entry</th><th class="n">External</th><th class="n">Mine</th></tr>
+    ${s.map(e => `<tr><td>${ev.games ? sdot(e.sport) : ''}${who(e)}<div class="sub">${e.ev}${e.roster ? ' · ' + e.roster : ''}</div></td><td class="n">${ord(e.ext)}</td><td class="n">${mineInput(ev, e)}</td></tr>`).join('')}</table>
+    ${out.length ? `<p class="sub">Not selected: ${out.map(e => e.who + ' (' + e.ev + ')').join(', ')}</p>` : ''}`;
+}
+function medalTbl(ev, upto, ids, label) {
+  const f = upto / ev.days, b = medalsBel(ev, upto, ids);
+  const rows = ev.nations.map(([n, a, s, c]) => [n, Math.round(a * f), Math.round(s * f), Math.round(c * f)]).concat([['Belgium', ...b]])
+    .sort((x, y) => y[1] - x[1] || y[2] - x[2] || y[3] - x[3]);
+  return `<table><tr><th>#</th><th>${label || 'Medal table'}</th><th class="n"><span class="medal m1">G</span></th><th class="n"><span class="medal m2">S</span></th><th class="n"><span class="medal m3">B</span></th></tr>
+    ${rows.map((r, i) => `<tr class="${r[0] === 'Belgium' ? 'bel' : ''}"><td>${i + 1}</td><td>${r[0]}</td><td class="n">${r[1]}</td><td class="n">${r[2]}</td><td class="n">${r[3]}</td></tr>`).join('')}</table>`;
+}
+function dayPicker(ev, ids, cur) {
+  let h = '';
+  for (let n = 1; n <= ev.days; n++) {
+    const has = ev.sessions.some(s => s.d === n && (!ids || ids.includes(s.id)));
+    h += `<a class="day ${n === cur ? 'on' : ''} ${n < ev.simDay ? 'past' : ''} ${has ? 'has' : ''}" href="${href({ day: n })}">D${n}<b>${dayDate(ev, n).getDate()}</b></a>`;
+  }
+  return `<div class="scrollx" style="white-space:nowrap">${h}</div>`;
+}
+function daySessions(ev, ids, n) {
+  const ss = ev.sessions.filter(s => s.d === n && (!ids || ids.includes(s.id)));
+  const E = (id) => ev.entries.find(e => e.id === id);
+  return `<h3>${dayLbl(ev, n)}${n === ev.simDay ? ' · today' : ''}</h3>` + (ss.length ? `<table>${ss.map(s => { const e = E(s.id); return `<tr><td style="width:50px">${s.t}</td><td>${ev.games ? sdot(e.sport) : ''}${who(e)}<div class="sub">${e.ev} · ${s.r}</div></td><td class="n">${n < ev.simDay ? (s.medal ? `<span class="medal m${s.medal}">${'GSB'[s.medal - 1]}</span> ` : '') + '<b>' + s.res + '</b>' : '<span class="sub">' + (n === ev.simDay ? 'today' : 'scheduled') + '</span>'}</td></tr>`; }).join('')}</table>` : '<p class="sub">No Belgian Entries this day.</p>');
+}
+function liveBlock(ev, es, day) {
+  const ids = es.map(e => e.id), n = +day || ev.simDay;
+  return `<div class="note">Simulated: today is day ${ev.simDay} (${dayLbl(ev, ev.simDay)})</div>${dayPicker(ev, ids, n)}${daySessions(ev, ids, n)}
+    <h3>Medal table after day ${ev.simDay - 1}</h3>${medalTbl(ev, ev.simDay - 1, ids.length < ev.entries.length ? ids : null)}`;
+}
+function afterBlock(ev, es) {
+  const s = es.filter(e => e.sel), ds = s.map(e => delta(+(MINE[ev.name + e.id] || e.ext), e.out));
+  const beat = s.filter(e => delta(e.ext, e.out) > 0).length, met = s.filter(e => delta(e.ext, e.out) === 0).length;
+  const best = s.filter(e => typeof e.out === 'number').sort((a, b) => a.out - b.out).slice(0, 5);
+  return `<h3>Expectation vs outcome</h3><p class="meta">Against external: <b>${beat} beat · ${met} matched · ${s.length - beat - met} short</b></p>
+    <table><tr><th>Entry</th><th class="n">Ext.</th><th class="n">Mine</th><th class="n">Out</th><th class="n">±Ext</th><th class="n">±Mine</th></tr>
+    ${s.map(e => { const d1 = delta(e.ext, e.out), m = +(MINE[ev.name + e.id] || e.mine), d2 = delta(m, e.out); return `<tr><td>${ev.games ? sdot(e.sport) : ''}${who(e)}<div class="sub">${e.ev}</div></td><td class="n">${e.ext}</td><td class="n">${m}</td><td class="n"><b>${ord(e.out)}</b></td><td class="n ${dCls(d1)}">${dTxt(d1)}</td><td class="n ${dCls(d2)}">${dTxt(d2)}</td></tr>`; }).join('')}</table>
+    <h3>Best results</h3><table>${best.map(e => `<tr><td>${e.out <= 3 ? `<span class="medal m${e.out}">${'GSB'[e.out - 1]}</span>` : ord(e.out)}</td><td>${ev.games ? sdot(e.sport) : ''}${who(e)}<div class="sub">${e.ev}</div></td><td class="n">${e.perf}</td></tr>`).join('')}</table>
+    <h3>Final medal table</h3>${medalTbl(ev, ev.days, es.length < ev.entries.length ? es.map(e => e.id) : null)}`;
+}
+const BLOCK = { qual: qualBlock, sel: selBlock, live: liveBlock, after: afterBlock };
+const evHead = (ev) => `<h1>${ev.name}</h1><div class="meta">${ev.place} · ${ev.dates}</div>`;
+
+// ---- calendar helpers ----
+const monthKey = () => g('month', TODAY.slice(0, 7));
+const shiftMonth = (m, k) => { const d = D(m + '-01'); d.setMonth(d.getMonth() + k); return iso(d).slice(0, 7); };
+const monthTitle = (m) => D(m + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+const daysIn = (m) => { const d = D(m + '-01'); return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); };
+const legend = (evs) => `<div style="margin:10px 0">${[...new Set(evs.map(e => e.sport))].map(s => `<span class="chip" style="border-color:${COL[s]}">${sdot(s)}${s}</span>`).join('')}<span class="chip" style="font-weight:700">▣ bold = Championship</span></div>`;
+const evList = (evs) => `<table>${evs.map(e => `<tr><td style="width:90px">${fmtS(e.s)}${e.e !== e.s ? '–' + fmtS(e.e) : ''}</td><td>${sdot(e.sport)}${e.champ ? '<b>' + e.name + '</b>' : e.name}<div class="sub">${e.sport} · ${e.who}</div></td></tr>`).join('')}</table>`;
+const inMonth = (m) => CAL.filter(e => e.s.slice(0, 7) <= m && e.e.slice(0, 7) >= m);
+const monthNav = (m) => `<div class="mhead"><a href="${href({ month: shiftMonth(m, -1) })}">‹</a><h1 style="margin:0">${monthTitle(m)}</h1><a href="${href({ month: shiftMonth(m, 1) })}">›</a></div>`;
+
+// ======================= VARIANT A — STEPPER =======================
 const A = {
   athlete() {
-    const a = ATHLETE, q = a.qual;
-    return `<h1>${a.name}</h1>
-      <div class="meta">${a.sport} · ${a.event} · born ${fmt(a.born)} · Athlete since ${a.since}</div>
-      <div class="meta sub">${a.ids}</div>
-      <h2>Qualification · ${q.cycle}</h2>
-      <div class="ladder">
-        <div class="k">Quota place</div><div><b>${q.quota.label}</b><br><span class="sub">${q.quota.detail}</span></div>
-        <div class="k">Athlete path</div><div><b>${q.path.label}</b><br><span class="sub">${q.path.detail}</span></div>
-        <div class="k">BOIC selection</div><div><b>${q.boic.label}</b><br><span class="sub">${q.boic.detail}</span></div>
-      </div>
-      <h2>Upcoming</h2>
-      <table><tr><th>Date</th><th>Competition</th><th class="n">Ext.</th><th class="n">Mine</th></tr>
-      ${a.upcoming.map(r => `<tr><td>${fmtS(r.date)}<div class="sub">${r.date.slice(0,4)}</div></td><td class="${r.champ?'champ':''}">${r.comp}<div class="sub">${r.ev} · ${r.note}</div></td><td class="n">${r.ext ?? '–'}</td><td class="n">${r.mine ?? '<u>pick</u>'}</td></tr>`).join('')}
-      </table>
-      <h2>Results · Expectation vs outcome</h2>
-      <table><tr><th>Date</th><th>Competition</th><th class="n">Ext.</th><th class="n">Mine</th><th class="n">Out</th><th class="n">±Ext</th></tr>
-      ${a.results.map(r => { const d = delta(r.ext, r.out); return `<tr><td>${fmtS(r.date)}<div class="sub">${r.date.slice(0,4)}</div></td><td class="${r.champ?'champ':''}">${r.comp}<div class="sub">${r.ev} · ${r.perf}</div></td><td class="n">${r.ext}</td><td class="n">${r.mine}</td><td class="n"><b>${r.out}</b></td><td class="n ${dCls(d)}">${dTxt(d)}</td></tr>`; }).join('')}
-      <tr><td></td><td class="sub">Season record vs external Expectation</td><td colspan="4" class="n"><b>1 beat · 0 matched · 3 short</b></td></tr>
-      </table>
-      <p class="sub" style="font-family:sans-serif">${a.updated}</p>`;
+    const a = ATHLETE;
+    return athleteHead(a) + `<div class="twocol">${a.targets.map(t => `<div><h2>${t.label} · ${t.name}</h2>
+      <div style="margin-bottom:6px">${badge(t.status)} <span class="sub">${t.dates} · ${t.window}</span></div>
+      <div class="ladder">${t.tracks.map(r => `<div class="k">${r.k}</div><div>${mark(r.st === 'ok' ? true : r.st === 'no' ? false : null)} <b>${r.need}</b><br><span class="sub">${r.has}</span></div>`).join('')}</div></div>`).join('')}</div>
+      <h2>Upcoming</h2>${upcomingTbl(a)}<h2>Results</h2>${resultsTbl(a)}`;
   },
   calendar() {
-    let wk = '';
-    return `<h1>Calendar</h1><div class="meta">Belgian Entries, next 10 weeks · <b>bold</b> = Championship</div>` +
-      CAL.map(e => {
-        const w = 'Week of ' + fmtS(e.d); const head = w !== wk ? `<div class="wk">${w}</div>` : ''; wk = w;
-        return head + `<table><tr><td style="width:80px">${fmtS(e.d)}${e.end ? '–<br>' + fmtS(e.end) : ''}</td><td class="${e.champ?'champ':''}">${e.comp}<div class="sub">${e.sport} · ${e.who}</div></td></tr></table>`;
-      }).join('') + `<p class="sub" style="font-family:sans-serif">↧ Subscribe (iCal) · Filter: All sports ▾</p>`;
+    // Classic month grid; multi-day events are bars spanning their days, wrapping across weeks.
+    const m = monthKey(), first = D(m + '-01'), off = (first.getDay() + 6) % 7;
+    const start = new Date(first); start.setDate(1 - off);
+    let h = monthNav(m) + `<div class="dow">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => `<div>${x}</div>`).join('')}</div>`;
+    for (let w = 0; w < 6; w++) {
+      const ws = new Date(start); ws.setDate(start.getDate() + w * 7);
+      if (w > 0 && iso(ws).slice(0, 7) > m) break;
+      const days = [...Array(7)].map((_, i) => { const d = new Date(ws); d.setDate(ws.getDate() + i); return iso(d); });
+      const evs = CAL.filter(e => e.s <= days[6] && e.e >= days[0]).sort((a, b) => a.s.localeCompare(b.s));
+      const lanes = []; let bars = '';
+      evs.forEach(e => {
+        const c0 = Math.max(0, days.indexOf(e.s) < 0 ? 0 : days.indexOf(e.s)), c1 = days.indexOf(e.e) < 0 ? 6 : days.indexOf(e.e);
+        let l = 0; while ((lanes[l] || []).some(([a, b]) => !(c1 < a || c0 > b))) l++; (lanes[l] = lanes[l] || []).push([c0, c1]);
+        bars += `<div class="ev ${e.champ ? 'champ' : ''} ${e.s < days[0] ? 'cl' : ''} ${e.e > days[6] ? 'cr' : ''}" title="${e.name}" style="background:${COL[e.sport]};grid-column:${c0 + 1}/${c1 + 2};grid-row:${l + 2}">${e.s < days[0] ? '← ' : ''}${e.name}</div>`;
+      });
+      h += `<div class="week">${days.map((d, i) => `<div class="dn ${d.slice(0, 7) !== m ? 'out' : ''} ${d === TODAY ? 'today' : ''}" style="grid-column:${i + 1}">${+d.slice(8)}</div>`).join('')}${bars}</div>`;
+    }
+    return h + legend(inMonth(m)) + `<h2>This month</h2>` + evList(inMonth(m)) + `<p class="sub">↧ Subscribe (iCal)</p>`;
   },
-  championship() {
-    const c = CHAMP;
-    return `<h1>${c.name}</h1><div class="meta">${c.place} · ${c.dates} · ${c.status} · Belgium: ${c.medals.g} gold, ${c.medals.s} silver, ${c.medals.b} bronze</div>
-      <h2>Belgian Entries</h2>
-      <table><tr><th>Day</th><th>Event / Entry</th><th class="n">Ext.</th><th class="n">Mine</th><th class="n">Out</th><th class="n">±</th></tr>
-      ${c.entries.map(e => { const d = delta(e.ext, e.out); return `<tr><td>${e.day}</td><td>${e.who}${e.team ? ' <span class="tag">TEAM</span>' : ''}<div class="sub">${e.ev} · ${e.perf}${e.roster ? '<br>Roster: ' + e.roster : ''}</div></td><td class="n">${e.ext}</td><td class="n">${e.mine}</td><td class="n"><b>${e.out}</b></td><td class="n ${dCls(d)}">${dTxt(d)}</td></tr>`; }).join('')}
-      </table>`;
-  },
-  games() {
-    const g = GAMES;
-    return `<h1>${g.name} · day by day</h1><div class="meta">Expected Belgian Entries per day · status = qualification status today · scroll →</div>
-      <div class="gridscroll"><table class="sched"><tr>${g.days.map(d => `<th>Day ${d.n}<br>${d.key} Jul</th>`).join('')}</tr>
-      <tr>${g.days.map(d => `<td>${d.items.length ? d.items.map(i => `<div style="margin-bottom:8px"><b>${i.t}</b> ${i.ev}<br>${i.who}<br><span class="tag" style="color:${i.st==='g'?'#1b7a35':i.st==='y'?'#8a6d1d':'#b3261e'}">${i.stl}</span>${i.ext ? ' <span class="sub">exp ' + ord(i.ext) + '</span>' : ''}</div>`).join('') : '<span class="sub">No Belgians</span>'}</td>`).join('')}</tr></table></div>`;
-  },
-  render(s) {
-    return `<div class="vA"><div class="wrap">${this[s]()}</div>
-      <nav class="tabs">${SCREENS.map(([k, l]) => `<a href="${href({ screen: k })}" class="${k===s?'on':''}">${l}</a>`).join('')}</nav></div>`;
+  event(ev) {
+    // One phase at a time behind a stepper; the current real-world phase is marked "now". Games: sport chips.
+    const ph = g('phase', ev.current), sp = ev.games ? (g('sport', '') ? g('sport').split(',') : []) : [];
+    const es = filt(ev, sp);
+    const chips = ev.games ? `<div style="margin-top:10px"><a class="chip ${!sp.length ? 'on' : ''}" href="${href({ sport: null })}">All sports</a>${sportsOf(ev).map(s => `<a class="chip ${sp.includes(s) ? 'on' : ''}" href="${href({ sport: sp.includes(s) ? sp.filter(x => x !== s).join(',') || null : [...sp, s].join(',') })}">${sdot(s)}${s}</a>`).join('')}</div>` : '';
+    return evHead(ev) + `<div class="stepper">${PHASES.map(([k, l]) => `<a class="${k === ph ? 'on' : ''}" href="${href({ phase: k, day: null })}">${l}${k === ev.current ? '<span class="now">● now</span>' : '<span class="now">&nbsp;</span>'}</a>`).join('')}</div>` + chips + BLOCK[ph](ev, es, g('day'));
   },
 };
 
-// ======================= VARIANT B — TIMELINE =======================
+// ======================= VARIANT B — STACKED =======================
 const B = {
-  track(ext, mine, out, n = 8) {
-    const pos = (v) => typeof v === 'number' ? Math.min(v, n) / n * 92 + 4 : 96;
-    return `<div class="exp"><span style="width:28px;color:#8aa0b4">1st</span><div class="track">
-      ${ext != null ? `<span class="e" style="left:${pos(ext)}%">${ext}</span>` : ''}
-      ${mine != null ? `<span class="p" style="left:${pos(mine)}%">${mine}</span>` : ''}
-      ${out != null ? `<span class="o" style="left:${pos(out)}%">${typeof out === 'number' ? out : '×'}</span>` : ''}
-      </div><span style="width:28px;color:#8aa0b4;text-align:right">${n}th</span></div>`;
-  },
-  legend: `<div class="legend"><span><i style="background:#5b7a96"></i>External</span><span><i style="background:#a77bff"></i>My pick</span><span><i style="background:#ffd23f"></i>Outcome</span></div>`,
   athlete() {
-    const a = ATHLETE, q = a.qual;
-    const items = [...a.upcoming.slice().reverse().map(r => ({ ...r, past: false })), { now: true }, ...a.results.map(r => ({ ...r, past: true }))];
-    return `<div class="hero"><h1>${a.name}</h1><p>${a.event} · World #${a.worldRank} · SB ${a.sb}</p></div>
-      <div class="quals">
-        <div class="${q.quota.state}"><b>Quota place</b>${q.quota.label}</div>
-        <div class="${q.path.state}"><b>Athlete path</b>${q.path.label}</div>
-        <div class="${q.boic.state}"><b>BOIC</b>${q.boic.label}</div>
-      </div>
-      ${this.legend}
-      <div class="river">${items.map(r => r.now ? `<div class="node now"><div class="nowbar">━━ TODAY · ${fmtS(TODAY)} ━━</div></div>` : `
-        <div class="node ${r.past ? 'past' : ''} ${r.champ ? 'big' : ''}">
-          <div class="date">${fmt(r.date)}</div>
-          <div class="title">${r.comp}</div>
-          <div class="line">${r.ev}${r.past ? ` · <b>${ord(r.out)}</b> · ${r.perf}` : ` · ${r.note}`}</div>
-          ${this.track(r.ext, r.mine, r.past ? r.out : null)}
-        </div>`).join('')}</div>`;
+    // Both targets in one combined table, grouped by target.
+    const a = ATHLETE;
+    return athleteHead(a) + `<h2>Qualification</h2><table><tr><th>Track</th><th>Need</th><th>Has</th><th></th></tr>
+      ${a.targets.map(t => `<tr class="grp"><td colspan="4">${t.label}: ${t.name} · ${t.dates} &nbsp; ${badge(t.status)}<div class="sub" style="font-weight:400">${t.window} · closes in ${daysUntil(t.closes)} days</div></td></tr>
+      ${t.tracks.map(r => `<tr><td>${r.k}</td><td>${r.need}</td><td class="sub">${r.has}</td><td>${mark(r.st === 'ok' ? true : r.st === 'no' ? false : null)}</td></tr>`).join('')}`).join('')}</table>
+      <h2>Upcoming</h2>${upcomingTbl(a)}<h2>Results</h2>${resultsTbl(a)}`;
   },
   calendar() {
-    return `<div class="hero"><h1>What's next</h1><p>Belgian Entries from today · Championships in yellow</p></div>
-      <div class="river"><div class="node now"><div class="nowbar">━━ TODAY · ${fmtS(TODAY)} ━━</div></div>
-      ${CAL.map(e => `<div class="node ${e.champ ? 'big' : ''}"><div class="date">${fmtS(e.d)}${e.end ? ' – ' + fmtS(e.end) : ''} · ${e.sport}</div><div class="title">${e.comp}</div><div class="line">${e.who}</div></div>`).join('')}</div>`;
+    // Month as sport lanes: one row per sport, days across, events as bars spanning their days.
+    const m = monthKey(), N = daysIn(m), evs = inMonth(m), sports = [...new Set(evs.map(e => e.sport))];
+    let h = `<div class="lanes" style="grid-template-columns:96px repeat(${N}, 1fr)"><div class="lh"></div>`;
+    for (let d = 1; d <= N; d++) { const ds = m + '-' + String(d).padStart(2, '0'), wd = D(ds).getDay(); h += `<div class="lh ${wd === 0 || wd === 6 ? 'we' : ''} ${ds === TODAY ? 'today' : ''}">${'SMTWTFS'[wd]}<br>${d}</div>`; }
+    sports.forEach((s, i) => {
+      const row = i + 2;
+      h += `<div class="sp" style="grid-row:${row};border-left:4px solid ${COL[s]}">${s}</div>`;
+      for (let d = 1; d <= N; d++) h += `<div class="cell" style="grid-row:${row};grid-column:${d + 1}"></div>`;
+      evs.filter(e => e.sport === s).forEach(e => {
+        const a = e.s.slice(0, 7) < m ? 1 : +e.s.slice(8), b = e.e.slice(0, 7) > m ? N : +e.e.slice(8);
+        h += `<div class="ev ${e.champ ? 'champ' : ''}" title="${e.name}" style="background:${COL[s]};grid-row:${row};grid-column:${a + 1}/${b + 2}">${e.name}</div>`;
+      });
+    });
+    return monthNav(m) + `<p class="sub">One row per sport · scroll sideways on a phone</p><div class="scrollx">${h}</div></div>` + `<h2>This month</h2>` + evList(evs);
   },
-  championship() {
-    const c = CHAMP;
-    return `<div class="hero"><h1>${c.name}</h1><p>${c.place} · ${c.dates} · 🥇${c.medals.g} 🥈${c.medals.s} 🥉${c.medals.b}</p></div>
-      ${this.legend}
-      <div class="river">${c.entries.map(e => `<div class="node past ${typeof e.out === 'number' && e.out <= 3 ? 'big' : ''}">
-        <div class="date">${e.day} Aug · ${e.ev}</div>
-        <div class="title">${e.who} · ${ord(e.out)}${e.team ? ' <span class="chip y">Team</span>' : ''}</div>
-        <div class="line">${e.perf}${e.roster ? ' · ' + e.roster : ''}</div>
-        ${this.track(e.ext, e.mine, e.out)}</div>`).join('')}</div>`;
-  },
-  games(day) {
-    const g = GAMES, d = g.days.find(x => x.key === day) || g.days[0];
-    return `<div class="hero"><h1>${g.name}</h1><p>Opening ${g.start} · swipe the days · expected Belgian Entries</p></div>
-      <div class="days">${g.days.map(x => `<a href="${href({ day: x.key })}" class="${x.key===d.key?'on':''}">Day ${x.n}<b>${x.key.split(' ')[1]}</b>${x.key.split(' ')[0]}<span class="dot" style="background:${x.items.length ? '#3ddc84' : 'transparent'}"></span></a>`).join('')}</div>
-      <div class="river">${d.items.length ? d.items.map(i => `<div class="node"><div class="date">${i.t} local</div><div class="title">${i.ev}</div><div class="line">${i.who} <span class="chip ${i.st}">${i.stl}</span></div>${i.ext ? `<div class="line" style="color:#8aa0b4;margin-top:4px">External Expectation: ${ord(i.ext)} · <u>add my pick</u></div>` : ''}</div>`).join('') : '<div class="node"><div class="line">No Belgian Entries this day.</div></div>'}</div>`;
-  },
-  render(s, day) {
-    return `<div class="vB"><div class="top"><div class="seg">${SCREENS.map(([k, l]) => `<a href="${href({ screen: k })}" class="${k===s?'on':''}">${l}</a>`).join('')}</div></div>
-      <div class="wrap">${this[s](day)}</div></div>`;
+  event(ev) {
+    // All four phases on one page as collapsible sections; the current one is open, later ones greyed. Games: dropdown filter.
+    const open = g('phase', ev.current), sp = ev.games ? g('sport', '') : '';
+    const es = filt(ev, sp ? [sp] : []);
+    const idx = PHASES.findIndex(p => p[0] === ev.current);
+    const sum = { qual: `${es.filter(e => e.st === 'q').length} qualified · ${es.filter(e => e.st === 't').length} on track · ${es.filter(e => e.st === 'r').length} at risk`,
+      sel: `${es.filter(e => e.sel).length} selected by ${ev.selector}`, live: `day ${ev.simDay} of ${ev.days}`,
+      after: (() => { const m = medalsBel(ev, ev.days, sp ? es.map(e => e.id) : null); return `${m[0]} gold · ${m[1]} silver · ${m[2]} bronze`; })() };
+    const filter = ev.games ? `<div style="margin:10px 0">Showing <select onchange="location.search='${href({ sport: '__' })}'.replace('__',encodeURIComponent(this.value)).replace(/sport=(&|$)/,'')"><option value="">All sports combined</option>${sportsOf(ev).map(s => `<option ${s === sp ? 'selected' : ''}>${s}</option>`).join('')}</select></div>` : '';
+    return evHead(ev) + filter + PHASES.map(([k, l], i) => `<details class="ph ${i > idx ? 'future' : ''}" ${k === open ? 'open' : ''}><summary><b>${l}</b><span class="sub">${k === ev.current ? '● now · ' : i > idx ? 'later · ' : ''}${sum[k]}</span></summary>${BLOCK[k](ev, es, g('day'))}</details>`).join('');
   },
 };
 
-// ======================= VARIANT C — SCOREBOARD =======================
+// ======================= VARIANT C — MATRIX =======================
 const C = {
   athlete() {
-    const a = ATHLETE, q = a.qual;
-    const beat = a.results.filter(r => delta(r.ext, r.out) > 0).length, short = a.results.filter(r => delta(r.ext, r.out) < 0).length;
-    const lc = (s) => s === 'ok' ? 'g' : s === 'wait' ? 'y' : 'x';
-    return `<div class="heroC"><div><h1>${a.name}</h1><p>${a.event} · ${a.sport}</p></div><div style="text-align:right"><div class="big">#${a.worldRank}</div><p>World Ranking</p></div></div>
-      <div class="grid" style="margin-top:12px">
-        <div class="card"><h3>Road to ${q.cycle}</h3>
-          <div class="lights">
-            <div class="light ${lc(q.quota.state)}"><i></i>Quota place<br><span style="font-weight:400">${q.quota.label}</span></div>
-            <div class="light ${lc(q.path.state)}"><i></i>Athlete path<br><span style="font-weight:400">${q.path.label}</span></div>
-            <div class="light ${lc(q.boic.state)}"><i></i>BOIC<br><span style="font-weight:400">${q.boic.label}</span></div>
-          </div><p style="font-size:12px;color:#555;margin:10px 0 0">${q.quota.detail}</p></div>
-        <div class="card"><h3>Next up</h3><div style="font-weight:800;font-size:18px">${a.upcoming[0].comp}</div><div style="font-size:13px;color:#555">${fmt(a.upcoming[0].date)} · ${a.upcoming[0].ev}</div>
-          <button style="margin-top:10px;background:#e30613;color:#fff;border:0;padding:10px 14px;font-weight:800;border-radius:3px">Make my pick</button></div>
-        <div class="card" style="grid-column:1/-1"><h3>Expectation vs outcome · last 4</h3>
-          <div style="display:flex;gap:18px;margin-bottom:10px"><div><div class="big" style="color:#1db954">${beat}</div><small>beat</small></div><div><div class="big" style="color:#e30613">${short}</div><small>short</small></div></div>
-          <div class="score"><span class="h">Competition</span><span class="h">Ext</span><span class="h">Out</span><span class="h">±</span>
-          ${a.results.map(r => { const d = delta(r.ext, r.out); return `<span><b>${r.comp}</b><br><small>${fmtS(r.date)} ${r.date.slice(0,4)} · ${r.perf} · my pick ${r.mine}</small></span><span>${r.ext}</span><span><b>${r.out}</b></span><span class="pill ${dCls(d)}">${dTxt(d)}</span>`; }).join('')}
-          </div></div>
-      </div>`;
+    // Segmented switch between the two targets; each track as a progress bar toward its requirement.
+    const a = ATHLETE, tk = g('target', 'oly'), t = a.targets.find(x => x.key === tk) || a.targets[0];
+    return athleteHead(a) + `<h2>Qualification</h2><div class="seg">${a.targets.map(x => `<a class="${x.key === t.key ? 'on' : ''}" href="${href({ target: x.key })}">${x.label}<br><span style="font-weight:400">${x.name}</span></a>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline">${badge(t.status)}<span class="sub">${t.dates} · window closes in <b>${daysUntil(t.closes)}</b> days</span></div>
+      ${t.tracks.map(r => `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between"><span>${r.k}</span><span class="sub">${r.need}</span></div><div class="bar"><i style="width:${r.pct}%;background:${r.st === 'ok' ? '#1b7a35' : '#8a6d1d'}"></i></div><div class="sub">${r.has}</div></div>`).join('')}
+      <h2>Upcoming</h2>${upcomingTbl(a)}<h2>Results</h2>${resultsTbl(a)}`;
   },
   calendar() {
-    const first = new Date('2026-11-01T12:00'); const off = (first.getDay() + 6) % 7; const cells = [];
-    for (let i = 0; i < off; i++) cells.push('<div></div>');
-    for (let d = 1; d <= 30; d++) {
-      const ds = '2026-11-' + String(d).padStart(2, '0');
-      const evs = CAL.filter(e => e.d <= ds && (e.end || e.d) >= ds);
-      cells.push(`<div class="${ds === TODAY ? 'today' : ''}"><b>${d}</b>${evs.map(e => `<div class="ev ${e.champ ? 'c' : ''}">${e.sport}</div>`).join('')}</div>`);
-    }
-    return `<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">November 2026</h2><span>‹ ›</span></div>
-      <div class="month" style="margin-top:8px">${['M','T','W','T','F','S','S'].map(x => `<div class="dh">${x}</div>`).join('')}${cells.join('')}</div>
-      <div class="grid grid3" style="margin-top:14px">${CAL.slice(0, 6).map(e => `<div class="tile"><div class="ev">${fmtS(e.d)} · ${e.sport}${e.champ ? ' · <span style="color:#e30613">Championship</span>' : ''}</div><div class="who">${e.comp}</div><div style="font-size:12px">${e.who}</div></div>`).join('')}</div>`;
+    // Year planner: four months stacked, days 1–31 across; each day cell is filled with the colour(s) of the sports on that day.
+    const m0 = monthKey(); let h = `<div class="plan"><div></div>${[...Array(31)].map((_, i) => `<div class="hd">${i + 1}</div>`).join('')}`;
+    const months = [0, 1, 2, 3].map(k => shiftMonth(m0, k)); const shown = new Set();
+    months.forEach(m => {
+      h += `<div class="ml">${D(m + '-01').toLocaleDateString('en-GB', { month: 'short' })}</div>`;
+      for (let d = 1; d <= 31; d++) {
+        if (d > daysIn(m)) { h += '<div class="c na"></div>'; continue; }
+        const ds = m + '-' + String(d).padStart(2, '0'), wd = D(ds).getDay();
+        const evs = CAL.filter(e => e.s <= ds && e.e >= ds); evs.forEach(e => shown.add(e));
+        const bg = evs.length ? `background:linear-gradient(${evs.map((e, i) => `${COL[e.sport]} ${i / evs.length * 100}% ${(i + 1) / evs.length * 100}%`).join(',')})` : '';
+        h += `<div class="c ${wd === 0 || wd === 6 ? 'we' : ''} ${evs.some(e => e.champ) ? 'champ' : ''} ${ds === TODAY ? 'today' : ''}" title="${evs.map(e => e.name).join(' / ')}" style="${bg}"></div>`;
+      }
+    });
+    const list = [...shown].sort((a, b) => a.s.localeCompare(b.s));
+    return `<div class="mhead"><a href="${href({ month: shiftMonth(m0, -1) })}">‹</a><h1 style="margin:0">${monthTitle(m0).split(' ')[0]} – ${monthTitle(months[3])}</h1><a href="${href({ month: shiftMonth(m0, 1) })}">›</a></div>
+      <p class="sub">Four months at a glance · outlined = Championship day · red line = today</p>${h}</div>` + legend(list) + `<h2>In view</h2>` + evList(list);
   },
-  championship() {
-    const c = CHAMP;
-    return `<div class="heroC"><div><h1>${c.name}</h1><p>${c.place} · ${c.dates} · ${c.status}</p></div></div>
-      <div class="card" style="margin:12px 0"><h3>Belgium medal count</h3><div class="medals"><span><span class="medal m1">G</span> ${c.medals.g}</span><span><span class="medal m2">S</span> ${c.medals.s}</span><span><span class="medal m3">B</span> ${c.medals.b}</span></div></div>
-      <div class="grid grid3">${c.entries.map(e => { const d = delta(e.ext, e.out); return `<div class="tile">
-        <div class="ev">${e.ev} · ${e.day}</div>
-        <div class="who">${typeof e.out === 'number' && e.out <= 3 ? `<span class="medal m${e.out}">${e.out}</span> ` : ''}${e.who}</div>
-        ${e.roster ? `<div style="font-size:11px;color:#555">Team · ${e.roster}</div>` : ''}
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:13px"><span>Exp ${ord(e.ext)} → <b>${ord(e.out)}</b></span><span class="pill ${dCls(d)}">${dTxt(d)}</span></div></div>`; }).join('')}</div>`;
-  },
-  games(day) {
-    const g = GAMES, d = g.days.find(x => x.key === day) || g.days[0];
-    return `<div class="heroC"><div><h1>${g.name}</h1><p>Day ${d.n} · ${d.key} Jul 2028 · ${d.items.length} Belgian Entries expected</p></div><div style="text-align:right"><div class="big">${g.days.reduce((s, x) => s + x.items.length, 0)}</div><p>Entries in view</p></div></div>
-      <div class="daypills" style="margin-top:12px">${g.days.map(x => `<a href="${href({ day: x.key })}" class="${x.key===d.key?'on':''}">D${x.n} · ${x.key}</a>`).join('')}</div>
-      <div class="nownext">${d.items.length ? d.items.map(i => `<div class="slot"><span class="t">${i.t}</span><span><b>${i.who}</b><br><small>${i.ev}</small></span><span style="text-align:right"><span class="st ${i.st}">${i.stl}</span>${i.ext ? `<br><small>exp ${ord(i.ext)}</small>` : ''}</span></div>`).join('') : '<p>No Belgian Entries this day.</p>'}</div>`;
-  },
-  render(s, day) {
-    return `<div class="vC"><div class="bar"><button class="burger" onclick="document.querySelector('.drawer').classList.add('open')">☰</button><b>${SCREENS.find(x => x[0] === s)[1]}</b></div>
-      <div class="drawer" onclick="this.classList.remove('open')"><nav>${SCREENS.map(([k, l]) => `<a href="${href({ screen: k })}" class="${k===s?'on':''}">${l}</a>`).join('')}</nav></div>
-      <div class="wrap">${this[s](day)}</div></div>`;
+  event(ev) {
+    // Entries down, phases across: follow every Athlete/Team through Qualification → Selection → Live → After.
+    // The chosen column header opens its phase-wide panel below. Games: per-sport toggles, grouped rows.
+    const ph = g('phase', ev.current), allS = sportsOf(ev), on = ev.games ? (g('sports') ? g('sports').split(',') : allS) : allS;
+    const es = filt(ev, on), n = +g('day', ev.simDay);
+    const cell = {
+      qual: (e) => `${badge(e.st)}<div class="sub">${e.tracks.map(t => mark(t[3]) + ' ' + t[0]).join('<br>')}</div>`,
+      sel: (e) => e.sel ? `✓ selected<div>mine ${mineInput(ev, e)} <span class="sub">ext ${ord(e.ext)}</span></div>` : '<span class="sub">not selected</span>',
+      live: (e) => { if (!e.sel) return ''; const ss = ev.sessions.filter(s => s.id === e.id); const last = ss.filter(s => s.d < ev.simDay).pop(), next = ss.find(s => s.d >= ev.simDay);
+        return (last ? `<b>${last.res}</b><div class="sub">${last.r} · D${last.d}</div>` : '') + (next ? `<div class="sub">next: ${next.r} · D${next.d} ${next.t}</div>` : ''); },
+      after: (e) => { if (!e.sel) return ''; const d = delta(e.ext, e.out); return `<b>${ord(e.out)}</b> <span class="${dCls(d)}">${dTxt(d)}</span><div class="sub">exp ${e.ext} · mine ${MINE[ev.name + e.id] || e.mine}</div>`; },
+    };
+    const toggles = ev.games ? `<div style="margin:10px 0">${allS.map(s => { const nx = on.includes(s) ? on.filter(x => x !== s) : [...on, s]; return `<a class="chip ${on.includes(s) ? 'on' : ''}" href="${href({ sports: nx.length === allS.length ? null : nx.join(',') || allS[0] })}">${sdot(s)}${s}</a>`; }).join('')}<a class="chip" href="${href({ sports: null })}">all</a></div>` : '';
+    const groups = ev.games ? on.map(s => [s, es.filter(e => e.sport === s)]) : [[null, es]];
+    const rows = groups.map(([s, list]) => (s ? `<tr class="grp"><td colspan="5">${sdot(s)}${s}</td></tr>` : '') + list.map(e => `<tr><td>${who(e)}<div class="sub">${e.ev}</div></td>${PHASES.map(([k]) => `<td class="${k === ph ? 'sel' : ''}">${cell[k](e)}</td>`).join('')}</tr>`).join('')).join('');
+    const ids = es.map(e => e.id), filtered = es.length < ev.entries.length ? ids : null;
+    const panel = { qual: `<h2>Qualification · ${ev.window}</h2><p class="meta">${es.filter(e => e.st === 'q').length} qualified · ${es.filter(e => e.st === 't').length} on track · ${es.filter(e => e.st === 'r').length} at risk · ${es.filter(e => e.st === 'x').length} out</p>`,
+      sel: `<h2>Selection · ${ev.selector}, ${ev.selDate}</h2><p class="meta">Type your Expectations in the column above; they lock when the event starts.</p>`,
+      live: `<h2>Live · day by day</h2>${dayPicker(ev, ids, n)}${daySessions(ev, ids, n)}<h3>Medal table after day ${ev.simDay - 1}</h3>${medalTbl(ev, ev.simDay - 1, filtered)}`,
+      after: `<h2>After</h2>` + afterBlock(ev, es) };
+    return evHead(ev) + toggles + `<div class="scrollx"><table class="matrix"><tr><th>Entry</th>${PHASES.map(([k, l]) => `<th class="${k === ph ? 'sel' : ''}"><a href="${href({ phase: k })}">${l}${k === ev.current ? ' ●' : ''}</a></th>`).join('')}</tr>${rows}</table></div>` + panel[ph];
   },
 };
 
-// ======================= switcher =======================
+// ======================= router + switcher =======================
 const R = { A, B, C };
 function render() {
-  const { v, s, day } = cur();
-  document.getElementById('app').innerHTML = (R[v] || A).render(s, day);
-  const name = (VARIANTS.find(x => x[0] === v) || VARIANTS[0])[1];
-  document.getElementById('label').textContent = `${v} (${name}) · ${s}`;
+  const v = g('variant', 'A'), s = g('screen', 'athlete'), V = R[v] || A;
+  const body = s === 'championship' ? V.event(CHAMP) : s === 'games' ? V.event(GAMES) : V[s]();
+  document.getElementById('app').innerHTML = `<div class="wrap">${body}</div><nav class="tabs">${SCREENS.map(([k, l]) => `<a href="${href({ screen: k, phase: null, day: null })}" class="${k === s ? 'on' : ''}">${l}</a>`).join('')}</nav>`;
+  document.getElementById('label').textContent = `${v} · ${(VARIANTS.find(x => x[0] === v) || VARIANTS[0])[1]}`;
 }
 function step(dir) {
-  const i = VARIANTS.findIndex(x => x[0] === cur().v);
-  const n = VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length][0];
-  history.replaceState(null, '', href({ variant: n })); render();
+  const i = VARIANTS.findIndex(x => x[0] === g('variant', 'A'));
+  history.replaceState(null, '', href({ variant: VARIANTS[(i + dir + 3) % 3][0] })); render();
 }
 document.getElementById('prev').onclick = () => step(-1);
 document.getElementById('next').onclick = () => step(1);
-document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input,textarea,[contenteditable]')) return;
-  if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1);
-});
+document.addEventListener('keydown', (e) => { if (e.target.closest('input,textarea,select,[contenteditable]')) return; if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1); });
 render();
 </script>
 </body>
