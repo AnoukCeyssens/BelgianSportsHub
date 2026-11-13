@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Curation workspace</title>
+<!--
+  PROTOTYPE, throwaway, never merged. Wayfinder ticket "Curation workspace prototype" (#19).
+  Question: how should the owner's curation side look and behave so the weekly session (~2–3.5 h)
+  and the daily Live pass are fast?
+  Three structurally different variants on one page, switchable via ?variant=A|B|C, plus ?mode=weekly|live.
+    A  Run sheet    — a guided, linear session: one step (task type) at a time, in a fixed order.
+    B  Inbox        — every pending thing in one urgency-sorted queue, keyboard-driven, one item at a time.
+    C  Sport board  — a grid of sports × task types; open a cell to work that sport's slice.
+  All data is mock (13 Nov 2026). State is in memory only; reload resets it.
+-->
+<style>
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:70px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:4px 10px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+button.ghost{background:transparent}
+button.small{padding:2px 8px;font-size:12px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:5px;padding:4px 6px}
+textarea{width:100%;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+input.url{width:100%}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+h1,h2,h3,h4{margin:0}
+.muted{color:var(--muted)}
+.warn{color:var(--warn)}
+.bad{color:var(--bad)}
+.okc{color:var(--ok)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stack>*+*{margin-top:8px}
+.tool{display:block}
+.tool label{display:block;font-size:12px;color:var(--muted);margin:6px 0 2px}
+.maps{display:flex;flex-wrap:wrap;gap:6px 14px;margin:6px 0}
+.maps label{display:flex;flex-direction:column;margin:0}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok)}.dot.stale{background:var(--warn)}.dot.blocked{background:var(--bad)}
+.st{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;border:1px solid currentColor;white-space:nowrap}
+.st-qualified,.st-selected{color:var(--ok)}
+.st-on-track,.st-eligible{color:var(--accent2)}
+.st-at-risk{color:var(--warn)}
+.st-not-in-contention,.st-not-selected,.st-withdrawn{color:var(--muted)}
+.tag{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:3px;background:var(--tagbg);color:var(--tagink);white-space:nowrap}
+.src{font-size:12px;color:var(--muted)}
+.arrow{color:var(--muted);padding:0 4px}
+.match-ok{color:var(--ok);font-size:12px}
+.match-no{color:var(--warn);font-size:12px}
+.cand{border:1px solid var(--line);border-radius:6px;padding:8px;margin:6px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.incoming{border-left:3px solid var(--accent);padding:6px 10px;background:var(--field)}
+.log{font-size:12px;max-height:220px;overflow:auto}
+.log div{padding:3px 0;border-bottom:1px dotted var(--line)}
+.notdue{font-size:12px;color:var(--muted)}
+.mock{font-size:11px;color:var(--muted);font-style:italic}
+
+/* ---------- floating switcher (prototype chrome, not part of any design) ---------- */
+#switcher{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:99;display:flex;gap:6px;align-items:center;
+  background:#111;color:#fff;border-radius:999px;padding:6px 8px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:13px -apple-system,system-ui,sans-serif;white-space:nowrap}
+#switcher button{background:#2a2a2a;color:#fff;border:0;border-radius:999px;padding:4px 10px}
+#switcher button.on{background:#ffd43b;color:#111}
+#switcher .lbl{min-width:150px;text-align:center;font-weight:600}
+#switcher .sep{width:1px;height:18px;background:#444;margin:0 4px}
+
+/* ================= Variant A — Run sheet ================= */
+body.vA{--bg:#f3f1ec;--panel:#fff;--field:#faf9f6;--ink:#1f2328;--muted:#6b6f76;--line:#e2ded6;--accent:#3949ab;--accent2:#1976d2;--onaccent:#fff;--ok:#2e7d32;--warn:#c77700;--bad:#c62828;--tagbg:#e8eaf6;--tagink:#3949ab}
+.vA .shell{display:grid;grid-template-columns:250px 1fr 270px;min-height:100vh}
+.vA .rail{background:#23262d;color:#d9dce1;padding:18px 0}
+.vA .rail h1{font-size:15px;padding:0 18px 4px;color:#fff}
+.vA .rail .sub{padding:0 18px 14px;font-size:12px;color:#9aa0a8}
+.vA .rail ol{list-style:none;margin:0;padding:0}
+.vA .rail li{display:flex;gap:10px;padding:9px 18px;cursor:pointer;border-left:3px solid transparent}
+.vA .rail li:hover{background:#2c3038}
+.vA .rail li.cur{background:#2f3440;border-left-color:#8c9eff;color:#fff}
+.vA .rail li small{display:block;color:#9aa0a8;font-size:11px}
+.vA .rail .num{width:22px;height:22px;border-radius:50%;border:1px solid #59606b;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none}
+.vA .rail li.fin .num{background:#2e7d32;border-color:#2e7d32;color:#fff}
+.vA .rail .bar{margin:16px 18px 0;height:6px;background:#3a3f49;border-radius:3px;overflow:hidden}
+.vA .rail .bar i{display:block;height:100%;background:#8c9eff}
+.vA main{padding:24px 32px;max-width:980px}
+.vA main .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.vA main h2{font-size:22px}
+.vA main .lede{color:var(--muted);margin:0 0 18px}
+.vA .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.vA .card h4{font-size:15px;margin-bottom:2px}
+.vA .improw{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.vA .foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:14px;border-top:1px solid var(--line)}
+.vA aside{padding:20px 18px;border-left:1px solid var(--line);background:#fbfaf7}
+.vA aside h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 6px}
+.vA .big{font-size:28px;font-weight:700}
+.vA .donebox{color:var(--ok);padding:24px;text-align:center;border:1px dashed var(--ok);border-radius:8px;background:#f1f8f1}
+
+/* ================= Variant B — Inbox ================= */
+body.vB{--bg:#0f1216;--panel:#171c22;--field:#1e252d;--ink:#d8dee6;--muted:#7f8a96;--line:#28313b;--accent:#4fd1a5;--accent2:#64b5f6;--onaccent:#06281d;--ok:#4fd1a5;--warn:#f6c453;--bad:#ff6b6b;--tagbg:#24303b;--tagink:#a9c4dc}
+.vB .top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:#12161b;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.vB .top h1{font:600 14px ui-monospace,Menlo,monospace;color:var(--accent)}
+.vB .chips{display:flex;gap:6px;flex-wrap:wrap}
+.vB .chip{font:12px ui-monospace,Menlo,monospace;padding:2px 9px;border-radius:999px;border:1px solid var(--line);cursor:pointer;background:transparent;color:var(--muted)}
+.vB .chip.on{border-color:var(--accent);color:var(--accent)}
+.vB .meta{margin-left:auto;font:12px ui-monospace,Menlo,monospace;color:var(--muted)}
+.vB .split{display:grid;grid-template-columns:400px 1fr;height:calc(100vh - 50px)}
+.vB .list{overflow:auto;border-right:1px solid var(--line)}
+.vB .it{display:grid;grid-template-columns:86px 1fr auto;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+.vB .it:hover{background:#151a20}
+.vB .it.cur{background:#1b2a26;box-shadow:inset 3px 0 0 var(--accent)}
+.vB .it .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vB .it .s{grid-column:2/4;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vB .it .u{font:11px ui-monospace,Menlo,monospace;color:var(--muted)}
+.vB .it.snz{opacity:.5}
+.vB .tag.t-health{background:#3b1f22;color:#ff9b9b}.vB .tag.t-status{background:#2c2a17;color:#f6c453}.vB .tag.t-merge{background:#20283b;color:#9db4ff}
+.vB .tag.t-import,.vB .tag.t-manual{background:#173029;color:#7ee0bb}
+.vB .detail{overflow:auto;padding:22px 28px}
+.vB .detail h2{font-size:19px;margin-bottom:2px}
+.vB .detail .lede{color:var(--muted);margin:0 0 16px}
+.vB .keys{font:12px ui-monospace,Menlo,monospace;color:var(--muted);margin-top:22px;border-top:1px solid var(--line);padding-top:10px}
+.vB kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font:11px ui-monospace,Menlo,monospace;color:var(--ink)}
+.vB .donefoot{padding:10px 12px;font-size:12px;color:var(--muted)}
+.vB .empty{padding:60px 20px;text-align:center;color:var(--ok);font:14px ui-monospace,Menlo,monospace}
+.vB .live{background:#2b1d10;color:#ffb86b;padding:6px 16px;font:12px ui-monospace,Menlo,monospace}
+
+/* ================= Variant C — Sport board ================= */
+body.vC{--bg:#fff;--panel:#fff;--field:#f7f8fa;--ink:#16191d;--muted:#69717c;--line:#dfe3e8;--accent:#d9480f;--accent2:#1c7ed6;--onaccent:#fff;--ok:#2b8a3e;--warn:#e67700;--bad:#c92a2a;--tagbg:#fff4e6;--tagink:#d9480f}
+.vC header{display:flex;align-items:center;gap:18px;padding:14px 22px;border-bottom:2px solid var(--ink);flex-wrap:wrap}
+.vC header h1{font-size:18px;letter-spacing:-.01em}
+.vC header .tabs{display:flex;gap:2px}
+.vC header .tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:6px 10px;font-weight:600;color:var(--muted)}
+.vC header .tabs button.on{border-bottom-color:var(--accent);color:var(--ink)}
+.vC header .meta{margin-left:auto;font-size:13px;color:var(--muted)}
+.vC .wrap{padding:16px 22px}
+.vC .board{border:1px solid var(--line);font-size:13px}
+.vC .board th{background:#f4f5f7;border-right:1px solid var(--line);text-align:center}
+.vC .board th:first-child{text-align:left}
+.vC .board td{border-right:1px solid var(--line);text-align:center;vertical-align:middle;padding:0;height:46px}
+.vC .board td.sp{text-align:left;padding:6px 10px;min-width:210px}
+.vC .board td.sp small{display:block;color:var(--muted);font-size:11px}
+.vC .cell{display:flex;align-items:center;justify-content:center;width:100%;height:46px;cursor:pointer;font-weight:700;font-size:15px}
+.vC .cell:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.vC .cell.h1{background:#fff4e6}.vC .cell.h2{background:#ffe8cc}.vC .cell.h3{background:#ffd8a8}
+.vC .cell.zero{color:#c4c9d0;font-weight:400;cursor:default}
+.vC .cell.zero:hover{outline:none}
+.vC .cell.sel{outline:3px solid var(--ink);outline-offset:-3px}
+.vC .cell .hc{font-size:11px;font-weight:400;color:var(--muted);text-align:left;line-height:1.2}
+.vC .tier{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:0 5px;border-radius:3px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
+.vC .quiet{margin-top:10px;font-size:12px;color:var(--muted)}
+.vC .drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100vw);background:#fff;border-left:2px solid var(--ink);box-shadow:-10px 0 30px rgba(0,0,0,.12);overflow:auto;z-index:20;padding:18px 22px 90px}
+.vC .drawer h2{font-size:18px}
+.vC .drawer .card{border-top:1px solid var(--line);padding:14px 0}
+.vC .drawer .card h4{font-size:14px}
+.vC .bottom{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}
+.vC .bottom h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.vC .livebar{background:var(--accent);color:#fff;padding:6px 22px;font-weight:600;font-size:13px}
+@media (max-width:900px){
+  .vA .shell{grid-template-columns:1fr}.vA aside{border-left:0}
+  .vB .split{grid-template-columns:1fr;height:auto}
+  .vC .bottom{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="switcher"></div>
+<script>
+/* ======================= MOCK DATA (13 Nov 2026) ======================= */
+const NOW = new Date('2026-11-13T09:30');
+const TODAY = '13 Nov 2026';
+
+const SOURCES = [
+  {id:'wa', name:'World Athletics', sport:'Athletics', cadence:1, lastFetch:'2026-11-13T06:02', lastChange:'2026-11-11'},
+  {id:'aq', name:'World Aquatics', sport:'Aquatics', cadence:1, lastFetch:'2026-11-13T06:03', lastChange:'2026-11-12'},
+  {id:'ijf', name:'IJF', sport:'Judo', cadence:1, lastFetch:'2026-11-13T06:04', lastChange:'2026-11-10'},
+  {id:'fie', name:'FIE', sport:'Fencing', cadence:1, lastFetch:'2026-11-10T06:05', lastChange:'2026-11-02', error:'HTTP 500 on every fetch since 11 Nov'},
+  {id:'uci', name:'UCI', sport:'Cycling', cadence:1, lastFetch:'2026-11-08T06:06', lastChange:'2026-11-08', error:'403 from Workers since 9 Nov', blocked:true},
+  {id:'wr', name:'World Rowing', sport:'Rowing', cadence:1, lastFetch:'2026-11-13T06:07', lastChange:'2026-10-04'},
+  {id:'warc', name:'World Archery API', sport:'Archery', cadence:1, lastFetch:'2026-11-13T06:08', lastChange:'2026-11-09'},
+  {id:'tri', name:'World Triathlon API', sport:'Triathlon', cadence:1, lastFetch:'2026-11-13T06:08', lastChange:'2026-11-08'},
+  {id:'fivb', name:'FIVB VIS', sport:'Volleyball', cadence:1, lastFetch:'2026-11-13T06:09', lastChange:'2026-11-12'},
+  {id:'owgr', name:'OWGR ranking', sport:'Golf', cadence:7, lastFetch:'2026-11-09T06:10', lastChange:'2026-11-09'},
+  {id:'isu', name:'ISU speed skating API', sport:'Speed skating', cadence:1, lastFetch:'2026-11-13T06:11', lastChange:'2026-11-09'},
+  {id:'fis', name:'FIS points lists (ZIP)', sport:'Alpine · XC · Freestyle · Snowboard', cadence:7, lastFetch:'2026-10-28T06:12', lastChange:'2026-10-28', error:'New list not found at the expected file name'},
+];
+
+const ROSTER = [
+  {name:'Jonas De Waele', sport:'Table tennis', ids:{ITTF:'119340'}, dob:'1999-02-03', key:'dewaele'},
+  {name:'Jens De Waele', sport:'Table tennis', ids:{}, dob:'2001-09-30', key:'dewaele'},
+  {name:'Lotte Rasschaert', sport:'Table tennis', ids:{ITTF:'131877'}, dob:'2001-05-02', key:'rasschaert'},
+  {name:'Hanne Vos', sport:'Short track', ids:{ISU:'SR-20451'}, key:'vos'},
+  {name:'Charlotte Leclercq', sport:'Equestrian', ids:{FEI:'10088342'}, key:'leclercq'},
+  {name:'Pieter Wouters', sport:'Equestrian', ids:{FEI:'10061290'}, key:'wouters'},
+  {name:'Eline Claes', sport:'Badminton', ids:{BWF:'78012'}, key:'claes'},
+  {name:'Wout Hendrickx', sport:'Cycling', ids:{UCI:'10011223344'}, key:'hendrickx'},
+  {name:'Lisa Dumont', sport:'Cycling', ids:{UCI:'10015566778'}, key:'dumont'},
+];
+
+const T = rows => rows.map(r=>r.join('\t')).join('\n');
+const IMPORTS = [
+  {id:'i1', source:'ITTF', idKey:'ITTF', sport:'Table tennis', what:"World ranking wk 46 — men's singles", kind:'ranking', saved:['place','name','nation','points','IF ID'], lastUsed:'6 Nov', url:'https://www.ittf.com/rankings/',
+   sample:T([['Rank','Name','Assoc','Points','ITTF ID'],['1','LI Wen','CHN','9810','101233'],['2','HARIMOTO K.','JPN','8820','102877'],['3','MORENO Pablo','ESP','7340','108001'],['...','...','...','...','...'],['61','DE WAELE Jonas','BEL','1630','119340'],['62','SILVA Rui','POR','1610','120456'],['88','DE WAELE J.','BEL','1102','145022'],['89','NOVAK Jan','CZE','1099','141200'],['140','MAES Tibo','BEL','655','140001'],['141','OKAFOR Ade','NGR','650','139922']])},
+  {id:'i2', source:'ISU (short track)', idKey:'ISU', sport:'Short track', what:"World Tour #3 — women's 1000 m", kind:'results', saved:['place','name','nation','performance','IF ID'], lastUsed:'30 Oct', url:'https://www.isu.org/short-track/',
+   sample:T([['Pl','Name','Nat','Time','ISU ID'],['1','KIM Ji-woo','KOR','1:28.902','SR-10011'],['2','SCHULTING S.','NED','1:29.114','SR-10345'],['3','LI Mei','CHN','1:29.330','SR-11870'],['4','DUBOIS Anna','CAN','1:29.651','SR-12002'],['5','VOS Hanne','BEL','1:29.871','SR-20451'],['6','ROSSI Giulia','ITA','1:30.010','SR-14567'],['17','PEETERS Ella','BEL','1:31.402','SR-23901']])},
+  {id:'i3', source:'FEI', idKey:'FEI', sport:'Equestrian', what:'Jumping World Cup — Lyon', kind:'results', saved:['place','name','—ignore','nation','performance','—ignore','IF ID'], lastUsed:'3 Nov', url:'https://data.fei.org/',
+   sample:T([['Rank','Rider','Horse','NF','Faults','Time','FEI ID'],['1','WEISHAUPT P.','Zineday','GER','0','38.21','10002211'],['2','SMOLDERS H.','Monaco','NED','0','38.90','10011902'],['3','LECLERCQ Charlotte','Quidam B','BEL','0','39.44','10088342'],['4','GUERDAT S.','Venard','SUI','0','40.02','10000988'],['11','WOUTERS Pieter','Nova Z','BEL','4','37.80','10061290']])},
+  {id:'i4', source:'UCI (fallback paste)', idKey:'UCI', sport:'Cycling', what:'Track elite omnium ranking — source blocked, so pasted this week', kind:'ranking', saved:null, url:'https://www.uci.org/track/rankings',
+   sample:T([['#','Rider','Team','Ctry','Points','UCI ID'],['1','HAYTER E.','Great Britain','GBR','3120','10009811223'],['2','LEITAO I.','Portugal','POR','2890','10008855001'],['7','HENDRICKX Wout','Belgium','BEL','1840','10011223344'],['12','DUMONT Lisa','Belgium','BEL','1312','10015566778'],['13','RUIZ Ana','Spain','ESP','1300','10012009988']])},
+  {id:'i5', source:'BWF', idKey:'BWF', sport:'Badminton', what:"World ranking wk 46 — women's singles", kind:'ranking', saved:['place','name','nation','points','—ignore','IF ID'], lastUsed:'6 Nov', url:'https://bwfbadminton.com/rankings/',
+   sample:T([['Rank','Player','Member','Points','Tournaments','BWF ID'],['1','AN Se-young','KOR','111200','14','60011'],['2','WANG Z.','CHN','98200','15','61500'],['36','LIANG X.','SGP','40110','16','70990'],['37','CLAES Eline','BEL','39880','15','78012'],['38','GILMOUR K.','SCO','39500','13','52011']])},
+];
+
+const LIVE_IMPORT = {id:'lv-imp', source:'ITTF (WTTC results page)', idKey:'ITTF', sport:'Table tennis', what:"Today's results — Day 4", kind:'results', saved:['event','round','name','nation','opponent','score','IF ID'], lastUsed:'yesterday', url:'',
+  sample:T([['Event','Round','Player','Assoc','Opponent','Score','ITTF ID'],["WS",'R64','RASSCHAERT Lotte','BEL','KOVAC M. (SLO)','4–2','131877'],["WS",'R64','TANAKA Y.','JPN','HUBER L. (AUT)','4–0','133002'],["MS",'R64','DE WAELE Jonas','BEL','LI Wen (CHN)','1–4','119340'],["MS",'R64','MAES Tibo','BEL','SILVA Rui (POR)','4–3','140001']])};
+
+const MANUAL = [
+  {id:'m1', sport:'Taekwondo', comp:'WT Grand Prix Final', dates:'7–8 Nov', entry:'Sami El Idrissi', event:'Men −68 kg', why:'PDF results only'},
+  {id:'m2', sport:'Gymnastics', comp:'FIG Apparatus World Cup, Cottbus', dates:'6–9 Nov', entry:'Lien Verhaegen', event:'Uneven bars', why:'PDF results only'},
+  {id:'m3', sport:'Biathlon', comp:'IBU Cup 1, Idre', dates:'12–13 Nov', entry:'Thomas Lenaerts', event:'Men 10 km sprint', why:'IBU data needs a login'},
+];
+
+const MERGE0 = [
+  {id:'g1', sport:'Judo', incoming:{name:'VANDENBROECK Lien', dob:'2003-04-11', src:'IJF (automatic)', srcId:'IJF 78213', event:'−57 kg, Grand Slam Abu Dhabi'},
+   reason:'No IF ID match. Date of birth matches, name spelled differently.',
+   candidates:[{name:'Lien Van den Broeck', dob:'2003-04-11', ids:'Team Belgium 4411 · Wikidata Q11290045', note:'DOB ✓ · name ≈'}]},
+  {id:'g2', sport:'Volleyball', incoming:{name:'LAMBERT N.', dob:'—', src:'FIVB VIS (automatic)', srcId:'FIVB 199402', event:'Beach Pro Tour Elite16, Joao Pessoa'},
+   reason:'No IF ID match and no date of birth. Two possible Athletes.',
+   candidates:[{name:'Noor Lambert', dob:'2000-08-14', ids:'Team Belgium 3990', note:'beach volleyball'},{name:'Nora Lambert', dob:'2004-01-22', ids:'Wikidata Q12002930', note:'indoor volleyball'}]},
+  {id:'g3', sport:'Alpine · XC · Freestyle · Snowboard', incoming:{name:'MERTENS Arne', dob:'2005-06-18', src:'FIS points list (automatic)', srcId:'FIS 6532871', event:'Alpine GS, Levi World Cup'},
+   reason:'No match at all. Possibly a new Athlete: is this a first senior international performance?', candidates:[]},
+];
+
+const STATUS = [
+  {id:'s1', entry:'Eline Claes', sport:'Badminton', event:"Women's singles", target:'LA 2028', track:'BWF Race to LA ranking', before:'#31', after:'#37', need:'≈ top 34 (singles cap)', current:'On track', suggest:'At risk', source:'BWF ranking wk 46', checked:'6 Nov'},
+  {id:'s2', entry:'Red Lions', sport:'Hockey', event:"Men's", target:'LA 2028', track:'Quota place · FIH Pro League', before:'Provisional', after:'Allocated', need:'Allocated place', current:'On track', suggest:'Qualified', source:'FIH press release, 10 Nov', checked:'30 Oct', quota:true},
+  {id:'s3', entry:'Tom Peeters', sport:'Athletics', event:'Marathon', target:'Worlds 2027', track:'Entry standard 2:06:30', before:'2:07:12', after:'2:06:21 (Valencia)', need:'2:06:30', current:'On track', suggest:'Qualified', source:'World Athletics result', checked:'1 Nov'},
+  {id:'s4', entry:'Hanne Vos', sport:'Short track', event:"Women's 1000 m", target:'Europeans 2027', track:'ISU World Tour ranking', before:'#9', after:'#12', need:'top 16', current:'On track', suggest:'On track', source:'ISU World Tour standings', checked:'30 Oct'},
+  {id:'s5', entry:'Vermeulen / Lambert', sport:'Volleyball', event:"Women's beach", target:'LA 2028', track:'FIVB Olympic ranking', before:'#22', after:'#19', need:'top 17', current:'At risk', suggest:'At risk', source:'FIVB VIS', checked:'6 Nov'},
+  {id:'s6', entry:'Belgian Cats', sport:'Basketball', event:"Women's 5x5", target:'LA 2028', track:'FIBA Olympic Qualifying Tournament', before:'OQT draw pending', after:'Drawn in OQT 2 (Feb 2028)', need:'top 2 of OQT group', current:'On track', suggest:'On track', source:'FIBA draw, 11 Nov', checked:'23 Oct'},
+];
+const STATUSES = ['Not in contention','At risk','On track','Eligible','Qualified','Selected','Not selected','Withdrawn'];
+
+const SELECTIONS = [
+  {id:'sel1', sport:'Aquatics', comp:'European Short Course Swimming Championships (Dec 2026)', selector:'Belgian swimming federations', deadline:'IF entries close 20 Nov',
+   candidates:['Lucas Verbeke','Fleur Dewit','Roos Vanhoutte','Kobe Ndoumbe','Valentine Rocher','Senne Aerts','Lien Moreels','Mixed 4×50 m freestyle relay'],
+   press:"The selection committee has named the following swimmers for the European Short Course Championships: Lucas Verbeke (400 and 1500 free), Fleur Dewit (50 and 100 breast), Kobe Ndoumbe (100 fly), Valentine Rocher (200 IM) and Senne Aerts (50 free). Belgium will also enter the mixed 4×50 m freestyle relay."},
+];
+
+const LIKELY = [
+  {id:'l1', sport:'Short track', comp:'ISU Short Track World Tour #4', date:'27–30 Nov', reason:'In contention: Hanne Vos (Europeans 2027 track)', suggest:'Keep likely'},
+  {id:'l2', sport:'Equestrian', comp:'FEI Jumping World Cup — Mechelen', date:'26–30 Dec', reason:'Belgian Entry at the previous edition', suggest:'Keep likely'},
+  {id:'l3', sport:'Badminton', comp:'BWF World Tour Finals', date:'9–13 Dec', reason:'Eline Claes now #37; the field is the top 8 of the tour', suggest:'Drop'},
+  {id:'l4', sport:'Taekwondo', comp:'WT Grand Slam, Wuxi', date:'17–19 Dec', reason:'Added by hand on 2 Oct; no entry list yet', suggest:'Keep likely'},
+];
+
+const LA28 = [
+  ['Athletics','2028-07-15','2028-07-30'],['Aquatics (swimming)','2028-07-15','2028-07-23'],['Hockey','2028-07-13',''],['Cycling road','',''],['Judo','',''],['Equestrian','',''],
+];
+const ESTC = {id:'sch2', sport:'Short track', comp:'European Short Track Championships 2027', belgianEvents:["Women's 500 m","Women's 1000 m","Mixed relay"],
+  sample:T([['Day','Venue time','Round'],['Fri 15 Jan','13:00',"Women's 500 m heats"],['Fri 15 Jan','14:10',"Men's 500 m heats"],['Fri 15 Jan','15:30',"Women's 1000 m heats"],['Sat 16 Jan','12:00',"Women's 500 m quarter-finals"],['Sat 16 Jan','14:40','Mixed relay semi-finals'],['Sat 16 Jan','15:20',"Men's 1500 m final"],['Sun 17 Jan','13:00',"Women's 1000 m quarter-finals"],['Sun 17 Jan','15:50','Mixed relay final']])};
+
+const CHECK = [
+  {id:'c1', sport:'All sports', title:'2030 IF qualification systems', due:'14 Nov', sub:[['FIS','14 Oct'],['ISU','14 Oct'],['IBU','14 Oct'],['IBSF','16 Oct'],['FIL','16 Oct'],['WCF','16 Oct'],['ISMF','16 Oct'],['IIHF','16 Oct']]},
+  {id:'c2', sport:'All sports', title:'BOIC LA 2028 selection regulation', due:'19 Nov', sub:[['BOIC regulation page','20 Oct']]},
+  {id:'c3', sport:'All sports', title:'Belgian federation selection criteria (3 due)', due:'17 Nov', sub:[['Belgian Hockey (KBHB/ARBH)','18 Oct'],['Belgian Cycling','18 Oct'],['Swimming (Belswim)','18 Oct']]},
+  {id:'c4', sport:'All sports', title:'Calendar refresh (Championships + named series, next 6 months)', due:'10 Nov (overdue)', sub:[['IF calendars','10 Oct']]},
+];
+const CHECK_NOT_DUE = 4;
+
+const LIVE = {comp:'World Table Tennis Championships', note:'simulated Live day', day:'Day 4 of 9', tz:'venue time = Belgian time + 7 h'};
+const DETAIL = [
+  {id:'d1', sport:'Table tennis', entry:'Lotte Rasschaert', event:"Women's singles", round:'R32 (if through)', session:'Tomorrow, session 7'},
+  {id:'d2', sport:'Table tennis', entry:'Tibo Maes', event:"Men's singles", round:'R32 (if through)', session:'Tomorrow, session 8'},
+];
+
+/* ======================= STATE ======================= */
+const params = new URLSearchParams(location.search);
+let variant = (params.get('variant')||'A').toUpperCase(); if(!'ABC'.includes(variant)) variant='A';
+let mode = params.get('mode')==='live' ? 'live' : 'weekly';
+const VNAMES = {A:'Run sheet', B:'Inbox', C:'Sport board'};
+let S;
+function reset(){ S = {done:{}, log:[], imports:{}, merge:JSON.parse(JSON.stringify(MERGE0)), seq:10, sel:{}, sched:{}, check:{}, ui:{A:{step:0,fin:{},open:null}, B:{cur:0,filter:'all',snz:{}}, C:{tab:'board',drawer:null}}}; }
+reset();
+
+/* ======================= HELPERS ======================= */
+const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const badge = st => `<span class="st st-${st.toLowerCase().replace(/\s+/g,'-')}">${esc(st)}</span>`;
+function srcState(s){ if(s.blocked) return 'blocked'; return (NOW-new Date(s.lastFetch))/864e5 > 2*s.cadence ? 'stale' : 'ok'; }
+function rel(d){ const days=Math.floor((NOW-new Date(d))/864e5); return days<=0?'today':days===1?'yesterday':days+' days ago'; }
+function done(id, note){ S.done[id]={at:new Date()}; if(note) S.log.unshift(note); render(); }
+function note(n){ S.log.unshift(n); render(); }
+const TYPE = {health:'Source', import:'Paste import', manual:'Manual result', merge:'Identity', status:'Qual. status', selection:'Selection', likely:'Likely', schedule:'Schedule', checklist:'Checklist', detail:'Match detail'};
+const EST = {health:2, import:12, manual:6, merge:3, status:5, selection:8, likely:2, schedule:10, checklist:5, detail:3};
+
+/* ======================= ITEMS ======================= */
+function buildItems(){
+  const it=[];
+  SOURCES.filter(s=>srcState(s)!=='ok').forEach(s=>it.push({id:'h-'+s.id,type:'health',sport:s.sport,urg:0,
+    title:`${s.name} is ${srcState(s)}`, sub:`${s.error} · last good fetch ${rel(s.lastFetch)}`, render:()=>healthItem(s)}));
+  if(mode==='weekly'){
+    IMPORTS.forEach(i=>it.push({id:i.id,type:'import',sport:i.sport,urg:i.saved?3:1,title:`${i.source}: ${i.what.split(' — ')[0]}`,sub:i.what,render:()=>importer(i)}));
+    MANUAL.forEach(m=>it.push({id:m.id,type:'manual',sport:m.sport,urg:3,title:`${m.comp} — ${m.entry}`,sub:`${m.event} · ${m.dates} · ${m.why}`,render:()=>manualForm(m)}));
+  } else {
+    DETAIL.forEach(d=>it.push({id:d.id,type:'detail',sport:d.sport,urg:1,title:`${d.entry}: ${d.round}`,sub:`${d.event} · ${d.session}`,render:()=>detailForm(d)}));
+    it.push({id:'lv-tt',type:'schedule',sport:'Table tennis',urg:1,title:'WTTC schedule v4 posted 06:40',sub:'2 Belgian matches moved',render:ttVersion});
+    it.push({id:LIVE_IMPORT.id,type:'import',sport:'Table tennis',urg:2,title:"WTTC: paste today's results",sub:'4 BEL rows expected',render:()=>importer(LIVE_IMPORT)});
+  }
+  S.merge.forEach(g=>it.push({id:g.id,type:'merge',sport:g.sport,urg:4,title:`${g.incoming.name} (${g.incoming.srcId})`,sub:g.reason,render:()=>mergeItem(g)}));
+  if(mode==='weekly'){
+    STATUS.forEach(s=>it.push({id:s.id,type:'status',sport:s.sport,urg:s.suggest!==s.current?2:5,title:`${s.entry} · ${s.target}`,sub:`${s.track}: ${s.before} → ${s.after}`,status:s,render:()=>statusItem(s)}));
+    SELECTIONS.forEach(s=>it.push({id:s.id,type:'selection',sport:s.sport,urg:1,title:`Selection: ${s.comp}`,sub:`${s.deadline}`,render:()=>selectionItem(s)}));
+    LIKELY.forEach(l=>it.push({id:l.id,type:'likely',sport:l.sport,urg:l.suggest==='Drop'?3:6,title:`${l.comp} (${l.date})`,sub:l.reason,render:()=>likelyItem(l)}));
+    it.push({id:'sch1',type:'schedule',sport:'All sports',urg:7,title:'LA 2028: Games dates + per-sport first/last day',sub:'Curated until the full schedule import (~Jan 2028)',render:la28Form});
+    it.push({id:'sch2',type:'schedule',sport:'Short track',urg:5,title:'Europeans 2027 timetable v1 published',sub:'Paste it; Belgian events only',render:timetablePaste});
+    CHECK.forEach(c=>it.push({id:c.id,type:'checklist',sport:c.sport,urg:c.due.includes('overdue')?1:6,title:c.title,sub:`due ${c.due}`,render:()=>checkItem(c)}));
+  }
+  return it.filter(i=>!S.done[i.id]);
+}
+const minutesLeft = items => items.reduce((a,i)=>a+EST[i.type],0);
+const fmtMin = m => m>=60 ? `${Math.floor(m/60)} h ${String(m%60).padStart(2,'0')}` : `${m} min`;
+
+/* ======================= TOOLS (widgets shared by all variants) ======================= */
+function healthTable(){
+  return `<table><tr><th></th><th>Source</th><th>Sport</th><th>Cadence</th><th>Last successful fetch</th><th>Last data change</th><th></th></tr>`+
+  SOURCES.map(s=>{const st=srcState(s);return `<tr><td><span class="dot ${st}"></span></td><td><b>${esc(s.name)}</b>${s.error?`<div class="src ${st==='blocked'?'bad':'warn'}">${esc(s.error)}</div>`:''}</td><td>${esc(s.sport)}</td><td>${s.cadence===1?'daily':'weekly'}</td><td>${rel(s.lastFetch)}</td><td>${rel(s.lastChange)}</td><td>${st==='ok'?'<span class="okc">ok</span>':`<b class="${st==='blocked'?'bad':'warn'}">${st.toUpperCase()}</b>`}</td></tr>`}).join('')+`</table>`;
+}
+function healthItem(s){
+  const st=srcState(s);
+  return `<div class="tool stack"><div><span class="dot ${st}"></span><b>${esc(s.name)}</b> · ${esc(s.sport)} · ${s.cadence===1?'daily':'weekly'} fetch</div>
+  <div class="src">Last successful fetch ${rel(s.lastFetch)} · last data change ${rel(s.lastChange)} · stale after missing twice its cadence</div>
+  <div class="${st==='blocked'?'bad':'warn'}">${esc(s.error)}</div>
+  ${st==='blocked'?`<div class="muted">A Worker-blocked source drops to <b>Assisted</b>: this week's data comes in through the paste importer.</div>`:''}
+  <div class="row"><button data-act="h-retry" data-id="${s.id}">Retry fetch now</button>
+  <button class="primary" data-primary data-act="h-ack" data-id="${s.id}">${st==='blocked'?'Keep on Assisted until fixed':'Acknowledge, keep watching'}</button>
+  <a href="#" class="src" onclick="return false">Open source ↗</a></div></div>`;
+}
+
+const ROLES=['—ignore','place','name','nation','performance','points','IF ID','DOB','event','round','opponent','score'];
+function parseTable(t){ const lines=t.split(/\r?\n/).filter(l=>l.trim()); const sp=l=>(l.includes('\t')?l.split('\t'):l.split(/\s{2,}|,/)).map(x=>x.trim());
+  return {head:sp(lines[0]||''), rows:lines.slice(1).map(sp).filter(r=>r[0]!=='...')}; }
+function guessRole(h){ h=h.toLowerCase();
+  if(/^(rank|pl|pos|#|place)$/.test(h)) return 'place'; if(/ id$|^id$/.test(h)) return 'IF ID'; if(/name|player|rider|athlete/.test(h)) return 'name';
+  if(/^(nat|noc|nf|assoc|member|country|nation)$/.test(h)) return 'nation'; if(/point|pts/.test(h)) return 'points'; if(/time|result|faults|perf|mark/.test(h)) return 'performance';
+  if(/dob|birth/.test(h)) return 'DOB'; if(/event/.test(h)) return 'event'; if(/round/.test(h)) return 'round'; if(/opponent/.test(h)) return 'opponent'; if(/score/.test(h)) return 'score'; return '—ignore'; }
+function matchRow(get, imp){
+  const id=get('IF ID'), key=get('name').toLowerCase().replace(/[^a-z]/g,'');
+  const r=id && ROSTER.find(a=>a.ids[imp.idKey]===id); if(r) return {ok:true, how:'IF ID', who:r.name};
+  const c=ROSTER.filter(a=>a.sport===imp.sport && key.includes(a.key)); return {ok:false, how:c.length?'name only, no DOB':'no match', cands:c};
+}
+function importer(imp){
+  const st = S.imports[imp.id] ||= {text:imp.sample, map:null, parsed:false, sel:{}};
+  let h=`<div class="tool">
+   <div class="row"><b>${esc(imp.source)}</b><span class="muted">· ${esc(imp.what)}</span></div>
+   <div class="src">${imp.saved?`Column mapping saved for this source (last used ${imp.lastUsed}).`:`<span class="warn">No saved mapping yet: map the columns once and it is saved for this source.</span>`}</div>
+   <label>URL of a plain HTML page, or the table copied from the browser</label>
+   <input class="url" placeholder="https://…" value="${esc(imp.url)}">
+   <textarea rows="6" data-imp-text="${imp.id}">${esc(st.text)}</textarea>
+   <div class="row"><button data-act="parse" data-id="${imp.id}" ${st.parsed?'':'data-primary'} class="${st.parsed?'':'primary'}">Read table</button><span class="mock">mock: the sample is pre-pasted</span></div>`;
+  if(st.parsed){
+    const {head,rows}=parseTable(st.text);
+    if(!st.map) st.map = imp.saved && imp.saved.length===head.length ? [...imp.saved] : head.map(guessRole);
+    h+=`<label>Columns ${imp.saved?'(saved mapping applied)':'(guessed — check them)'}</label><div class="maps">`+head.map((c,i)=>`<label>${esc(c)}<select data-map="${imp.id}" data-col="${i}">${ROLES.map(r=>`<option ${st.map[i]===r?'selected':''}>${r}</option>`).join('')}</select></label>`).join('')+`</div>`;
+    const ni=st.map.indexOf('nation');
+    if(ni<0) h+=`<p class="warn">Map a nation column so the BEL rows can be suggested.</p>`;
+    else {
+      const bel=rows.map((r,idx)=>({r,idx})).filter(x=>(x.r[ni]||'').toUpperCase()==='BEL');
+      const shown=['place','round','name','performance','points','opponent','score'].filter(r=>st.map.includes(r));
+      h+=`<p>${rows.length} rows read · <b>${bel.length} BEL rows suggested</b> · ${rows.length-bel.length} others skipped</p>
+      <table><tr><th></th>${shown.map(r=>`<th>${r}</th>`).join('')}<th>Identity</th></tr>`+bel.map(({r,idx})=>{
+        const get=role=>{const i=st.map.indexOf(role);return i<0?'':r[i]||''}; const m=matchRow(get,imp); const on=st.sel[idx]!==false;
+        return `<tr><td><input type="checkbox" data-selrow="${imp.id}" data-idx="${idx}" ${on?'checked':''}></td>${shown.map(x=>`<td>${esc(get(x))}</td>`).join('')}
+        <td>${m.ok?`<span class="match-ok">✓ ${m.how} → ${esc(m.who)}</span>`:`<span class="match-no">${m.how} → merge queue</span>`}</td></tr>`;}).join('')+`</table>
+      <div class="row" style="margin-top:8px"><button class="primary" data-primary data-act="confirm-import" data-id="${imp.id}">Confirm ${bel.filter(b=>st.sel[b.idx]!==false).length} rows</button></div>`;
+    }
+  }
+  return h+`</div>`;
+}
+function confirmImport(id){
+  const imp=[...IMPORTS,LIVE_IMPORT].find(i=>i.id===id); const st=S.imports[id]; const {rows}=parseTable(st.text); const ni=st.map.indexOf('nation');
+  let ok=0, q=0;
+  rows.forEach((r,idx)=>{ if((r[ni]||'').toUpperCase()!=='BEL'||st.sel[idx]===false) return;
+    const get=role=>{const i=st.map.indexOf(role);return i<0?'':r[i]||''}; const m=matchRow(get,imp);
+    if(m.ok) ok++; else { q++; S.merge.push({id:'g'+(++S.seq), sport:imp.sport, incoming:{name:get('name'), dob:get('DOB')||'—', src:imp.source+' (paste)', srcId:imp.idKey+' '+get('IF ID'), event:imp.what},
+      reason:m.cands.length?'No IF ID match and no date of birth; the name matches.':'No match at all. Possibly a new Athlete: first senior international performance?',
+      candidates:m.cands.map(c=>({name:c.name,dob:c.dob||'—',ids:Object.entries(c.ids).map(([k,v])=>k+' '+v).join(' · ')||'no IF ID yet',note:c.sport}))}); }
+  });
+  if(!imp.saved){ imp.saved=[...st.map]; imp.lastUsed='today'; }
+  done(id, `${imp.source}: wrote ${ok} ${imp.kind} rows${q?`, ${q} sent to the merge queue`:''}${imp.lastUsed==='today'?' · mapping saved':''}`);
+}
+function manualForm(m){
+  return `<div class="tool"><div class="row"><b>${esc(m.comp)}</b><span class="muted">${esc(m.dates)} · ${esc(m.why)}</span></div>
+  <div class="maps"><label>Entry<input value="${esc(m.entry)}"></label><label>Event<input value="${esc(m.event)}"></label>
+  <label>Round<select><option>Final classification</option><option>Final</option><option>Semi-final</option><option>Qualification</option></select></label>
+  <label>Place<input size="4" placeholder="5"></label><label>Performance<input size="10" placeholder="13.650 / 2–1"></label>
+  <label>Status<select><option>Finished</option><option>DNF</option><option>DNS</option><option>DSQ</option></select></label></div>
+  <label>Source URL (the PDF)</label><input class="url" placeholder="https://…/results.pdf">
+  <div class="row" style="margin-top:8px"><button class="primary" data-primary data-act="manual-save" data-id="${m.id}">Save result</button><button data-act="manual-none" data-id="${m.id}">Did not compete</button></div></div>`;
+}
+function mergeItem(g){
+  return `<div class="tool stack"><div class="incoming"><b>${esc(g.incoming.name)}</b> · DOB ${esc(g.incoming.dob)} · ${esc(g.incoming.srcId)}<div class="src">from ${esc(g.incoming.src)} · ${esc(g.incoming.event)}</div></div>
+  <div class="muted">${esc(g.reason)}</div>
+  ${g.candidates.map((c,i)=>`<div class="cand"><div><b>${esc(c.name)}</b> · DOB ${esc(c.dob)}<div class="src">${esc(c.ids)} · ${esc(c.note)}</div></div><button ${i===0?'data-primary class="primary"':''} data-act="merge-link" data-id="${g.id}" data-c="${i}">Same person: link</button></div>`).join('')||'<div class="src">No existing Athlete comes close.</div>'}
+  <div class="row"><button ${g.candidates.length?'':'data-primary class="primary"'} data-act="merge-new" data-id="${g.id}">Create new Athlete</button><button data-act="merge-not" data-id="${g.id}">Not an Athlete (not senior / not BEL)</button></div></div>`;
+}
+function statusControls(s){
+  const changed=s.suggest!==s.current;
+  return `<div class="row">${changed?`<button class="primary" data-primary data-act="st-accept" data-id="${s.id}">Set ${esc(s.suggest)}</button>`:''}
+   <button ${changed?'':'class="primary" data-primary'} data-act="st-keep" data-id="${s.id}">Keep ${esc(s.current)}</button>
+   <select id="stsel-${s.id}">${STATUSES.map(x=>`<option>${x}</option>`).join('')}</select><button class="small" data-act="st-set" data-id="${s.id}">Set</button></div>`;
+}
+function statusItem(s){
+  return `<div class="tool stack"><div><b>${esc(s.entry)}</b> · ${esc(s.sport)}, ${esc(s.event)} · target <b>${esc(s.target)}</b></div>
+  <table><tr><th>Track</th><th>Was</th><th>Now</th><th>Needs</th></tr><tr><td>${esc(s.track)}</td><td>${esc(s.before)}</td><td><b>${esc(s.after)}</b></td><td>${esc(s.need)}</td></tr></table>
+  <div>${badge(s.current)} <span class="arrow">→</span> suggested ${badge(s.suggest)} ${s.quota?'<span class="src">(quota place moves to Allocated too)</span>':''}</div>
+  <div class="src">Source: ${esc(s.source)} · last checked ${esc(s.checked)}</div>${statusControls(s)}</div>`;
+}
+function statusTable(list){
+  return `<table><tr><th>Entry · target</th><th>Track change</th><th>Status</th><th>Source · last checked</th><th></th></tr>`+list.map(i=>{const s=i.status;return `<tr>
+  <td><b>${esc(s.entry)}</b><div class="src">${esc(s.sport)} · ${esc(s.target)}</div></td><td>${esc(s.track)}<div>${esc(s.before)} → <b>${esc(s.after)}</b> <span class="src">(needs ${esc(s.need)})</span></div></td>
+  <td>${badge(s.current)}${s.suggest!==s.current?` → ${badge(s.suggest)}`:'<div class="src">no change suggested</div>'}</td><td class="src">${esc(s.source)}<br>checked ${esc(s.checked)}</td><td>${statusControls(s)}</td></tr>`}).join('')+`</table>`;
+}
+function selectionItem(s){
+  const st=S.sel[s.id] ||= {text:'', url:'', ticks:{}};
+  return `<div class="tool"><div class="row"><b>${esc(s.comp)}</b><span class="muted">selector: ${esc(s.selector)} · ${esc(s.deadline)}</span></div>
+  <label>Press release URL (becomes the source)</label><input class="url" data-sel-url="${s.id}" value="${esc(st.url)}" placeholder="https://…/news/selection">
+  <label>Press release text <button class="small" data-act="sel-sample" data-id="${s.id}">paste mock text</button></label><textarea rows="4" data-sel-text="${s.id}">${esc(st.text)}</textarea>
+  <div class="row"><button data-act="sel-find" data-id="${s.id}">Tick the names found in the text</button></div>
+  <label>Potential Entries</label>${s.candidates.map((c,i)=>`<div><label style="display:inline;color:var(--ink)"><input type="checkbox" data-seltick="${s.id}" data-i="${i}" ${st.ticks[i]?'checked':''}> ${esc(c)}</label></div>`).join('')}
+  <div class="row" style="margin-top:8px"><button class="primary" data-primary data-act="sel-save" data-id="${s.id}">Save Selection (${Object.values(st.ticks).filter(Boolean).length} Selected, rest Not selected)</button></div>
+  <div class="src">Replaced by the IF entry list once it is published.</div></div>`;
+}
+function likelyItem(l){
+  return `<div class="tool"><div><b>${esc(l.comp)}</b> · ${esc(l.date)} · ${esc(l.sport)}</div><div class="src">likely because: ${esc(l.reason)}</div>
+  <div class="row" style="margin-top:6px"><button data-act="lk" data-v="Confirmed" data-id="${l.id}">Confirm (entry list seen)</button>
+  <button ${l.suggest==='Keep likely'?'class="primary" data-primary':''} data-act="lk" data-v="Kept likely" data-id="${l.id}">Keep likely</button>
+  <button ${l.suggest==='Drop'?'class="primary" data-primary':''} data-act="lk" data-v="Dropped" data-id="${l.id}">Drop</button></div></div>`;
+}
+function likelyTable(list){
+  return `<table><tr><th>Competition</th><th>Why likely</th><th></th></tr>`+list.map(i=>{const l=LIKELY.find(x=>x.id===i.id);return `<tr><td><b>${esc(l.comp)}</b><div class="src">${esc(l.date)} · ${esc(l.sport)}</div></td><td class="src">${esc(l.reason)}</td><td><div class="row">
+  <button class="small" data-act="lk" data-v="Confirmed" data-id="${l.id}">Confirm</button><button class="small ${l.suggest==='Keep likely'?'primary':''}" data-act="lk" data-v="Kept likely" data-id="${l.id}">Keep</button><button class="small ${l.suggest==='Drop'?'primary':''}" data-act="lk" data-v="Dropped" data-id="${l.id}">Drop</button></div></td></tr>`}).join('')+
+  `</table><div class="row" style="margin-top:6px"><button class="small" data-act="lk-add">+ Add a likely Participation by hand</button></div>`;
+}
+function la28Form(){
+  return `<div class="tool"><div class="maps"><label>Games first day<input type="date" value="2028-07-14"></label><label>Games last day<input type="date" value="2028-07-30"></label><label>Schedule version<input value="curated (no import yet)" size="20"></label></div>
+  <table><tr><th>Sport</th><th>First day</th><th>Last day</th></tr>${LA28.map(r=>`<tr><td>${r[0]}</td><td><input type="date" value="${r[1]}"></td><td><input type="date" value="${r[2]}"></td></tr>`).join('')}</table>
+  <div class="mock">mock dates</div><label>Source</label><input class="url" placeholder="LA28 competition schedule PDF URL">
+  <div class="row" style="margin-top:8px"><button class="primary" data-primary data-act="sch-save" data-id="sch1">Save dates</button></div></div>`;
+}
+function timetablePaste(){
+  const st=S.sched.sch2 ||= {text:ESTC.sample, parsed:false};
+  let h=`<div class="tool"><div class="row"><b>${esc(ESTC.comp)}</b><span class="muted">timetable · Belgian events: ${ESTC.belgianEvents.join(', ')}</span></div>
+  <div class="maps"><label>Version stamp<input value="v1" size="5"></label><label>Published<input type="date" value="2026-11-11"></label><label>Venue time zone<input value="CET (= Belgian time)" size="18"></label></div>
+  <label>Paste the timetable</label><textarea rows="5" data-sch-text="sch2">${esc(st.text)}</textarea>
+  <div class="row"><button ${st.parsed?'':'class="primary" data-primary'} data-act="sch-parse" data-id="sch2">Read timetable</button></div>`;
+  if(st.parsed){ const {rows}=parseTable(st.text); const bel=rows.filter(r=>ESTC.belgianEvents.some(e=>r[2]&&r[2].startsWith(e)));
+    h+=`<p>${rows.length} rounds read · <b>${bel.length} with a Belgian Entry</b> · ${rows.length-bel.length} skipped</p><table><tr><th>Day</th><th>Time</th><th>Round</th><th></th></tr>`+
+    bel.map((r,i)=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td class="src">${/heats/.test(r[2])?'attached':'if through'}</td></tr>`).join('')+`</table>
+    <div class="row" style="margin-top:8px"><button class="primary" data-primary data-act="sch-save" data-id="sch2">Store as v1</button></div>`; }
+  return h+`</div>`;
+}
+function checkItem(c){
+  const st=S.check[c.id] ||= {};
+  return `<div class="tool"><div class="src">due ${esc(c.due)}</div><table><tr><th>Check</th><th>Last checked</th><th></th></tr>`+c.sub.map((s,i)=>`<tr><td>${esc(s[0])} <a href="#" class="src" onclick="return false">↗</a></td><td class="src">${st[i]?'<span class="okc">today</span>':esc(s[1])}</td><td>${st[i]?`<span class="okc">${esc(st[i])}</span>`:`<button class="small" data-act="ck" data-id="${c.id}" data-i="${i}" data-v="no change">No change</button> <button class="small" data-act="ck" data-id="${c.id}" data-i="${i}" data-v="changed">Changed…</button>`}</td></tr>`).join('')+
+  `</table><div class="row" style="margin-top:6px"><button class="primary" data-primary data-act="ck-all" data-id="${c.id}">All checked, no change</button></div></div>`;
+}
+function detailForm(d){
+  return `<div class="tool"><div><b>${esc(d.entry)}</b> · ${esc(d.event)} · ${esc(d.round)} · ${esc(d.session)}</div>
+  <div class="maps"><label>Opponent<input placeholder="Name (NAT)"></label><label>Table<input size="4" placeholder="3"></label><label>Start, venue time<input type="time" value="17:30"></label><label>Belgian time<input value="10:30" size="6" disabled></label></div>
+  <div class="src">${LIVE.tz} · optional detail, from the IF start list / draw</div>
+  <div class="row" style="margin-top:6px"><button class="primary" data-primary data-act="det-save" data-id="${d.id}">Save detail</button><button data-act="det-skip" data-id="${d.id}">Not through (eliminated)</button></div></div>`;
+}
+function ttVersion(){
+  return `<div class="tool"><div class="src">WTTC schedule · v3 (stored) → v4 (posted 06:40 venue time)</div>
+  <table><tr><th>Belgian Entry</th><th>Round</th><th>v3</th><th>v4</th></tr><tr><td>Tibo Maes</td><td>MS R32 (if through)</td><td>Sat 14:00 · T4</td><td><b>Sat 18:30 · T2</b></td></tr><tr><td>De Waele / Maes</td><td>MD R16</td><td>Sat 19:00 · T1</td><td><b>Sun 11:00 · T1</b></td></tr></table>
+  <label>Paste or URL of v4</label><input class="url" placeholder="https://…/schedule-v4.pdf">
+  <div class="row" style="margin-top:6px"><button class="primary" data-primary data-act="tt-accept">Store v4 (2 moves)</button></div></div>`;
+}
+
+/* ======================= VARIANT A — Run sheet ======================= */
+const STEPS = {
+  weekly:[{t:['health'],l:'Source health',e:'~5 min',d:'Automatic sources first, so you know which data to distrust today.'},
+    {t:['import'],l:'Paste imports',e:'0.5–1.25 h',d:'Assisted sources with Belgian Participation this week. Open one, paste, confirm the BEL rows.'},
+    {t:['manual'],l:'Manual results',e:'15–30 min',d:'PDF-only and login-only sports: type the Belgian rows.'},
+    {t:['merge'],l:'Merge queue',e:'~10 min',d:'Identities the IF ID and name + DOB rules could not settle. Includes what this session\'s imports just sent here.'},
+    {t:['status'],l:'Qualification review',e:'0.5–1 h',d:'Only Entries whose ranking or track changed since their last check.'},
+    {t:['selection','likely'],l:'Selections & likely',e:'~15 min',d:'Selections from federation press releases, then the likely Participations of the next weeks.'},
+    {t:['schedule'],l:'Schedules',e:'~10 min',d:'New timetable versions and Games dates.'},
+    {t:['checklist'],l:'Monthly checklist',e:'~15 min',d:'Only the checks due this week.'}],
+  live:[{t:['detail','schedule'],l:'Today & tomorrow',e:'~10 min',d:'Schedule changes and match detail for Belgian Entries that are through.'},
+    {t:['import'],l:"Today's results",e:'~10 min',d:'Paste the results page of the day.'},
+    {t:['merge'],l:'Merge queue',e:'~2 min',d:'Anything today\'s results could not match.'},
+    {t:['health'],l:'Source health',e:'~2 min',d:'Problems only.'}]
+};
+function renderA(){
+  const items=buildItems(), steps=STEPS[mode], ui=S.ui.A; if(ui.step>=steps.length) ui.step=0;
+  const step=steps[ui.step], its=items.filter(i=>step.t.includes(i.type));
+  const total=steps.length, fin=steps.filter((s,i)=>ui.fin[mode+i]||!items.some(x=>s.t.includes(x.type))).length;
+  let body='';
+  if(step.t[0]==='health'){ body+=`<div class="card">${healthTable()}</div>`+its.map(i=>`<div class="card"><h4>${esc(i.title)}</h4>${i.render()}</div>`).join(''); }
+  else if(step.t[0]==='import'){ body+=its.map(i=>`<div class="card"><div class="improw"><div><h4>${esc(i.title)}</h4><div class="src">${esc(i.sub)}</div></div>${ui.open===i.id?'':`<button ${its[0]===i?'class="primary"':''} data-act="a-open" data-id="${i.id}">Open</button>`}</div>${ui.open===i.id?`<div style="margin-top:10px">${i.render()}</div>`:''}</div>`).join(''); }
+  else if(step.t[0]==='status'){ body+= its.length?`<div class="card">${statusTable(its)}</div>`:''; }
+  else if(step.t[0]==='selection'){ const sel=its.filter(i=>i.type==='selection'), lk=its.filter(i=>i.type==='likely');
+    body+=sel.map(i=>`<div class="card"><h4>${esc(i.title)}</h4>${i.render()}</div>`).join('')+(lk.length?`<div class="card"><h4>Likely Participations, next 6 weeks</h4>${likelyTable(lk)}</div>`:''); }
+  else body+=its.map(i=>`<div class="card"><h4>${esc(i.title)}</h4><div class="src" style="margin-bottom:6px">${esc(i.sub)}</div>${i.render()}</div>`).join('');
+  if(!its.length) body+=`<div class="donebox">✓ Nothing left in this step.</div>`;
+  if(step.t[0]==='checklist') body+=`<div class="notdue">${CHECK_NOT_DUE} other checks are not due this week.</div>`;
+  const last=ui.step===total-1;
+  return `<div class="shell"><nav class="rail"><h1>${mode==='weekly'?'Weekly curation':'Live day pass'}</h1>
+   <div class="sub">${mode==='weekly'?`Fri ${TODAY} · week 46`:`${LIVE.comp} · ${LIVE.day}<br><i>${LIVE.note}</i>`}</div>
+   <ol>${steps.map((s,i)=>{const n=items.filter(x=>s.t.includes(x.type)).length, f=ui.fin[mode+i]||n===0;return `<li class="${i===ui.step?'cur':''} ${f?'fin':''}" data-act="a-step" data-i="${i}"><span class="num">${f?'✓':i+1}</span><span>${s.l}<small>${s.e} · ${n} open</small></span></li>`}).join('')}</ol>
+   <div class="bar"><i style="width:${Math.round(fin/total*100)}%"></i></div><div class="sub" style="padding-top:6px">${fin} of ${total} steps done</div></nav>
+  <main><div class="head"><h2>${ui.step+1}. ${step.l}</h2><span class="muted">${step.e} · ${its.length} open</span></div><p class="lede">${step.d}</p>${body}
+   <div class="foot"><button class="ghost" data-act="a-prev" ${ui.step===0?'disabled':''}>← Back</button>
+   <button class="primary" data-act="a-next">${last?'Finish session':its.length?`Leave ${its.length} for next week, continue →`:'Next step →'}</button></div></main>
+  <aside><h3>Estimated time left</h3><div class="big">${fmtMin(minutesLeft(items))}</div><div class="src">${items.length} items open</div>
+   <h3>Session log</h3><div class="log">${S.log.map(l=>`<div>${esc(l)}</div>`).join('')||'<span class="src">Nothing yet.</span>'}</div></aside></div>`;
+}
+
+/* ======================= VARIANT B — Inbox ======================= */
+function renderB(){
+  const ui=S.ui.B; let items=buildItems().sort((a,b)=>(!!ui.snz[a.id]-!!ui.snz[b.id])||(a.urg-b.urg));
+  const all=items; if(ui.filter!=='all') items=items.filter(i=>i.type===ui.filter);
+  if(ui.cur>=items.length) ui.cur=Math.max(0,items.length-1);
+  const cur=items[ui.cur]; const types=[...new Set(all.map(i=>i.type))];
+  return `<div class="top"><h1>curation/inbox</h1><div class="chips"><button class="chip ${ui.filter==='all'?'on':''}" data-act="b-filter" data-v="all">all ${all.length}</button>${types.map(t=>`<button class="chip ${ui.filter===t?'on':''}" data-act="b-filter" data-v="${t}">${TYPE[t].toLowerCase()} ${all.filter(i=>i.type===t).length}</button>`).join('')}</div>
+   <div class="meta">${mode==='weekly'?`fri 13 nov · wk 46`:'live day pass'} · ~${fmtMin(minutesLeft(all))} left · ${Object.keys(S.done).length} done</div></div>
+  ${mode==='live'?`<div class="live">● LIVE · ${LIVE.comp} · ${LIVE.day} · ${LIVE.note}</div>`:''}
+  <div class="split"><div class="list">${items.map((i,n)=>`<div class="it ${n===ui.cur?'cur':''} ${ui.snz[i.id]?'snz':''}" data-act="b-pick" data-i="${n}"><span><span class="tag t-${i.type}">${TYPE[i.type]}</span></span><span class="t">${esc(i.title)}</span><span class="u">${esc(i.sport.split(' ')[0])}</span><span class="s">${esc(i.sub)}</span></div>`).join('')||'<div class="empty">inbox zero ✓</div>'}
+   <div class="donefoot"><b>Done (${S.log.length})</b>${S.log.slice(0,8).map(l=>`<div>✓ ${esc(l)}</div>`).join('')}</div></div>
+  <div class="detail">${cur?`<div class="row"><span class="tag t-${cur.type}">${TYPE[cur.type]}</span><span class="muted">${esc(cur.sport)} · ${ui.cur+1} of ${items.length} · ~${EST[cur.type]} min</span></div>
+   <h2 style="margin-top:8px">${esc(cur.title)}</h2><p class="lede">${esc(cur.sub)}</p>${cur.render()}
+   <div class="keys"><kbd>j</kbd>/<kbd>k</kbd> next/prev · <kbd>a</kbd> primary action (highlighted) · <kbd>s</kbd> snooze to the bottom · <kbd>←</kbd><kbd>→</kbd> switch variant · done items leave the queue and the next one opens</div>`
+   :'<div class="empty">Nothing left. Session done.</div>'}</div></div>`;
+}
+
+/* ======================= VARIANT C — Sport board ======================= */
+const COLS=[{t:['health'],l:'Source'},{t:['import','detail'],l:'Import / detail'},{t:['manual'],l:'Manual'},{t:['merge'],l:'Identities'},{t:['status'],l:'Qual. status'},{t:['selection','likely'],l:'Selection / likely'},{t:['schedule'],l:'Schedule'},{t:['checklist'],l:'Checklist'}];
+const TIER={'Table tennis':'assisted','Short track':'assisted','Equestrian':'assisted','Badminton':'assisted','Hockey':'assisted','Basketball':'assisted','Taekwondo':'manual','Gymnastics':'manual','Biathlon':'manual','All sports':''};
+function renderC(){
+  const ui=S.ui.C, items=buildItems();
+  const srcBySport={}; SOURCES.forEach(s=>srcBySport[s.sport]=s);
+  const sports=[...new Set([...items.map(i=>i.sport)])].sort((a,b)=>(a==='All sports')-(b==='All sports')||items.filter(i=>i.sport===b).length-items.filter(i=>i.sport===a).length);
+  const quiet=SOURCES.filter(s=>!sports.includes(s.sport));
+  let main='';
+  if(ui.tab==='board'){
+    main=`<table class="board"><tr><th>Sport</th>${COLS.map(c=>`<th>${c.l}</th>`).join('')}<th></th></tr>`+sports.map(sp=>{
+      const src=srcBySport[sp], tier=src?'auto':TIER[sp]??'assisted', rowItems=items.filter(i=>i.sport===sp);
+      return `<tr><td class="sp"><b>${esc(sp)}</b>${tier?`<span class="tier">${tier}</span>`:''}<small>${rowItems.length} open · ~${fmtMin(minutesLeft(rowItems))}</small></td>`+COLS.map((c,ci)=>{
+        const n=rowItems.filter(i=>c.t.includes(i.type)).length, sel=ui.drawer&&ui.drawer.sp===sp&&ui.drawer.c===ci;
+        if(c.t[0]==='health'&&src){const st=srcState(src);return `<td><div class="cell ${n?'h2':'zero'} ${sel?'sel':''}" ${n?`data-act="c-open" data-sp="${esc(sp)}" data-c="${ci}"`:''}><span class="dot ${st}"></span><span class="hc">${rel(src.lastFetch)}<br>chg ${rel(src.lastChange)}</span></div></td>`;}
+        return `<td><div class="cell ${n?'h'+Math.min(3,n):'zero'} ${sel?'sel':''}" ${n?`data-act="c-open" data-sp="${esc(sp)}" data-c="${ci}"`:''}>${n||'·'}</div></td>`;}).join('')+
+      `<td style="padding:0 8px"><button class="small" data-act="c-open" data-sp="${esc(sp)}" data-c="-1">Work row</button></td></tr>`;}).join('')+`</table>
+      <div class="quiet"><b>Quiet (nothing to do):</b> ${quiet.map(s=>`<span class="dot ${srcState(s)}"></span>${esc(s.sport)} <span class="src">(${rel(s.lastFetch)})</span>`).join(' &nbsp; ')}</div>
+      <div class="quiet">${mode==='weekly'?`Not shown: ${CHECK_NOT_DUE} checklist items not due this week · sports with no Participation this week.`:'Only sports with a Live Championship today are shown.'}</div>`;
+  } else if(ui.tab==='health'){ main=healthTable(); }
+  else { main=`<div class="stack">${['selection','likely','checklist'].map(t=>items.filter(i=>i.type===t).map(i=>`<div style="border-top:1px solid var(--line);padding-top:10px"><h4>${esc(i.title)}</h4>${i.render()}</div>`).join('')).join('')}</div>`; }
+  let drawer='';
+  if(ui.drawer){ const {sp,c}=ui.drawer; const di=items.filter(i=>i.sport===sp&&(c<0||COLS[c].t.includes(i.type)));
+    drawer=`<div class="drawer"><div class="row" style="justify-content:space-between"><h2>${esc(sp)} · ${c<0?'all open work':COLS[c].l}</h2><button data-act="c-close">Close ✕</button></div>
+    <div class="src">${di.length} open · ~${fmtMin(minutesLeft(di))}</div>
+    ${di.map(i=>`<div class="card"><div class="row"><span class="tag">${TYPE[i.type]}</span><h4>${esc(i.title)}</h4></div><div class="src" style="margin:2px 0 6px">${esc(i.sub)}</div>${i.render()}</div>`).join('')||'<p class="okc">✓ All done for this cell.</p>'}</div>`; }
+  return `${mode==='live'?`<div class="livebar">LIVE · ${LIVE.comp} · ${LIVE.day} (${LIVE.note})</div>`:''}
+  <header><h1>Curation</h1><div class="tabs">${[['board','Board'],['health','All sources'],['cross','Cross-sport queue']].map(([k,l])=>`<button class="${ui.tab===k?'on':''}" data-act="c-tab" data-v="${k}">${l}</button>`).join('')}</div>
+   <div class="meta">${mode==='weekly'?`Fri ${TODAY}`:'Live day pass'} · <b>${items.length}</b> open · ~${fmtMin(minutesLeft(items))}</div></header>
+  <div class="wrap">${main}<div class="bottom"><div><h3>Session log</h3><div class="log">${S.log.map(l=>`<div>${esc(l)}</div>`).join('')||'<span class="src">Nothing yet.</span>'}</div></div>
+  <div><h3>How to read the board</h3><div class="src">Each row is a sport with work this week; each number is open items of that kind. Click a number to work just that slice, or "Work row" to clear a sport in one go. Orange = more items. The Source column shows the automatic fetch health.</div></div></div></div>${drawer}`;
+}
+
+/* ======================= RENDER + EVENTS ======================= */
+function render(){
+  document.body.className='v'+variant;
+  document.getElementById('app').innerHTML = variant==='A'?renderA():variant==='B'?renderB():renderC();
+  document.getElementById('switcher').innerHTML = `<button data-sw="-1">◀</button><span class="lbl">${variant} · ${VNAMES[variant]}</span><button data-sw="1">▶</button><span class="sep"></span>
+   <button class="${mode==='weekly'?'on':''}" data-mode="weekly">Weekly</button><button class="${mode==='live'?'on':''}" data-mode="live">Live day</button><span class="sep"></span><button data-reset>Reset</button>`;
+}
+function setURL(){ const p=new URLSearchParams(location.search); p.set('variant',variant); p.set('mode',mode); history.replaceState(null,'','?'+p); }
+function cycle(d){ const k='ABC'; variant=k[(k.indexOf(variant)+d+3)%3]; setURL(); render(); }
+document.getElementById('switcher').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.sw) cycle(+b.dataset.sw); else if(b.dataset.mode){mode=b.dataset.mode; S.ui.A.step=0; S.ui.B.cur=0; S.ui.C.drawer=null; setURL(); render();} else if('reset' in b.dataset){reset(); render();}});
+
+document.addEventListener('input',e=>{const t=e.target;
+  if(t.dataset.impText){ const st=S.imports[t.dataset.impText]; st.text=t.value; st.parsed=false; st.map=null; }
+  if(t.dataset.selText) S.sel[t.dataset.selText].text=t.value;
+  if(t.dataset.selUrl) S.sel[t.dataset.selUrl].url=t.value;
+  if(t.dataset.schText){ S.sched[t.dataset.schText].text=t.value; S.sched[t.dataset.schText].parsed=false; }
+});
+document.addEventListener('change',e=>{const t=e.target;
+  if(t.dataset.map){ S.imports[t.dataset.map].map[+t.dataset.col]=t.value; render(); }
+  if(t.dataset.selrow){ S.imports[t.dataset.selrow].sel[+t.dataset.idx]=t.checked; render(); }
+  if(t.dataset.seltick){ S.sel[t.dataset.seltick].ticks[+t.dataset.i]=t.checked; render(); }
+});
+document.getElementById('app').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]'); if(!b) return; const a=b.dataset.act, id=b.dataset.id;
+  const find=(arr)=>arr.find(x=>x.id===id);
+  switch(a){
+    case 'h-retry': note(`${find(SOURCES).name}: retry queued (still failing in this mock)`); break;
+    case 'h-ack': done('h-'+id, `${find(SOURCES).name}: ${srcState(find(SOURCES))==='blocked'?'kept on Assisted until the block lifts':'acknowledged as stale'}`); break;
+    case 'parse': S.imports[id].parsed=true; render(); break;
+    case 'confirm-import': confirmImport(id); break;
+    case 'manual-save': { const m=find(MANUAL); done(id, `${m.entry}: result saved for ${m.comp}`); break; }
+    case 'manual-none': { const m=find(MANUAL); done(id, `${m.entry}: did not compete at ${m.comp} (likely Participation dropped)`); break; }
+    case 'merge-link': case 'merge-new': case 'merge-not': { const g=S.merge.find(x=>x.id===id); S.merge=S.merge.filter(x=>x.id!==id);
+      done(id, a==='merge-link'?`${g.incoming.name} linked to ${g.candidates[+b.dataset.c].name}; ${g.incoming.srcId} added as external ID`:a==='merge-new'?`New Athlete created: ${g.incoming.name} (Athlete since this result)`:`${g.incoming.name}: marked not an Athlete`); break; }
+    case 'st-accept': { const s=find(STATUS); done(id, `${s.entry} (${s.target}): ${s.current} → ${s.suggest} · source ${s.source} · checked today`); break; }
+    case 'st-keep': { const s=find(STATUS); done(id, `${s.entry} (${s.target}): kept ${s.current} · checked today`); break; }
+    case 'st-set': { const s=find(STATUS), v=document.getElementById('stsel-'+id).value; done(id, `${s.entry} (${s.target}): set to ${v} · checked today`); break; }
+    case 'sel-sample': S.sel[id].text=SELECTIONS[0].press; S.sel[id].url='https://example.org/news/selection-ec-short-course'; render(); break;
+    case 'sel-find': { const s=find(SELECTIONS), st=S.sel[id]; s.candidates.forEach((c,i)=>{ const k=c.includes('relay')?'relay':c; st.ticks[i]=st.text.toLowerCase().includes(k.toLowerCase()); }); render(); break; }
+    case 'sel-save': { const s=find(SELECTIONS), st=S.sel[id], n=Object.values(st.ticks).filter(Boolean).length; done(id, `Selection saved for ${s.comp}: ${n} Selected, ${s.candidates.length-n} Not selected · source ${st.url||'(no URL)'}`); break; }
+    case 'lk': { const l=find(LIKELY); done(id, `${l.comp}: ${b.dataset.v.toLowerCase()}`); break; }
+    case 'lk-add': note('(mock) would open a form: competition + date + Entry → likely Participation, added by hand'); break;
+    case 'sch-parse': S.sched[id].parsed=true; render(); break;
+    case 'sch-save': done(id, id==='sch1'?'LA 2028 dates saved (curated, no schedule import yet)':`${ESTC.comp}: timetable stored as v1, Belgian rounds attached, later rounds "if through"`); break;
+    case 'ck': { const c=find(CHECK); S.check[id][+b.dataset.i]=b.dataset.v; if(c.sub.every((_,i)=>S.check[id][i])) done(id, `${c.title}: all checked today`); else note(`${c.sub[+b.dataset.i][0]}: ${b.dataset.v}`); break; }
+    case 'ck-all': done(id, `${find(CHECK).title}: all checked, no change`); break;
+    case 'det-save': done(id, `${find(DETAIL).entry}: match detail saved`); break;
+    case 'det-skip': done(id, `${find(DETAIL).entry}: eliminated, later rounds removed`); break;
+    case 'tt-accept': done('lv-tt', 'WTTC schedule v4 stored; 2 Belgian matches moved'); break;
+    case 'a-step': S.ui.A.step=+b.dataset.i; S.ui.A.open=null; render(); break;
+    case 'a-open': S.ui.A.open=id; render(); break;
+    case 'a-prev': S.ui.A.step--; S.ui.A.open=null; render(); window.scrollTo(0,0); break;
+    case 'a-next': { const ui=S.ui.A; ui.fin[mode+ui.step]=true; if(ui.step<STEPS[mode].length-1) ui.step++; else note('Session finished'); ui.open=null; render(); window.scrollTo(0,0); break; }
+    case 'b-filter': S.ui.B.filter=b.dataset.v; S.ui.B.cur=0; render(); break;
+    case 'b-pick': S.ui.B.cur=+b.dataset.i; render(); break;
+    case 'c-tab': S.ui.C.tab=b.dataset.v; S.ui.C.drawer=null; render(); break;
+    case 'c-open': S.ui.C.drawer={sp:b.dataset.sp, c:+b.dataset.c}; render(); break;
+    case 'c-close': S.ui.C.drawer=null; render(); break;
+  }
+});
+document.addEventListener('keydown',e=>{
+  const t=e.target; if(t.matches&&t.matches('input,textarea,select,[contenteditable]')) return;
+  if(e.key==='ArrowLeft') return cycle(-1); if(e.key==='ArrowRight') return cycle(1);
+  if(variant==='B'){ const ui=S.ui.B;
+    if(e.key==='j'||e.key==='ArrowDown'){ui.cur++;render();e.preventDefault();}
+    else if(e.key==='k'||e.key==='ArrowUp'){ui.cur=Math.max(0,ui.cur-1);render();e.preventDefault();}
+    else if(e.key==='a'){const p=document.querySelector('.detail [data-primary]'); if(p) p.click();}
+    else if(e.key==='s'){const it=document.querySelectorAll('.list .it')[ui.cur]; if(it){const items=buildItems().sort((a,b)=>(!!ui.snz[a.id]-!!ui.snz[b.id])||(a.urg-b.urg)).filter(i=>ui.filter==='all'||i.type===ui.filter); const x=items[ui.cur]; if(x){ui.snz[x.id]=true; render();}}}
+  }
+  if(variant==='C'&&e.key==='Escape'){S.ui.C.drawer=null;render();}
+});
+setURL(); render();
+</script>
+</body>
+</html>
