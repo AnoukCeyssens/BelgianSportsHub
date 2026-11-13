@@ -31,3 +31,16 @@ A unit of two or more Athletes competing together for Belgium in one event, with
 ## Roster
 
 The Athletes credited on a Team's entry at one competition, as the official result or squad list names them. That includes heats-only relay members where the federation credits them, and excludes reserves who are not named. Everyone on the roster shares the Team's result in their own Athlete record.
+
+## Phase
+
+One of the four stages that every **Championship** and Olympic Games passes through, in order: **Qualification**, **Selection**, **Live** and **After**. Championships and Games use the same phases. The Games can also be viewed one sport at a time.
+
+- **Qualification:** each potential Entry's current qualification status and its **Qualification tracks**.
+- **Selection:** the final list of Entries, as named by the selector (the national federation for a Championship, the Belgian Olympic Committee for the Games). Personal **Expectations** are entered here.
+- **Live:** what Belgian Entries do day by day, plus the medal table.
+- **After:** Expectations compared with outcomes, and Belgium's best results. Expectations are compared only here, never on an Athlete's own record.
+
+## Qualification track
+
+One route or requirement an Entry has to meet to compete at a Championship or Games: an entry standard, a world-ranking position, a quota place, a federation or Belgian Olympic Committee selection, and so on. Each track records what is needed, what the Entry has so far, and whether it is met. An Athlete's record tracks qualification for two targets: the next Olympic Games in their **Olympic cycle**, and their next Championship.
