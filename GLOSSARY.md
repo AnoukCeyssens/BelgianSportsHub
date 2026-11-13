@@ -18,7 +18,7 @@ A title event in an Olympic sport at continental level (Europeans) or world leve
 
 ## Expectation
 
-A forecast of an **Entry**'s finishing place (or place range, such as 5th–8th) at a **Championship** or the Olympic Games, recorded before it takes place; other competitions have no Expectations. It is either **external** (a **Seed** or a published projection) or **personal** (the user's own pick). A forecast medal colour is a place: gold is 1st. It is compared afterwards with the **outcome**, giving a **Verdict**. Belgian Olympic Committee targets are not Expectations: they are delegation-level counts, compared with Belgium's totals.
+A forecast of an **Entry**'s finishing place (or place range, such as 5th–8th) at a **Championship** or the Olympic Games, recorded before it takes place; other competitions have no Expectations. It is either **external** (a **Seed** or a published projection) or **personal** (the user's own pick). A forecast medal colour is a place: gold is 1st; "a medal" is 1st–3rd and "the final" 1st–8th. A round reached in a tournament is the place range that round classifies (a quarter-final exit is 5th–8th). A personal pick is a single value per Entry: it can be made once the Entry is **Selected**, can be changed freely until it **locks** when the competition's first session starts, and only the locked value counts. An Entry added after the lock, or left unpicked, has no personal Expectation. It is compared afterwards with the **outcome**, giving a **Verdict**. Belgian Olympic Committee targets are not Expectations: they are delegation-level counts, compared with Belgium's totals.
 
 ## Seed
 
@@ -27,7 +27,7 @@ _Avoid_: projection, rank expectation
 
 ## Verdict
 
-The result of comparing one **Expectation** with the Entry's outcome: **Beat** (a better place than expected), **Met** (the expected place, or inside the expected range) or **Missed** (a worse place, or no place at all: DNF, DNS, DSQ, or eliminated before a place is given). There are no points or scores.
+The result of comparing one **Expectation** with the Entry's outcome: **Beat** (a better place than expected), **Met** (the expected place, or inside the expected range) or **Missed** (a worse place, or no place at all: DNF, DNS, DSQ, or eliminated before a place is given). The outcome is the international federation's official final classification place; a shared place counts as its best place (equal 5th is 5th). A personal pick for an Entry withdrawn before the lock is **voided** and gets no Verdict; a withdrawal after the lock is Missed. A place range counts toward a medal or top-8 total only when the whole range lies inside it. There are no points or scores.
 
 ## Participation
 
@@ -48,12 +48,12 @@ The Athletes credited on a Team's entry at one competition, as the official resu
 
 ## Phase
 
-One of the five stages that every **Championship** and Olympic Games passes through, in order: **Standards**, **Qualification**, **Selection**, **Live** and **After**. Championships and Games use the same phases. The Games can also be viewed one sport at a time.
+One of the five stages that every **Championship** and Olympic Games passes through, in order: **Standards**, **Qualification**, **Selection**, **Live** and **After**. Championships and Games use the same phases. The Games can also be viewed one sport at a time, and each sport is in its own phase. A competition is always shown in its current phase, with the earlier ones still reachable.
 
 - **Standards:** from the start of the cycle until the qualification system or entry standards are published. Nothing is shown before publication except the expected publication date, if known. Once published, the standards remain visible as what each **Qualification track** needs.
 - **Qualification:** each potential Entry's current qualification status and its **Qualification tracks**.
-- **Selection:** the final list of Entries, as named by the selector (the national federation for a Championship, the Belgian Olympic Committee for the Games) and confirmed by the international federation's entry list. Personal **Expectations** are entered here.
-- **Live:** what Belgian Entries do day by day, plus the medal table.
+- **Selection:** the final list of Entries, as named by the selector (the national federation for a Championship, the Belgian Olympic Committee for the Games) and confirmed by the international federation's entry list. It begins when the first Entry is Selected, while others may still be qualifying. Personal **Expectations** are entered here, each as soon as its Entry is Selected.
+- **Live:** from the competition's first session (for the Games as a whole, the first session in any sport, often before the opening ceremony; for one sport, its own first session): what Belgian Entries do day by day, plus the medal table. Personal Expectations lock as the competition goes Live; at the Games, every sport's picks lock together at the Games' first session.
 - **After:** Expectations compared with outcomes, and Belgium's best results. Expectations are compared only here, never on an Athlete's own record.
 
 ## Qualification track
