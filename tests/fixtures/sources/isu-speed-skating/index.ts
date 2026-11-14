@@ -24,6 +24,20 @@ import wc1At2025Results17 from "./wc1-2025-results-17.json?raw";
 import wc1At2025Results17Meta from "./wc1-2025-results-17.json.meta.json";
 import wc1At2025Results24 from "./wc1-2025-results-24.json?raw";
 import wc1At2025Results24Meta from "./wc1-2025-results-24.json.meta.json";
+import worldCups2027 from "./worldcups-2027.json?raw";
+import worldCups2027Meta from "./worldcups-2027.json.meta.json";
+import wc2027F1000 from "./wc-2027-f-1000-standings.json?raw";
+import wc2027F1000Meta from "./wc-2027-f-1000-standings.json.meta.json";
+import wc2027M1000 from "./wc-2027-m-1000-standings.json?raw";
+import wc2027M1000Meta from "./wc-2027-m-1000-standings.json.meta.json";
+import wc2027M1500 from "./wc-2027-m-1500-standings.json?raw";
+import wc2027M1500Meta from "./wc-2027-m-1500-standings.json.meta.json";
+import worldCups2026 from "./worldcups-2026.json?raw";
+import worldCups2026Meta from "./worldcups-2026.json.meta.json";
+import wc2026FTp from "./wc-2026-f-tp-standings.json?raw";
+import wc2026FTpMeta from "./wc-2026-f-tp-standings.json.meta.json";
+import wc2026MTp from "./wc-2026-m-tp-standings.json?raw";
+import wc2026MTpMeta from "./wc-2026-m-tp-standings.json.meta.json";
 import events20260227 from "./events-2026-02-27.json?raw";
 import events20260227Meta from "./events-2026-02-27.json.meta.json";
 import worlds2026Schedule from "./worlds-2026-schedule.json?raw";
@@ -45,7 +59,12 @@ import worlds2027ScheduleMeta from "./worlds-2027-schedule.json.meta.json";
  *   12 (Indra Medard 18th in the 1500m Men Division B);
  * - competitors of World Cup #1 (trimmed; Medard, Bart Swings, Vanhoutte) and
  *   of World Cup #2 (Tokyo, from 20 Nov; none published yet);
- * - the schedules of the 2027 Europeans and Worlds (none published yet).
+ * - the schedules of the 2027 Europeans and Worlds (none published yet);
+ * - the season's senior World Cups and the standings of the three that
+ *   competitions 7, 8 and 12 count for (1000m Women: Vanhoutte 19th, 36 pts;
+ *   1000m Men: no Belgian; 1500m Men: Medard 38th, 3 pts). Ticket #33
+ *   recorded these at 14:41 UTC, after the rest of the run, so they already
+ *   count World Cup #1's second weekend.
  */
 export const isuWorldCup1Run: RecordedResponse[] = [
   { ...eventsMeta, body: events },
@@ -55,6 +74,10 @@ export const isuWorldCup1Run: RecordedResponse[] = [
   { ...wc1Results12Meta, body: wc1Results12 },
   { ...wc1CompetitorsMeta, body: wc1Competitors },
   { ...wc2CompetitorsMeta, body: wc2Competitors },
+  { ...worldCups2027Meta, body: worldCups2027 },
+  { ...wc2027F1000Meta, body: wc2027F1000 },
+  { ...wc2027M1000Meta, body: wc2027M1000 },
+  { ...wc2027M1500Meta, body: wc2027M1500 },
   { ...europeans2027ScheduleMeta, body: europeans2027Schedule },
   { ...worlds2027ScheduleMeta, body: worlds2027Schedule },
 ];
@@ -77,13 +100,20 @@ export const ISU_JANUARY_2026_RUN = { now: "2026-01-06T04:00:00.000Z", lastSucce
  * - Team Pursuit Women Division B (trimmed): Belgium 2nd (Fran Vanhoutte,
  *   Isabelle Van Elst, Sandrine Tas), behind Kazakhstan;
  * - Team Pursuit Men (trimmed): Belgium 7th (Bart Swings, Indra Medard,
- *   Mathias Vosté, Daan Van Der Elst), behind the United States.
+ *   Mathias Vosté, Daan Van Der Elst), behind the United States;
+ * - the 2025/26 senior World Cups and the two team pursuit standings these
+ *   count for. Ticket #33 recorded those in Nov 2026, so they are the
+ *   season's final standings: Belgium 9th of the women (110 pts) and 16th of
+ *   the men (36 pts).
  */
 export const isuTeamPursuitRun: RecordedResponse[] = [
   { ...events202511Meta, body: events202511 },
   { ...wc1At2025CompetitionsMeta, body: wc1At2025Competitions },
   { ...wc1At2025Results17Meta, body: wc1At2025Results17 },
   { ...wc1At2025Results24Meta, body: wc1At2025Results24 },
+  { ...worldCups2026Meta, body: worldCups2026 },
+  { ...wc2026FTpMeta, body: wc2026FTp },
+  { ...wc2026MTpMeta, body: wc2026MTp },
 ];
 export const ISU_TEAM_PURSUIT_RUN = { now: "2025-11-17T04:00:00.000Z", lastSuccessAt: "2025-11-16T04:00:00.000Z" };
 
@@ -93,7 +123,7 @@ export const ISU_TEAM_PURSUIT_RUN = { now: "2025-11-17T04:00:00.000Z", lastSucce
  * - the senior events ending on or after 27 Feb (the 2026 Worlds to the 2027 Worlds);
  * - the 2026 Worlds' schedule (16 races, UTC start times) and its
  *   competitors (trimmed to the first one and the Belgians);
- * - the schedules of the 2027 Europeans and Worlds (none published yet).
+ * - the schedules of the 2027 Europeans and Worlds (none published yet);
  */
 export const isuWorlds2026Run: RecordedResponse[] = [
   { ...events20260227Meta, body: events20260227 },

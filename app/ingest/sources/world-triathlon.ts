@@ -14,8 +14,8 @@
 //    held since the window start, Belgian rows only; the start list of each
 //    individual race still to come.
 // Senior relays (mixed relay) go to Belgium's relay Team (ADR 0001), with the
-// team members the result credits as its roster. Rankings wait for rankings
-// ingest (#33).
+// team members the result credits as its roster. Rankings need the key and
+// the ranking ids first (#33, conventions.md "Rankings").
 // The API gives only a year of birth, so a Belgian not yet known by World
 // Triathlon ID waits in the merge queue.
 import { SourceBlocked, type CompetitionKind, type Person, type ResultStatus, type SourceAdapter, type SourceRun } from "../source-adapter";

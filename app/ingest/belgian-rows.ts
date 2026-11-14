@@ -5,10 +5,11 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "~/db/client";
 import { belgianDate, identityMatch, teamIdentity, TIMETABLE_TEXT_HEAD, timetableText, type KnownIdentity, type TimetableRound } from "~/domain";
+import { followRanking } from "~/qualification/ranked-tracks";
 import { applyEntryList } from "~/qualification/selection";
 import { knownIdentities } from "./identities";
 import { keepRawCopy } from "./raw-copy";
-import type { BelgianRows, CompetitionInput, Person, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
+import type { BelgianRows, CompetitionInput, Person, RankingInput, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
 import { addVersion, fingerprintOf, replaceSessions, versionsOf } from "./timetable-versions";
 
 type MergeQueueItem = typeof schema.mergeQueueItem.$inferSelect;
@@ -125,6 +126,44 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
 
     async team(input: TeamInput) {
       return findOrCreateTeam({ ...input, members: input.members?.filter((p) => p.nationality === BELGIUM) ?? null });
+    },
+
+    async ranking(input: RankingInput) {
+      let who: { athleteId: string } | { teamId: string };
+      if ("teamId" in input) who = { teamId: input.teamId };
+      else {
+        // Rankings never create Athletes: a person not matched to one is left out.
+        if (input.person.nationality !== BELGIUM) return;
+        const { athleteId } = await athleteFor(input.person);
+        if (!athleteId) return;
+        who = { athleteId };
+      }
+      const s = schema.rankingSnapshot;
+      const key = and(
+        eq(s.source, source),
+        eq(s.ranking, input.ranking),
+        eq(s.asOf, input.asOf),
+        "athleteId" in who ? eq(s.athleteId, who.athleteId) : eq(s.teamId, who.teamId),
+      );
+      const values = { sport: input.sport, position: input.position, points: input.points };
+      const existing = await db.query.rankingSnapshot.findFirst({ where: key });
+      if (!existing) {
+        await db.insert(s).values({
+          ...values,
+          source,
+          ranking: input.ranking,
+          asOf: input.asOf,
+          athleteId: "athleteId" in who ? who.athleteId : null,
+          teamId: "teamId" in who ? who.teamId : null,
+          rawCopyId: input.rawCopyId,
+          recordedAt: now.toISOString(),
+        });
+        changes++;
+      } else if (existing.position !== values.position || existing.points !== values.points || existing.sport !== values.sport) {
+        await db.update(s).set({ ...values, rawCopyId: input.rawCopyId }).where(eq(s.id, existing.id));
+        changes++;
+      }
+      changes += await followRanking(db, { source, ranking: input.ranking, who }, now);
     },
 
     async entrants(competitionId: string, people: Person[], rawCopyId: string) {

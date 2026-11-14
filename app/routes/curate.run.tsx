@@ -1,6 +1,7 @@
 import { Form, Link, redirect } from "react-router";
 import { ManualResultsStep, actOnManualResult, loadManualResults } from "~/curate/manual-results";
 import { MergeQueueStep, actOnMergeQueueItem, loadMergeQueue } from "~/curate/merge-queue";
+import { QualificationReviewStep, actOnQualificationReview, loadQualificationReview } from "~/curate/qualification-review";
 import { PasteImportsStep, actOnPasteImport, loadPasteImporter, loadPasteImports } from "~/curate/paste-imports";
 import { MonthlyChecklistStep, actOnChecklist, loadMonthlyChecklist } from "~/curate/monthly-checklist";
 import { SchedulesStep, actOnSchedules, loadSchedules } from "~/curate/schedules";
@@ -38,11 +39,12 @@ function stepIndex(key: string) {
 
 /** Each built step's items; the others have none yet. */
 async function loadSteps(db: Db, at: Date) {
-  const [sourceHealth, pasteImports, manualResults, mergeQueue, selectionsLikely, schedules, monthlyChecklist] = await Promise.all([
+  const [sourceHealth, pasteImports, manualResults, mergeQueue, qualificationReview, selectionsLikely, schedules, monthlyChecklist] = await Promise.all([
     loadSourceHealth(db, at),
     loadPasteImports(db, at),
     loadManualResults(db, at),
     loadMergeQueue(db),
+    loadQualificationReview(db, at),
     loadSelectionsLikely(db, at),
     loadSchedules(db, at),
     loadMonthlyChecklist(db, at),
@@ -52,6 +54,7 @@ async function loadSteps(db: Db, at: Date) {
     "paste-imports": pasteImports.open,
     "manual-results": manualResults.open,
     "merge-queue": mergeQueue.open,
+    "qualification-review": qualificationReview.open,
     "selections-likely": selectionsLikely.open,
     schedules: schedules.open,
     "monthly-checklist": monthlyChecklist.open,
@@ -61,6 +64,7 @@ async function loadSteps(db: Db, at: Date) {
     pasteImports,
     manualResults,
     mergeQueue,
+    qualificationReview,
     selectionsLikely,
     schedules,
     monthlyChecklist,
@@ -73,7 +77,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const db = dbFrom(context);
   const at = now();
   const [steps, session, live] = await Promise.all([loadSteps(db, at), currentSession(db, SHEET), liveCompetitions(db, at)]);
-  const { sourceHealth, pasteImports, manualResults, mergeQueue, selectionsLikely, schedules, monthlyChecklist } = steps;
+  const { sourceHealth, pasteImports, manualResults, mergeQueue, qualificationReview, selectionsLikely, schedules, monthlyChecklist } = steps;
   const progress = runSheetProgress(steps.withOpenCounts, session.passed);
   return {
     index,
@@ -88,6 +92,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       params.step === "paste-imports" ? await loadPasteImporter(context.get(cloudflareContext).env, db, new URL(request.url).searchParams) : null,
     manualResults: params.step === "manual-results" ? manualResults : null,
     mergeQueue: params.step === "merge-queue" ? mergeQueue : null,
+    qualificationReview: params.step === "qualification-review" ? qualificationReview : null,
     selectionsLikely: params.step === "selections-likely" ? selectionsLikely : null,
     selectionReview:
       params.step === "selections-likely" ? await loadSelectionReview(context.get(cloudflareContext).env, db, new URL(request.url).searchParams, at) : null,
@@ -124,6 +129,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   else if (step.key === "paste-imports") ({ message, to } = await actOnPasteImport(env, db, intent, form, at));
   else if (step.key === "manual-results") message = await actOnManualResult(env, intent, form, at);
   else if (step.key === "merge-queue") message = await actOnMergeQueueItem(env.DB, db, intent, form);
+  else if (step.key === "qualification-review") message = await actOnQualificationReview(db, intent, form, at);
   else if (step.key === "selections-likely" && intent.endsWith("-selection")) ({ message, to } = await actOnSelection(env, intent, form, at));
   else if (step.key === "selections-likely") message = await actOnLikely(db, intent, form, at);
   else if (step.key === "schedules" && intent.endsWith("-timetable")) ({ message, to } = await actOnTimetable(env, intent, form, at));
@@ -146,6 +152,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
     pasteImporter,
     manualResults,
     mergeQueue,
+    qualificationReview,
     selectionsLikely,
     selectionReview,
     schedules,
@@ -190,6 +197,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
         {pasteImports ? <PasteImportsStep data={pasteImports} importer={pasteImporter} /> : null}
         {manualResults ? <ManualResultsStep data={manualResults} /> : null}
         {mergeQueue ? <MergeQueueStep data={mergeQueue} /> : null}
+        {qualificationReview ? <QualificationReviewStep data={qualificationReview} /> : null}
         {selectionsLikely ? <SelectionsLikelyStep data={selectionsLikely} review={selectionReview} /> : null}
         {schedules ? <SchedulesStep data={schedules} review={timetableReview} /> : null}
         {monthlyChecklist ? <MonthlyChecklistStep data={monthlyChecklist} /> : null}

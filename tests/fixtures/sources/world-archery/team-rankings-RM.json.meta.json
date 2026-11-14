@@ -1,0 +1,6 @@
+{
+  "url": "https://api.worldarchery.org/v3/WORLDRANKINGS/?CatCode=RM&Country=BEL&Team=true&RBP=All",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T14:52:54.487Z"
+}

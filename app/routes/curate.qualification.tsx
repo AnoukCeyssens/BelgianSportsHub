@@ -1,4 +1,4 @@
-import { and, asc, eq, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, or } from "drizzle-orm";
 import { data, Form, Link, redirect } from "react-router";
 import { now } from "~/clock";
 import { dbFrom } from "~/context";
@@ -24,6 +24,7 @@ import {
 } from "~/domain";
 import { formatDate } from "~/format";
 import { potentialEntries } from "~/qualification/entries";
+import { followRanking } from "~/qualification/ranked-tracks";
 import { linkAtSelection, quotaPlacesOf, recordQuotaPlaces } from "~/qualification/quota-places";
 import { activeStatuses } from "~/roster/active";
 import type { Route } from "./+types/curate.qualification";
@@ -89,6 +90,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     competition: { name: target.name, page: target.page, here: target.here },
     entries,
+    rankings: await rankingsOf(db, entries),
     quotaPlaces,
     candidates,
     statuses: QUALIFICATION_STATUSES.map((s) => ({ value: s, label: QUALIFICATION_STATUS_LABELS[s] })),
@@ -190,19 +192,40 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       if (!state || !TRACK_STATES.includes(state)) refuse("Unknown track state");
       const better = field("better");
       if (better !== null && better !== "higher" && better !== "lower") refuse("Better must be higher or lower");
-      const values = { name: required("name"), needed: required("needed"), has: field("has") ?? "–", state, better, source: field("source"), checkedOn: today };
-      const trackId = field("trackId");
+      // The ranking the track follows, "<source>|<ranking>" (ticket #33); empty: by hand only.
+      const [rankingSource, ranking] = field("ranking")?.split("|") ?? [null, null];
+      if (rankingSource !== null && !ranking) refuse("A ranking is <source>|<ranking>");
+      const values = {
+        name: required("name"),
+        needed: required("needed"),
+        has: field("has") ?? "–",
+        state,
+        better,
+        source: field("source"),
+        checkedOn: today,
+        rankingSource,
+        ranking: ranking ?? null,
+      };
+      let trackId = field("trackId");
       if (trackId) {
         const track = await db.query.qualificationTrack.findFirst({ where: and(eq(t.id, trackId), eq(t.entryId, row.id)) });
         if (!track) refuse("No such track");
         const changed = track.needed !== values.needed || track.has !== values.has || track.state !== values.state;
         await db
           .update(t)
-          .set({ ...values, changedOn: changed ? today : track.changedOn })
+          .set({ ...values, changedOn: changed ? today : track.changedOn, previousHas: track.has !== values.has ? track.has : track.previousHas })
           .where(eq(t.id, track.id));
       } else {
         const [last] = await db.select({ position: max(t.position) }).from(t).where(eq(t.entryId, row.id));
-        await db.insert(t).values({ ...values, entryId: row.id, position: (last?.position ?? 0) + 1, changedOn: today });
+        [{ id: trackId }] = await db
+          .insert(t)
+          .values({ ...values, entryId: row.id, position: (last?.position ?? 0) + 1, changedOn: today })
+          .returning({ id: t.id });
+      }
+      // A track linked to a ranking takes the Entry's latest snapshot on it at once.
+      if (rankingSource && ranking) {
+        const who = row.athleteId ? { athleteId: row.athleteId } : { teamId: row.teamId! };
+        await followRanking(db, { source: rankingSource, ranking, who, trackId }, now());
       }
       break;
     }
@@ -281,6 +304,29 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   return redirect(target.here, 303);
 }
 
+/**
+ * Per Athlete or Team of these Entries, the rankings it has snapshots on
+ * (latest position and date), for linking a track to one (ticket #33).
+ */
+async function rankingsOf(db: Db, entries: { who: { kind: "athlete" | "team"; id: string } }[]) {
+  const s = schema.rankingSnapshot;
+  const athleteIds = entries.filter((x) => x.who.kind === "athlete").map((x) => x.who.id);
+  const teamIds = entries.filter((x) => x.who.kind === "team").map((x) => x.who.id);
+  const byWho: Record<string, { value: string; label: string }[]> = {};
+  if (athleteIds.length + teamIds.length === 0) return byWho;
+  const rows = await db
+    .select()
+    .from(s)
+    .where(or(inArray(s.athleteId, athleteIds), inArray(s.teamId, teamIds)))
+    .orderBy(desc(s.asOf));
+  for (const r of rows) {
+    const value = `${r.source}|${r.ranking}`;
+    const list = (byWho[(r.athleteId ?? r.teamId)!] ??= []);
+    if (!list.some((x) => x.value === value)) list.push({ value, label: `${r.ranking} (#${r.position}, ${formatDate(r.asOf)})` });
+  }
+  return byWho;
+}
+
 function refuse(message: string): never {
   throw data(message, { status: 400 });
 }
@@ -304,7 +350,21 @@ async function notOnATeamRoster(db: Db, athleteId: string, sport: string, event:
 }
 
 export default function CurateQualification({ loaderData }: Route.ComponentProps) {
-  const { competition, entries, quotaPlaces, candidates, statuses, selectionLinks } = loaderData;
+  const { competition, entries, rankings, quotaPlaces, candidates, statuses, selectionLinks } = loaderData;
+  const rankingSelect = (who: string, value: string | null) => (
+    <label>
+      Follows ranking
+      <select name="ranking" defaultValue={value ?? ""}>
+        <option value="">none (by hand)</option>
+        {value && !(rankings[who] ?? []).some((r) => r.value === value) ? <option value={value}>{value.split("|")[1]}</option> : null}
+        {(rankings[who] ?? []).map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
   const statusSelect = (value: string | null) => (
     <select name="status" defaultValue={value ?? "on-track"}>
       {statuses.map((s) => (
@@ -389,6 +449,7 @@ export default function CurateQualification({ loaderData }: Route.ComponentProps
                 Source
                 <input name="source" defaultValue={track.source ?? ""} />
               </label>
+              {rankingSelect(entry.who.id, track.ranking)}
               <button type="submit" name="intent" value="save-track">
                 Save track
               </button>
@@ -424,6 +485,7 @@ export default function CurateQualification({ loaderData }: Route.ComponentProps
               Source
               <input name="source" />
             </label>
+            {rankingSelect(entry.who.id, null)}
             <button type="submit">Add track</button>
           </Form>
         </section>

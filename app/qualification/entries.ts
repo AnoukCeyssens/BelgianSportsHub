@@ -34,6 +34,10 @@ export type TrackView = {
   source: string | null;
   checkedOn: string;
   changedOn: string;
+  /** What it had before its last change to `has`, when it changed. */
+  previousHas: string | null;
+  /** The ranking it follows, "<source>|<ranking>" (ticket #33); null when kept by hand. */
+  ranking: string | null;
   /** 0–100, the progress bar (`trackProgress`). */
   progress: number;
 };
@@ -108,7 +112,17 @@ export async function potentialEntries(db: Db, competitionIds: readonly string[]
         .filter((x) => x.entryId === entry.id)
         .map((x) => {
           const measure = { needed: x.needed, has: x.has, state: x.state as TrackState, better: (x.better as TrackBetter | null) ?? null };
-          return { ...measure, id: x.id, name: x.name, source: x.source, checkedOn: x.checkedOn, changedOn: x.changedOn, progress: trackProgress(measure) };
+          return {
+            ...measure,
+            id: x.id,
+            name: x.name,
+            source: x.source,
+            checkedOn: x.checkedOn,
+            changedOn: x.changedOn,
+            previousHas: x.previousHas,
+            ranking: x.rankingSource && x.ranking ? `${x.rankingSource}|${x.ranking}` : null,
+            progress: trackProgress(measure),
+          };
         }),
     }))
     .toSorted((a, b) => a.sport.localeCompare(b.sport) || a.who.name.localeCompare(b.who.name) || a.event.localeCompare(b.event));
