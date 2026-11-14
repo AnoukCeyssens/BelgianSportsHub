@@ -29,6 +29,30 @@ export async function setSource(d1: D1Database, key: string, patch: Partial<type
   await getDb(d1).update(schema.source).set(patch).where(eq(schema.source.key, key));
 }
 
+/** Adds a Source row (tier and health columns as earlier runs left them). */
+export async function seedSource(d1: D1Database, key: string, row: Partial<typeof schema.source.$inferInsert> = {}) {
+  await getDb(d1)
+    .insert(schema.source)
+    .values({ key, name: key, tier: "automatic", cadenceDays: 1, addedAt: "2026-11-01T00:00:00.000Z", ...row });
+}
+
+type MergeQueueSeed = { name: string; sport: string; dateOfBirth?: string; scheme: string; value: string; source?: string };
+
+/** Puts an unmatched incoming identity in the merge queue, as an ingest run would. */
+export async function seedMergeQueueItem(d1: D1Database, item: MergeQueueSeed): Promise<string> {
+  const db = getDb(d1);
+  const source = item.source ?? item.scheme;
+  const [raw] = await db
+    .insert(schema.rawCopy)
+    .values({ source, url: `https://example.test/${source}/${item.value}`, r2Key: `raw/${source}/${crypto.randomUUID()}`, fetchedAt: "2026-11-13T04:00:00.000Z" })
+    .returning({ id: schema.rawCopy.id });
+  const [row] = await db
+    .insert(schema.mergeQueueItem)
+    .values({ source, name: item.name, sport: item.sport, dateOfBirth: item.dateOfBirth, scheme: item.scheme, value: item.value, rawCopyId: raw.id, createdAt: "2026-11-13T04:00:00.000Z" })
+    .returning({ id: schema.mergeQueueItem.id });
+  return row.id;
+}
+
 /**
  * Storage is shared by the tests in one file. Removes every Athlete and
  * everything ingest wrote (rows and raw copies in R2), keeping Source rows.

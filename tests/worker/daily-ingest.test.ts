@@ -42,15 +42,15 @@ describe("daily ingest cron", () => {
     });
     fixClock(ISU_WORLD_CUP_1_RUN.now);
     stubOutboundFetch(isuWorldCup1Run);
-    expect(await (await get("/curate/sources")).text()).toContain("Fetch now");
+    expect(await (await get("/curate/run/source-health")).text()).toContain("Fetch now");
 
-    const res = await post("/curate/sources", { source: "isu-speed-skating" });
+    const res = await post("/curate/run/source-health", { intent: "retry", source: "isu-speed-skating" });
 
     expect(res.status).toBe(303);
     // Through the real local queue, so wait for the consumer to finish.
     await vi.waitFor(
       async () => {
-        const page = await (await get("/curate/sources")).text();
+        const page = await (await get("/curate/run/source-health")).text();
         // The ISU row: Automatic again, fetched just now, healthy.
         const row = page.match(/<tr><td>ISU speed skating.*?<\/tr>/s)?.[0] ?? "";
         expect(row).toContain("<td>Automatic</td>");
