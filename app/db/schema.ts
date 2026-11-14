@@ -98,6 +98,14 @@ export const source = sqliteTable("source", {
    * (acknowledge, keep on Assisted, or retry). A newer problem reopens it.
    */
   acknowledgedAt: text("acknowledged_at"),
+  /** The sport its pasted results belong to; prefills the paste importer. */
+  sport: text("sport"),
+  /** External ID scheme of the IF IDs in its tables, e.g. "isu"; the key when null. */
+  idScheme: text("id_scheme"),
+  /** The paste importer's saved column mapping (JSON SavedColumnMapping), set on the first confirmed paste. */
+  columnMapping: text("column_mapping", { mode: "json" }).$type<Record<string, string>>(),
+  /** When a paste for this source was last confirmed (the Paste imports step's cadence). */
+  lastPastedAt: text("last_pasted_at"),
 });
 
 /**

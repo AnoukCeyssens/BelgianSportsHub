@@ -1,5 +1,6 @@
 import { Form, Link, redirect } from "react-router";
 import { MergeQueueStep, actOnMergeQueueItem, loadMergeQueue } from "~/curate/merge-queue";
+import { PasteImportsStep, actOnPasteImport, loadPasteImporter, loadPasteImports } from "~/curate/paste-imports";
 import { currentSession, finishSession, logAction } from "~/curate/session";
 import { SourceHealthStep, actOnSource, loadSourceHealth } from "~/curate/source-health";
 import { now } from "~/clock";
@@ -30,17 +31,17 @@ function stepIndex(key: string) {
 
 /** Each built step's items; the others have none yet. */
 async function loadSteps(db: Db, at: Date) {
-  const [sourceHealth, mergeQueue] = await Promise.all([loadSourceHealth(db, at), loadMergeQueue(db)]);
-  const open: Record<string, number> = { "source-health": sourceHealth.open, "merge-queue": mergeQueue.open };
-  return { sourceHealth, mergeQueue, withOpenCounts: WEEKLY_RUN_SHEET.map((s) => ({ ...s, open: open[s.key] ?? 0 })) };
+  const [sourceHealth, pasteImports, mergeQueue] = await Promise.all([loadSourceHealth(db, at), loadPasteImports(db, at), loadMergeQueue(db)]);
+  const open: Record<string, number> = { "source-health": sourceHealth.open, "paste-imports": pasteImports.open, "merge-queue": mergeQueue.open };
+  return { sourceHealth, pasteImports, mergeQueue, withOpenCounts: WEEKLY_RUN_SHEET.map((s) => ({ ...s, open: open[s.key] ?? 0 })) };
 }
 
-export async function loader({ context, params }: Route.LoaderArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
   const index = stepIndex(params.step);
   const db = dbFrom(context);
   const at = now();
   const [steps, session] = await Promise.all([loadSteps(db, at), currentSession(db, SHEET)]);
-  const { sourceHealth, mergeQueue } = steps;
+  const { sourceHealth, pasteImports, mergeQueue } = steps;
   const progress = runSheetProgress(steps.withOpenCounts, session.passed);
   return {
     index,
@@ -48,6 +49,9 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     progress,
     log: session.log.map((e) => ({ ...e, time: formatBelgianClock(e.at) })),
     sourceHealth: params.step === "source-health" ? sourceHealth : null,
+    pasteImports: params.step === "paste-imports" ? pasteImports : null,
+    pasteImporter:
+      params.step === "paste-imports" ? await loadPasteImporter(context.get(cloudflareContext).env, db, new URL(request.url).searchParams) : null,
     mergeQueue: params.step === "merge-queue" ? mergeQueue : null,
   };
 }
@@ -73,15 +77,17 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   }
 
   let message: string;
+  let to = runPath(step.key);
   if (step.key === "source-health") message = await actOnSource(db, env.INGEST, intent, String(form.get("source")), at);
+  else if (step.key === "paste-imports") ({ message, to } = await actOnPasteImport(env, db, intent, form, at));
   else if (step.key === "merge-queue") message = await actOnMergeQueueItem(env.DB, db, intent, form);
   else throw new Response(`Unknown action ${intent}`, { status: 400 });
   await logAction(db, SHEET, { step: step.key, action: intent, message }, at);
-  return redirect(runPath(step.key), 303);
+  return redirect(to, 303);
 }
 
 export default function RunSheet({ loaderData }: Route.ComponentProps) {
-  const { index, step, progress, log, sourceHealth, mergeQueue } = loaderData;
+  const { index, step, progress, log, sourceHealth, pasteImports, pasteImporter, mergeQueue } = loaderData;
   const total = progress.steps.length;
   const last = index === total - 1;
   return (
@@ -111,6 +117,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
           {step.purpose} <span className="sub">{`${step.estimate} · ${step.open} open`}</span>
         </p>
         {sourceHealth ? <SourceHealthStep data={sourceHealth} /> : null}
+        {pasteImports ? <PasteImportsStep data={pasteImports} importer={pasteImporter} /> : null}
         {mergeQueue ? <MergeQueueStep data={mergeQueue} /> : null}
         {step.open === 0 ? <p className="donebox">✓ Nothing left in this step.</p> : null}
         <Form method="post" className="foot">
