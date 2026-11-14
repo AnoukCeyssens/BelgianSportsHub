@@ -17,6 +17,7 @@
 // Belgium's default Team for the event, without a roster, as the page credits
 // no fencers. There are no full entry lists in the page state, so there is no
 // Upcoming.
+import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://fie.org";
@@ -93,6 +94,7 @@ export const fieFencing: SourceAdapter = {
         country: t.country || null,
         venueZone: null,
         sourceRef: String(t.id),
+        series: seriesKey({ source: "fie", name: t.name, kind, sport: SPORT, city: t.city || null }),
         rawCopyId: listing.rawCopyId,
       });
       if (t.startDate > today) continue;

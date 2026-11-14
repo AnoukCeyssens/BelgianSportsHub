@@ -177,3 +177,4 @@ export {
   type Verdict,
 } from "./verdicts";
 export { canonicalSport, olympicCycleOf, requireSport, sameSport, SPORTS, type SportDefinition } from "./sports";
+export { seriesKey, seriesSlug, type CompetitionKindName, type SeriesInput } from "./series";

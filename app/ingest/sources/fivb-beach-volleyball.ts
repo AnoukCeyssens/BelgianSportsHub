@@ -12,7 +12,7 @@
 // Rankings are not ingested yet (#33: VIS ranking requests still to work out; see conventions.md "Rankings").
 import type { CompetitionKind, Person, SourceAdapter } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
-import { elements, visPerson, visUrl } from "./fivb-vis";
+import { elements, visPerson, visSeries, visUrl } from "./fivb-vis";
 
 const SPORT = "Beach volleyball";
 /** Each tournament in the window costs a request, so the first run looks back a month only. */
@@ -76,6 +76,7 @@ export const fivbBeachVolleyball: SourceAdapter = {
         country: null,
         venueZone: null,
         sourceRef: t.No,
+        series: visSeries("fivb-beach-volleyball", t.Name, kind, SPORT),
         rawCopyId: list.rawCopyId,
       });
       if (t.EndDateMainDraw >= today) {
