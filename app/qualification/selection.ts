@@ -15,6 +15,7 @@ import { and, eq, inArray, min, sql } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 import { belgianDate, entryListSelection, selectorFor, type SelectionCandidate } from "~/domain";
 import { potentialEntries, type PotentialEntry } from "./entries";
+import { linkAtSelection } from "./quota-places";
 
 export type Candidate = PotentialEntry & { names: string[] };
 
@@ -70,10 +71,8 @@ export async function recordSelection(db: Db, input: SelectionInput, now: Date):
       })
       .where(eq(schema.entry.id, c.id));
   }
-  return {
-    selected: ticked.size,
-    notSelected: candidates.length - ticked.size,
-  };
+  await linkNocPlaces(db, input.competitionId, candidates);
+  return { selected: ticked.size, notSelected: candidates.length - ticked.size };
 }
 
 /**
@@ -113,6 +112,7 @@ export async function applyEntryList(db: Db, competitionId: string, rawCopyId: s
       .where(eq(e.id, id));
     changed++;
   }
+  if (changed > 0) await linkNocPlaces(db, competitionId, entries);
   return changed;
 }
 
@@ -146,4 +146,12 @@ export async function firstSelectedOn(db: Db, ids: readonly string[], bySport = 
         .where(where)
         .groupBy(e.competitionId);
   return new Map(rows.filter((r) => r.first !== null).map((r) => [bySport ? `${r.competitionId}:${r.sport}` : r.competitionId, r.first!]));
+}
+
+/** At the Games, NOC-owned Quota places follow Selection in each event the Selection touched (#36, story 81). */
+async function linkNocPlaces(db: Db, competitionId: string, entries: readonly { sport: string; event: string }[]) {
+  const competition = await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) });
+  if (competition?.kind !== "games") return;
+  const events = new Map(entries.map((e) => [`${e.sport.toLowerCase()}\n${e.event.toLowerCase()}`, e]));
+  for (const e of events.values()) await linkAtSelection(db, competitionId, e.sport, e.event);
 }

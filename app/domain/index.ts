@@ -97,6 +97,23 @@ export {
   type TrackState,
 } from "./qualification";
 export {
+  isQuotaPlaceEvent,
+  isQuotaPlaceState,
+  NEW_QUOTA_PLACE_EVENTS,
+  QUOTA_PLACE_EVENTS,
+  QUOTA_PLACE_KIND_LABELS,
+  QUOTA_PLACE_STATE_LABELS,
+  QUOTA_PLACE_STATES,
+  quotaPlaceEnded,
+  quotaPlaceLinkable,
+  quotaPlaceTransition,
+  type QuotaPlaceEvent,
+  type QuotaPlaceKind,
+  type QuotaPlaceMove,
+  type QuotaPlaceNow,
+  type QuotaPlaceState,
+} from "./quota-places";
+export {
   BOIC,
   entryListSelection,
   namesFoundIn,

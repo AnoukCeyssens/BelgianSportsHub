@@ -255,6 +255,17 @@ describe("Selection", () => {
     const verbeke = await activeAthlete("Lucas Verbeke", "Swimming", "2028-03-10");
     await addEntry(la, `athlete:${thiam}`, "Heptathlon", "qualified", "games");
     await addEntry(la, `athlete:${verbeke}`, "Men's 1500 m freestyle", "qualified", "games");
+    await post(qualification(la, "games"), {
+      intent: "add-quota-places",
+      sport: "Athletics",
+      event: "Heptathlon",
+      kind: "noc",
+      how: "hold",
+      count: "1",
+      earnedVia: "World Ranking",
+      entryId: "",
+      source: "https://worldathletics.org/road-to/la28",
+    });
 
     // Not due yet (more than eight weeks before LA, window open): the owner opens it from the Qualification page.
     expect(selectionCards(await page(STEP))).toEqual([]);
@@ -280,6 +291,8 @@ describe("Selection", () => {
     expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon"]);
     expect(panel(await page(`/games/${la}?sport=Athletics`))?.phase).toBe("Selection");
     expect(panel(await page(`/games/${la}?sport=Swimming`))?.phase).toBe("Qualification");
+    // Belgium's NOC-owned place in the event links to the Selected Entry.
+    expect(rows(await page(`/games/${la}?phase=qualification`), "Quota places")[0]).toContain("NOC-owned Provisional via World Ranking Nafissatou Thiam");
   });
 
   it("lets the IF entry list replace the press-release Selection", async () => {
