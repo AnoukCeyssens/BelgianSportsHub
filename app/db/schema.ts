@@ -24,6 +24,7 @@ export const EXTERNAL_ID_SCHEMES = {
   "team-belgium": "Team Belgium",
   "world-athletics": "World Athletics",
   isu: "ISU",
+  fis: "FIS",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;
