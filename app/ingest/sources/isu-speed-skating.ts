@@ -82,6 +82,7 @@ export const isuSpeedSkating: SourceAdapter = {
         country: event.track?.country ?? null,
         venueZone: event.track?.timeZone ?? null,
         sourceRef: event.isuId,
+        series: series(event, kind),
         rawCopyId: event.rawCopyId,
       });
 
@@ -140,6 +141,26 @@ function competitionKind(event: IsuEvent): CompetitionKind | null {
   if (!event.tags.includes("senior") || event.tags.includes("national") || event.tags.includes("junior")) return null;
   return KIND_BY_TAG.find(([tag]) => event.tags.includes(tag))?.[1] ?? null;
 }
+
+/**
+ * The Games are one series; a World Cup leg recurs by venue city (sponsor
+ * names and leg numbers change every season); a Championship by its name
+ * without the ISU and sport words ("ISU Speed Skating European Championships"
+ * → "isu:european-championships").
+ */
+function series(event: IsuEvent, kind: CompetitionKind): string | null {
+  if (kind === "games") return "olympic-games";
+  if (kind === "circuit") return event.track ? `isu:${event.tags.includes("final") ? "world-cup-final" : "world-cup"}:${slug(event.track.city)}` : null;
+  return `isu:${slug(event.name.replace(/\bISU\b|\bSpeed Skating\b/gi, ""))}`;
+}
+
+const slug = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
 function person(s: IsuSkater): Person {
   return {

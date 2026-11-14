@@ -146,6 +146,14 @@ export const competition = sqliteTable(
     country: text("country"),
     /** IANA zone of the venue. */
     venueZone: text("venue_zone"),
+    /**
+     * The recurring competition this is one edition of, e.g.
+     * "isu:world-championships" or "isu:world-cup:calgary"; the previous
+     * edition is the latest earlier one with the same series. Europeans and
+     * Worlds, indoor and outdoor, short and long course are separate series
+     * (each its own Championship). Null when the source gives no way to tell.
+     */
+    series: text("series"),
     source: text("source").notNull(),
     /** The source's own ID for this competition. */
     sourceRef: text("source_ref").notNull(),
@@ -236,3 +244,24 @@ export const entrant = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.competitionId, t.athleteId] })],
 );
+
+/**
+ * The owner's word on a competition's Participation (spec #20, stories 96,
+ * 109 and 114), from the Run sheet's Selections & likely step. Confirmed and
+ * likely Participations from sources are not stored: they are derived from
+ * `entrant` (entry lists), `result` and earlier editions by the domain rule
+ * `participation()`. One row per competition.
+ */
+export const participationCuration = sqliteTable("participation_curation", {
+  competitionId: text("competition_id")
+    .primaryKey()
+    .references(() => competition.id),
+  /** ISO instant the owner added it by hand as a likely Participation; null when it became likely from a source. */
+  addedAt: text("added_at"),
+  /** "confirmed" | "kept" | "dropped"; null when only added. */
+  decision: text("decision"),
+  /** Where the owner saw it (e.g. an entry list or a federation post), when given. */
+  sourceUrl: text("source_url"),
+  /** ISO instant of the owner's last check. */
+  checkedAt: text("checked_at").notNull(),
+});

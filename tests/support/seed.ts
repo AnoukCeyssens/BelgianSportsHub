@@ -53,6 +53,79 @@ export async function seedMergeQueueItem(d1: D1Database, item: MergeQueueSeed): 
   return row.id;
 }
 
+/** A raw copy row, as a fetch or paste would leave it (no R2 body). */
+async function seedRawCopy(d1: D1Database, source: string) {
+  const [raw] = await getDb(d1)
+    .insert(schema.rawCopy)
+    .values({ source, url: `https://example.test/${source}/${crypto.randomUUID()}`, r2Key: `raw/${source}/${crypto.randomUUID()}`, fetchedAt: "2026-11-01T04:00:00.000Z" })
+    .returning({ id: schema.rawCopy.id });
+  return raw.id;
+}
+
+type CompetitionSeed = {
+  name: string;
+  sport: string;
+  kind?: "championship" | "games" | "circuit";
+  startDate: string;
+  endDate?: string;
+  city?: string;
+  series?: string;
+};
+
+/** A competition as a source run would have stored it. */
+export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promise<string> {
+  const source = "test-source";
+  const [row] = await getDb(d1)
+    .insert(schema.competition)
+    .values({
+      name: c.name,
+      sport: c.sport,
+      kind: c.kind ?? "circuit",
+      startDate: c.startDate,
+      endDate: c.endDate ?? c.startDate,
+      city: c.city,
+      series: c.series,
+      source,
+      sourceRef: crypto.randomUUID(),
+      rawCopyId: await seedRawCopy(d1, source),
+    })
+    .returning({ id: schema.competition.id });
+  return row.id;
+}
+
+/** The competition's entry list names the Athlete, as an ingest run would record it. */
+export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
+  await getDb(d1)
+    .insert(schema.entrant)
+    .values({ competitionId, athleteId, rawCopyId: await seedRawCopy(d1, "test-source") });
+}
+
+/** A Belgian result of the Athlete at the competition. */
+export async function seedResult(d1: D1Database, competitionId: string, athleteId: string, r: { event?: string; date: string; place?: number }) {
+  await getDb(d1)
+    .insert(schema.result)
+    .values({
+      competitionId,
+      athleteId,
+      event: r.event ?? "Event",
+      date: r.date,
+      place: r.place ?? 10,
+      status: "finished",
+      source: "test-source",
+      sourceRef: crypto.randomUUID(),
+      rawCopyId: await seedRawCopy(d1, "test-source"),
+    });
+}
+
+/** The owner's word on a competition's Participation, as the Selections & likely step would store it. */
+export async function seedParticipationCuration(
+  d1: D1Database,
+  competitionId: string,
+  row: { addedAt?: string; decision?: "confirmed" | "kept" | "dropped"; checkedAt: string },
+) {
+  await getDb(d1).insert(schema.participationCuration).values({ competitionId, ...row });
+}
+
 /**
  * Storage is shared by the tests in one file. Removes every Athlete and
  * everything ingest wrote (rows and raw copies in R2), keeping Source rows.
@@ -60,6 +133,7 @@ export async function seedMergeQueueItem(d1: D1Database, item: MergeQueueSeed): 
 export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const db = getDb(env.DB);
   for (const table of [
+    schema.participationCuration,
     schema.entrant,
     schema.result,
     schema.mergeQueueItem,

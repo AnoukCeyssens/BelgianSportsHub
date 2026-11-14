@@ -68,3 +68,21 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
   .runsheet .rail { position: static; }
   .runsheet .merge { grid-template-columns: minmax(0, 1fr); }
 }
+/* Calendar: month grid with bars spanning their days (core-screens prototype, variant A). */
+.mhead { display: flex; justify-content: space-between; align-items: baseline; }
+.mhead h1 { margin: 0; }
+.mhead a { text-decoration: none; font-size: 22px; padding: 0 10px; }
+.dow { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 10px; color: #777; text-align: center; margin-top: 6px; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(18px, auto); border-top: 1px solid var(--rule); min-height: 76px; row-gap: 2px; padding-bottom: 4px; }
+.week .dn { font-size: 11px; padding: 2px 4px; color: var(--muted); grid-row: 1; }
+.week .dn.out { color: #ccc; }
+.week .dn.today { background: var(--ink); color: #fff; border-radius: 3px; justify-self: start; }
+.ev { font-size: 10px; color: #fff; padding: 1px 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0 1px; border-radius: 2px; opacity: .78; }
+.ev.champ { opacity: 1; font-weight: 700; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .35); }
+.ev.cl { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
+.ev.cr { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+.legend { margin: 10px 0; }
+.chip { display: inline-block; padding: 4px 10px; border: 1px solid var(--ink); border-radius: 999px; margin: 0 4px 6px 0; font-size: 12px; white-space: nowrap; }
+.chip.champ { font-weight: 700; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+td.when { width: 96px; white-space: nowrap; }
