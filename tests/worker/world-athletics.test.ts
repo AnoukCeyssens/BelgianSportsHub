@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
-import { WA_VAN_DAMME_RUN, waVanDammeRun } from "../fixtures/sources/world-athletics";
+import { WA_TOKYO_DAY_1_RUN, WA_VAN_DAMME_RUN, waTokyoDay1Run, waVanDammeRun } from "../fixtures/sources/world-athletics";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, setSource } from "../support/seed";
@@ -80,6 +80,34 @@ describe("World Athletics source", () => {
       { name: "Décastar", kind: "circuit", city: "Talence", country: "FRA" },
       { name: "World Athletics Road Running Championships", kind: "championship", city: "København", country: "DEN" },
     ]);
+  });
+
+  it("writes a relay's final place to Belgium's relay Team, crediting the heats-only runner too", async () => {
+    fixClock(WA_TOKYO_DAY_1_RUN.now);
+    await setSource(env.DB, WA, { lastSuccessAt: WA_TOKYO_DAY_1_RUN.lastSuccessAt });
+    const sacoor = await seedAthlete(env.DB, { name: "Jonathan Sacoor", sport: "Athletics", externalIds: [{ scheme: "world-athletics", value: "14676801" }] });
+    const doom = await seedAthlete(env.DB, { name: "Alexander Doom", sport: "Athletics", externalIds: [{ scheme: "world-athletics", value: "14548983" }] });
+    stubOutboundFetch(waTokyoDay1Run);
+
+    const result = await deliverIngestJobs([job]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    for (const athlete of [doom, sacoor]) {
+      const html = await athletePage(athlete);
+      expect(results(html)).toContain("World Athletics Championships, Tokyo 2025");
+      expect(results(html)).toContain("Mixed 4x400 Metres Relay");
+      expect(results(html)).toContain("3rd");
+      expect(results(html)).toContain("3:10.61");
+      expect(results(html)).toMatch(/href="\/teams\/[^"]+"[^>]*>Belgium · Mixed 4x400 Metres Relay</);
+      expect(html).toContain("Medals: 1 bronze");
+    }
+    const relays = await getDb(env.DB)
+      .select({ event: schema.result.event, place: schema.result.place, status: schema.result.status })
+      .from(schema.result)
+      .where(eq(schema.result.event, "Mixed 4x400 Metres Relay"));
+    expect(relays).toEqual([{ event: "Mixed 4x400 Metres Relay", place: 3, status: "finished" }]);
+    // Sacoor ran the heat, Doom the final: five Belgians on the roster.
+    expect(await getDb(env.DB).$count(schema.rosterMember)).toBe(5);
   });
 
   it("flags the source as blocked (Assisted) when the site refuses the Worker", async () => {

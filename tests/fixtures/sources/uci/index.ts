@@ -14,7 +14,9 @@ const metas = import.meta.glob<Omit<RecordedResponse, "body">>("./*.json.meta.js
  *   Championships (from 21 Oct); one-day .Pro and .1 races left out;
  * - track: the World Championships (14–18 Oct): sprint, keirin and omnium,
  *   men and women (Fabio Van den Bossche 2nd in the omnium, Lotte Kopecky
- *   7th, Nicky Degrendele, Zita Gheysens, Lowie Nulens);
+ *   7th, Nicky Degrendele, Zita Gheysens, Lowie Nulens), and the team
+ *   events: madison (men 4th, women 7th), team sprint (men 14th, women 12th)
+ *   and team pursuit (men 13th, women 10th), recorded on 14 Nov 2026;
  * - mountain bike: nothing in the window; BMX racing: World Cup rounds 9 and
  *   10 (31 Oct, 1 Nov) still to come; BMX freestyle: the Park World Cup
  *   (15–18 Oct, no Belgian).

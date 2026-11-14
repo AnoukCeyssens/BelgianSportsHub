@@ -9,12 +9,13 @@
 //    qualification regatta that ended since the last run (a year back on the
 //    first run) or is running: all its races, with boats, crews and times
 //    (one request); Belgian rows only.
-// Only single sculls (classic and coastal solo) are ingested: every other
-// boat is a crew, and crews wait for Teams (#27). The API publishes races,
-// not a final classification, so a sculler's place comes from the final they
-// reached (Final B is 7th to 12th, the bronze medal race 3rd and 4th), and a
-// sculler knocked out earlier is "eliminated" with their last time. No entry
-// lists are read, so there is no Upcoming.
+// Olympic boat classes only. A single sculler's result is theirs; every other
+// boat is a crew, a Team (ADR 0001: each boat is its own partnership), whose
+// roster is everyone the results credit in that boat across the rounds. The
+// API publishes races, not a final classification, so a boat's place comes
+// from the final it reached (Final B is 7th to 12th, the bronze medal race 3rd
+// and 4th), and a boat knocked out earlier is "eliminated" with its last time.
+// No entry lists are read, so there is no Upcoming.
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://world-rowing-api.soticcloud.net/stats/api";
@@ -23,6 +24,8 @@ const FIRST_RUN_LOOKBACK_DAYS = 365;
 const CALENDAR_HORIZON_DAYS = 14;
 /** The Olympic single sculls: men's and women's, classic and coastal (beach sprints). */
 const SINGLES = new Set(["M1x", "W1x", "CM1x", "CW1x"]);
+/** The Olympic crew boats: classic sweep and sculling boats, and the coastal mixed double. */
+const CREWS = new Set(["M2-", "W2-", "M2x", "W2x", "M4-", "W4-", "M4x", "W4x", "M8+", "W8+", "CMix2x"]);
 
 type Competition = {
   id: string;
@@ -45,6 +48,8 @@ type Race = {
 };
 
 type Boat = {
+  /** The boat entered in the event, the same in every round. */
+  boatId: string;
   Rank: number | null;
   ResultTime: string | null;
   /** "DNS", "DNF", "DSQ", "EXC", … when the boat has no valid result. */
@@ -81,23 +86,30 @@ export const worldRowing: SourceAdapter = {
       const fetched = await run.fetch(
         `${API}/race/?include=racePhase,event.boatClass,raceBoats.raceBoatAthletes.person,raceBoats.country&filter[event.competitionId]=${c.id}&sort[eventNum]=asc`,
       );
-      const races = (JSON.parse(fetched.text) as { data: Race[] }).data.filter((r) => SINGLES.has(r.event.boatClass.DisplayName));
+      const races = (JSON.parse(fetched.text) as { data: Race[] }).data.filter(
+        (r) => SINGLES.has(r.event.boatClass.DisplayName) || CREWS.has(r.event.boatClass.DisplayName),
+      );
       for (const [eventId, eventRaces] of groupBy(races, (r) => r.event.id)) {
-        for (const { race, boat } of lastRaces(eventRaces)) {
+        const crew = CREWS.has(eventRaces[0].event.boatClass.DisplayName);
+        for (const { race, boat, rowers } of lastRaces(eventRaces)) {
           const status = statusOf(race, boat);
           if (!status) continue;
-          const sculler = boat.raceBoatAthletes[0].person;
-          await run.rows.result({
+          const result = {
             competitionId,
-            person: person(sculler),
             event: race.event.DisplayName,
             date: race.DateString.slice(0, 10),
             place: status === "finished" ? placeIn(race, boat, eventRaces) : null,
             status,
             performance: boat.ResultTime ? boat.ResultTime.replace(/^00:/, "") : null,
-            sourceRef: `${c.id}/${eventId}/${sculler.id}`,
             rawCopyId: fetched.rawCopyId,
-          });
+          };
+          if (crew) {
+            const roster = rowers.map(person);
+            await run.rows.teamResult({ ...result, nationality: "BEL", roster, sourceRef: `${c.id}/${eventId}/${boat.boatId}` });
+          } else {
+            const sculler = rowers[0];
+            await run.rows.result({ ...result, person: person(sculler), sourceRef: `${c.id}/${eventId}/${sculler.id}` });
+          }
         }
       }
     }
@@ -123,18 +135,25 @@ function competitionKind(c: Competition): CompetitionKind | null {
   return null;
 }
 
-/** Each Belgian sculler's last race in the event: the final they reached, or the round they went out in. */
+type Rower = Boat["raceBoatAthletes"][number]["person"];
+
+/**
+ * Each Belgian boat's last race in the event (the final it reached, or the
+ * round it went out in), with every rower the results credit in it across
+ * the rounds: the last race's crew first, then anyone who rowed only earlier.
+ */
 function lastRaces(races: Race[]) {
-  const last = new Map<string, { race: Race; boat: Boat }>();
-  for (const race of races) {
+  const boats = new Map<string, { race: Race; boat: Boat; rowers: Map<string, Rower> }>();
+  const byDate = races.toSorted((a, b) => Date.parse(b.DateString) - Date.parse(a.DateString));
+  for (const race of byDate) {
     for (const boat of race.raceBoats) {
       if (boat.country?.CountryCode !== "BEL" || boat.raceBoatAthletes.length === 0) continue;
-      const id = boat.raceBoatAthletes[0].person.id;
-      const seen = last.get(id);
-      if (!seen || Date.parse(race.DateString) > Date.parse(seen.race.DateString)) last.set(id, { race, boat });
+      let seen = boats.get(boat.boatId);
+      if (!seen) boats.set(boat.boatId, (seen = { race, boat, rowers: new Map() }));
+      for (const { person } of boat.raceBoatAthletes) if (!seen.rowers.has(person.id)) seen.rowers.set(person.id, person);
     }
   }
-  return last.values();
+  return [...boats.values()].map(({ race, boat, rowers }) => ({ race, boat, rowers: [...rowers.values()] }));
 }
 
 function statusOf(race: Race, boat: Boat): ResultStatus | null {
@@ -159,7 +178,7 @@ function placeIn(race: Race, boat: Boat, eventRaces: Race[]): number | null {
   return above.reduce((n, r) => n + r.raceBoats.length, 0) + boat.Rank;
 }
 
-function person(p: Boat["raceBoatAthletes"][number]["person"]): Person {
+function person(p: Rower): Person {
   return {
     name: `${p.FirstName} ${p.LastName}`,
     dateOfBirth: p.BirthDate ? p.BirthDate.slice(0, 10) : null,

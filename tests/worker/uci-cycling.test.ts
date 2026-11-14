@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { UCI_RUN, uciRun } from "../fixtures/sources/uci";
@@ -10,6 +10,7 @@ import { deliverIngestJobs, get } from "../support/worker";
 
 // Spec #20, Ingest; ticket #43: UCI cycling through DataRide's form-POST grids,
 // against a recorded run after the Track Worlds and the Tour of Guangxi (Oct 2026).
+// Team events (madison, team sprint, team pursuit) go to Belgium's Teams (#27).
 const UCI = "uci-cycling";
 const job = { kind: "fetch-source", source: UCI } as const;
 
@@ -60,7 +61,7 @@ describe("UCI cycling source", () => {
   it("writes Belgian rows only, from Olympic individual events of senior competitions", async () => {
     await runAfterTrackWorlds();
 
-    const rows = await getDb(env.DB).select({ event: schema.result.event }).from(schema.result);
+    const rows = await getDb(env.DB).select({ event: schema.result.event }).from(schema.result).where(isNull(schema.result.teamId));
     const events = [...new Set(rows.map((r) => r.event))].sort();
     expect(events).toEqual([
       "Road: Men Elite - General Classification",
@@ -117,5 +118,34 @@ describe("UCI cycling source", () => {
     expect(result.retryMessages).toEqual([]);
     const source = await getDb(env.DB).query.source.findFirst({ where: eq(schema.source.key, UCI) });
     expect(source?.blockedAt).toBe(UCI_RUN.now);
+  });
+
+  it("writes Belgium's place in each track team event to its Team, with every rider the result credits", async () => {
+    const kopecky = await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling", dateOfBirth: "1995-11-10" });
+
+    await runAfterTrackWorlds();
+
+    const html = results(await athletePage(kopecky));
+    expect(html).toContain("Track: Women Elite - Madison");
+    expect(html).toContain("7th");
+    const team = html.match(/href="\/teams\/([^"]+)"[^>]*>Belgium · Track: Women Elite - Madison</)?.[1];
+    expect(team).toBeDefined();
+    expect(await (await get(`/teams/${team}`)).text()).toContain("BOSSUYT Shari");
+
+    const rows = await getDb(env.DB)
+      .select({ event: schema.result.event, place: schema.result.place, team: schema.team.name })
+      .from(schema.result)
+      .innerJoin(schema.team, eq(schema.result.teamId, schema.team.id))
+      .orderBy(schema.result.event);
+    expect(rows).toEqual([
+      { event: "Track: Men Elite - Madison", place: 4, team: "Belgium · Track: Men Elite - Madison" },
+      { event: "Track: Men Elite - Team Pursuit", place: 13, team: "Belgium · Track: Men Elite - Team Pursuit" },
+      { event: "Track: Men Elite - Team Sprint", place: 14, team: "Belgium · Track: Men Elite - Team Sprint" },
+      { event: "Track: Women Elite - Madison", place: 7, team: "Belgium · Track: Women Elite - Madison" },
+      { event: "Track: Women Elite - Team Pursuit", place: 10, team: "Belgium · Track: Women Elite - Team Pursuit" },
+      { event: "Track: Women Elite - Team Sprint", place: 12, team: "Belgium · Track: Women Elite - Team Sprint" },
+    ]);
+    // 2 + 4 + 3 + 2 + 4 + 3 credited riders.
+    expect(await getDb(env.DB).$count(schema.rosterMember)).toBe(18);
   });
 });

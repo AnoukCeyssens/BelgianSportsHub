@@ -2,16 +2,17 @@
 // research/summer-sport-sources). Anonymous GETs, documented at /v3/API/.
 //
 // One run, kept small and polite:
-// 1. Belgium's individual outdoor results in competitions from two weeks
-//    before the last run (a year back on the first run) to today: one request
-//    (COUNTRYRESULTS, already filtered to BEL by the API);
+// 1. Belgium's individual and team outdoor results in competitions from two
+//    weeks before the last run (a year back on the first run) to today: two
+//    requests (COUNTRYRESULTS, already filtered to BEL by the API). A team
+//    result goes to Belgium's default Team for the event (ADR 0001), with the
+//    archers it names as the roster;
 // 2. outdoor competitions running now or starting within two weeks: one
 //    request; for each European or world event among them, its Belgian entries
 //    as the entry list behind Upcoming.
 // Senior recurve and compound only (the Olympic and LA28 divisions); para,
-// youth and masters categories are left out, and so are team results until
-// Teams arrive (#27). The API gives no date of birth, so a Belgian not yet
-// known by World Archery ID waits in the merge queue.
+// youth and masters categories are left out. The API gives no date of birth,
+// so a Belgian not yet known by World Archery ID waits in the merge queue.
 import type { CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 
@@ -30,6 +31,16 @@ const EVENT_BY_CATEGORY: Record<string, string> = {
   RW: "Recurve Women",
   CM: "Compound Men",
   CW: "Compound Women",
+};
+
+/** Senior team categories (three archers; mixed teams two) and how a Team result names its event. */
+const TEAM_EVENT_BY_CATEGORY: Record<string, string> = {
+  RM: "Recurve Men Team",
+  RW: "Recurve Women Team",
+  CM: "Compound Men Team",
+  CW: "Compound Women Team",
+  RX: "Recurve Mixed Team",
+  CX: "Compound Mixed Team",
 };
 
 /**
@@ -76,6 +87,9 @@ type CountryResult = {
   DFrom: string;
   DTo: string;
 };
+type TeamCountryResult = Omit<CountryResult, "WaId" | "FName" | "GName" | "WNameOrd"> & {
+  Members: { WaId: number; FName: string; GName: string; WNameOrd: boolean }[];
+};
 type WaCompetition = {
   ID: number;
   Name: string;
@@ -94,6 +108,7 @@ export const worldArchery: SourceAdapter = {
     const today = isoDate(run.now);
     const from = run.since ? addDays(isoDate(run.since), -RESULTS_LOOKBACK_DAYS) : addDays(today, -FIRST_RUN_LOOKBACK_DAYS);
     await results(run, from, today);
+    await teamResults(run, from, today);
     await entryLists(run, today);
   },
 };
@@ -134,6 +149,41 @@ async function results(run: SourceRun, from: string, today: string) {
       performance: null,
       sourceRef: `${r.Id}/${r.Cat}/${r.WaId}`,
       rawCopyId: fetched.rawCopyId,
+    });
+  }
+}
+
+async function teamResults(run: SourceRun, from: string, today: string) {
+  const fetched = await run.fetch(
+    `${API}/COUNTRYRESULTS/?Noc=BEL&IndividualTeam=2&DisciplineId=${OUTDOOR}&StartDate=${from}&EndDate=${today}&RBP=All`,
+  );
+  for (const r of (JSON.parse(fetched.text) as Page<TeamCountryResult>).items) {
+    const event = TEAM_EVENT_BY_CATEGORY[r.Cat];
+    const kind = competitionKind(r.ComLevel, r.Name);
+    if (r.NOC !== "BEL" || !event || !kind) continue;
+    const competitionId = await run.rows.competition({
+      name: r.Name,
+      sport: SPORT,
+      kind,
+      startDate: r.DFrom,
+      endDate: r.DTo,
+      city: null,
+      country: r.Country || null,
+      venueZone: null,
+      sourceRef: String(r.Id),
+      rawCopyId: fetched.rawCopyId,
+    });
+    await run.rows.teamResult({
+      competitionId,
+      nationality: r.NOC,
+      event,
+      date: r.DTo,
+      place: r.Rnk,
+      status: "finished",
+      performance: null,
+      sourceRef: `${r.Id}/${r.Cat}/team`,
+      rawCopyId: fetched.rawCopyId,
+      roster: r.Members.map((m) => person({ Id: m.WaId, FName: m.FName, GName: m.GName, WNameOrd: m.WNameOrd, NOC: r.NOC })),
     });
   }
 }

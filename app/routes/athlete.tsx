@@ -1,11 +1,11 @@
 import { Fragment } from "react";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
-import { data } from "react-router";
+import { and, asc, eq, gte } from "drizzle-orm";
+import { data, Link } from "react-router";
 import { now } from "~/clock";
 import { dbFrom } from "~/context";
 import { EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES, schema } from "~/db/client";
-import { BELGIAN_ZONE } from "~/domain";
-import { formatDate, formatDay, placeText } from "~/format";
+import { athleteMedals, BELGIAN_ZONE } from "~/domain";
+import { formatDate, formatDay, medalsText, placeText } from "~/format";
 import type { Route } from "./+types/athlete";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -21,20 +21,44 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     .from(schema.athleteExternalId)
     .where(eq(schema.athleteExternalId.athleteId, athlete.id));
   const competition = schema.competition;
-  const results = await db
-    .select({
-      date: schema.result.date,
-      event: schema.result.event,
-      place: schema.result.place,
-      status: schema.result.status,
-      performance: schema.result.performance,
-      competition: competition.name,
-      kind: competition.kind,
-    })
+  const columns = {
+    date: schema.result.date,
+    event: schema.result.event,
+    place: schema.result.place,
+    status: schema.result.status,
+    performance: schema.result.performance,
+    competitionId: competition.id,
+    competition: competition.name,
+    kind: competition.kind,
+  };
+  const own = await db
+    .select(columns)
     .from(schema.result)
     .innerJoin(competition, eq(schema.result.competitionId, competition.id))
-    .where(eq(schema.result.athleteId, athlete.id))
-    .orderBy(desc(schema.result.date), asc(schema.result.event));
+    .where(eq(schema.result.athleteId, athlete.id));
+  // Team results: every result of a Team whose roster at that competition credits the Athlete.
+  const roster = schema.rosterMember;
+  const asTeam = await db
+    .selectDistinct({ ...columns, teamId: schema.team.id, team: schema.team.name })
+    .from(roster)
+    .innerJoin(schema.result, and(eq(schema.result.teamId, roster.teamId), eq(schema.result.competitionId, roster.competitionId)))
+    .innerJoin(schema.team, eq(schema.team.id, roster.teamId))
+    .innerJoin(competition, eq(schema.result.competitionId, competition.id))
+    .where(eq(roster.athleteId, athlete.id));
+  const results = [...own.map((r) => ({ ...r, teamId: null, team: null })), ...asTeam].toSorted(
+    (a, b) => b.date.localeCompare(a.date) || a.event.localeCompare(b.event),
+  );
+  const medals = athleteMedals(
+    results.map((r) => ({
+      competitionId: r.competitionId,
+      competitionKind: r.kind,
+      event: r.event,
+      place: r.place,
+      status: r.status,
+      entry: r.teamId ? { kind: "team" as const, teamId: r.teamId, roster: [athlete.id] } : { kind: "athlete" as const, athleteId: athlete.id },
+    })),
+    athlete.id,
+  );
   // Upcoming: competitions not over yet (in Belgium) whose entry list names the Athlete.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: BELGIAN_ZONE }).format(now());
   const upcoming = await db
@@ -49,7 +73,7 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     .innerJoin(competition, eq(schema.entrant.competitionId, competition.id))
     .where(and(eq(schema.entrant.athleteId, athlete.id), gte(competition.endDate, today)))
     .orderBy(asc(competition.startDate));
-  return { athlete, externalIds: sortedExternalIds(externalIds), results, upcoming };
+  return { athlete, externalIds: sortedExternalIds(externalIds), results, upcoming, medals: medalsText(medals) };
 }
 
 const SCHEME_ORDER = Object.keys(EXTERNAL_ID_SCHEMES);
@@ -76,7 +100,7 @@ function athleteSince(isoDate: string, competition: string | null) {
 }
 
 export default function Athlete({ loaderData }: Route.ComponentProps) {
-  const { athlete, externalIds, results, upcoming } = loaderData;
+  const { athlete, externalIds, results, upcoming, medals } = loaderData;
   const facts = [
     athlete.sport,
     athlete.dateOfBirth ? `born ${formatDate(athlete.dateOfBirth)}` : null,
@@ -96,6 +120,7 @@ export default function Athlete({ loaderData }: Route.ComponentProps) {
           ))}
         </div>
       ) : null}
+      {medals ? <div className="sub">{medals}</div> : null}
       {athlete.note ? <p className="note">{athlete.note}</p> : null}
 
       <h2>Upcoming</h2>
@@ -148,7 +173,15 @@ export default function Athlete({ loaderData }: Route.ComponentProps) {
                 </td>
                 <td>
                   <CompetitionName name={r.competition} kind={r.kind} />
-                  <div className="sub">{r.event}</div>
+                  <div className="sub">
+                    {r.event}
+                    {r.teamId ? (
+                      <>
+                        {" · "}
+                        <Link to={`/teams/${r.teamId}`}>{r.team}</Link>
+                      </>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="n">
                   <b>{placeText(r.place, r.status)}</b>

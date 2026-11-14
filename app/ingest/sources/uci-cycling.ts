@@ -10,14 +10,15 @@
 // 2. for each qualification-relevant competition that ended since the last run
 //    (a year back on the first run) and has started: its races, then for each
 //    final senior (Elite) race of an Olympic event: its events, and the
-//    results of its final classification; Belgian rows only.
+//    results of its final classification; Belgian rows only. A track team
+//    event (madison, team sprint, team pursuit) is Belgium's Team result
+//    (ADR 0001), with every rider the classification credits as its roster.
 // Scope (spec #20, story 95): road is an open pro tour, so only the
 // Championships, the Games and the UCI's named top series (the men's and
 // women's WorldTour) come in; the rest arrives through the UCI rankings
 // (#33). Track, mountain bike and BMX keep their Championships, the Games and
-// their World Cups. Team events (team sprint, team pursuit, madison, mixed
-// relays) wait for Teams (#27). DataRide gives no rider ID, only name and date
-// of birth, so the IF ID is the two together. No entry lists, so no Upcoming.
+// their World Cups. DataRide gives no rider ID, only name and date of birth,
+// so the IF ID is the two together. No entry lists, so no Upcoming.
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://dataride.uci.ch";
@@ -32,11 +33,14 @@ type Discipline = {
   name: string;
   /** The competition classes that count (UCI class codes). */
   classes: Record<string, CompetitionKind>;
-  /** The Olympic individual race types (DataRide race type codes). */
+  /** The Olympic race types (DataRide race type codes), team events included. */
   raceTypes: Set<string>;
   /** Further narrows the competitions, where one class mixes Olympic and other formats. */
   competition?: RegExp;
 };
+
+/** Track team events: madison, team sprint, team pursuit. DataRide lists each rider on a row; a team's first row carries its rank. */
+const TEAM_RACE_TYPES = new Set(["MA", "TS", "TP"]);
 
 const CHAMPIONSHIPS: Record<string, CompetitionKind> = { CM: "championship", CC: "championship", JO: "games", OG: "games" };
 
@@ -47,7 +51,7 @@ const DISCIPLINES: Discipline[] = [
     classes: { ...CHAMPIONSHIPS, "1.UWT": "circuit", "2.UWT": "circuit", "1.WWT": "circuit", "2.WWT": "circuit" },
     raceTypes: new Set(["IRR", "ITT"]),
   },
-  { id: 9, name: "Track", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["SP", "KE", "OM"]) },
+  { id: 9, name: "Track", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["SP", "KE", "OM", ...TEAM_RACE_TYPES]) },
   {
     id: 7,
     name: "Mountain bike",
@@ -81,6 +85,8 @@ type Result = {
   NationName: string | null;
   ResultValue: string | null;
   Irm: string | null;
+  /** The nation, on a team's first row (every row in a madison); empty on the rows of its other riders. */
+  TeamName?: string | null;
 };
 
 export const uciCycling: SourceAdapter = {
@@ -157,11 +163,34 @@ async function results(run: SourceRun, discipline: Discipline, c: Competition, c
     const events = JSON.parse(fetchedEvents.text) as RaceEvent[];
     // The general classification; the points, mountains and Olympic ranking classifications are not results.
     const event = events.find((e) => e.EventName === "General Classification") ?? (events.length === 1 ? events[0] : undefined);
-    if (!event || event.IsTeamEvent) continue;
+    const team = TEAM_RACE_TYPES.has(race.RaceTypeCode);
+    if (!event || (event.IsTeamEvent && !team)) continue;
     const fetched = await run.fetch(`${SITE}/iframe/Results/`, {
       form: { disciplineId: String(discipline.id), eventId: String(event.EventId), ...page(1000) },
     });
-    for (const r of (JSON.parse(fetched.text) as { data: Result[] }).data) {
+    const rows = (JSON.parse(fetched.text) as { data: Result[] }).data;
+    if (team) {
+      for (const t of teams(rows)) {
+        const [first] = t.rows;
+        if (first.NationName?.trim() !== "BEL") continue;
+        const status = statusOf(first);
+        if (!status) continue;
+        await run.rows.teamResult({
+          competitionId,
+          nationality: "BEL",
+          event: eventName(discipline, race),
+          date: raceDate(race.Date),
+          place: status === "finished" ? first.RankNumber : null,
+          status,
+          performance: status === "finished" ? first.ResultValue?.trim() || null : null,
+          sourceRef: `${discipline.id}/${c.CompetitionId}/${event.EventId}/BEL`,
+          rawCopyId: fetched.rawCopyId,
+          roster: t.rows.map(person),
+        });
+      }
+      continue;
+    }
+    for (const r of rows) {
       if (r.NationName?.trim() !== "BEL") continue;
       const status = statusOf(r);
       if (!status) continue;
@@ -185,6 +214,21 @@ async function results(run: SourceRun, discipline: Discipline, c: Competition, c
 function eventName(discipline: Discipline, race: Race): string {
   const name = race.RaceName === "Final Classification" ? `${race.CategoryCode} - General Classification` : race.RaceName;
   return `${discipline.name}: ${name}`;
+}
+
+/**
+ * A team event's rows grouped per team: a row naming a team (and its rank)
+ * starts one, and the rows after it without a team name are its other riders.
+ */
+function teams(rows: Result[]) {
+  const found: { name: string; rank: number | null; rows: Result[] }[] = [];
+  for (const r of rows) {
+    const name = r.TeamName?.trim() ?? "";
+    const current = found.at(-1);
+    if (name && (!current || current.name !== name || current.rank !== r.RankNumber)) found.push({ name, rank: r.RankNumber, rows: [r] });
+    else current?.rows.push(r);
+  }
+  return found;
 }
 
 /** Kendo grid paging, as the DataRide pages send it. */

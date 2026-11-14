@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldaquatics.com/fina/competitions?pageSize=100&venueDateFrom=2026-03-14T00:00:00%2B00:00&venueDateTo=2026-04-13T23:59:59%2B00:00&group=FINA&sort=dateFrom,asc",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T13:13:52.284Z",
+  "trimmedByHand": "Dropped the Open Water Swimming World Cup in Somabay, so the run asks nothing about it."
+}
