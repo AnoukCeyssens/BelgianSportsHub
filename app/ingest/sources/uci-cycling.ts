@@ -19,6 +19,16 @@
 // (#33). Track, mountain bike and BMX keep their Championships, the Games and
 // their World Cups. DataRide gives no rider ID, only name and date of birth,
 // so the IF ID is the two together. No entry lists, so no Upcoming.
+//
+// Rankings (#33; #20 review, D): once a week, on the first run after Tuesday
+// noon UTC (the UCI computes its rankings on Tuesdays), the road UCI World
+// Ranking of the current season for Men Elite and Women Elite: the season
+// (one GET), the season's ranking list per category (one POST), then the
+// individual ranking filtered to Belgium (each Belgian rider's position, an
+// Athlete matched by name and date of birth) and the nation ranking filtered
+// to Belgium (Belgium's default Team in the category's road race). The other
+// disciplines' rankings are not fetched yet. DataRide's ranking rows do carry
+// the rider's UCI ID (`UciId`), unlike its results grids.
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://dataride.uci.ch";
@@ -94,6 +104,7 @@ type Result = {
 
 export const uciCycling: SourceAdapter = {
   async run(run) {
+    if (rankingsComputedSince(run)) await roadRankings(run);
     const today = isoDate(run.now);
     const windowStart = run.since ? addDays(isoDate(run.since), -1) : addDays(today, -FIRST_RUN_LOOKBACK_DAYS);
     const horizon = addDays(today, CALENDAR_HORIZON_DAYS);
@@ -123,6 +134,103 @@ export const uciCycling: SourceAdapter = {
     }
   },
 };
+
+/** UCI rankings are computed on Tuesdays: fetch them on the first run after Tuesday noon (UTC), or on the first run ever. */
+function rankingsComputedSince(run: SourceRun): boolean {
+  if (!run.since) return true;
+  const day = run.now.getUTCDay();
+  const tuesday = new Date(Date.UTC(run.now.getUTCFullYear(), run.now.getUTCMonth(), run.now.getUTCDate() - ((day + 5) % 7), 12));
+  return run.since < tuesday && run.now >= tuesday;
+}
+
+const ROAD = DISCIPLINES[0];
+/** DataRide's category ids for the senior road rankings, and the event a nation ranking's places are for. */
+const RANKING_CATEGORIES = [
+  { id: 22, name: "Men Elite", raceEvent: "Road race Men Elite" },
+  { id: 23, name: "Women Elite", raceEvent: "Road race Women Elite" },
+];
+/** DataRide's country id for Belgium (`/iframe/GetCountries/`). */
+const BELGIUM_COUNTRY_ID = "21";
+const INDIVIDUAL_RANKING = 1;
+const NATION_RANKING = 3;
+
+type RankingListGroup = { GroupName: string; Rankings: { Id: number; MomentId: number; RankingTypeId: number }[] };
+type RankedObject = {
+  Rank: number;
+  DisplayName: string;
+  NationName: string | null;
+  BirthDate: string | null;
+  Points: number | null;
+  ComputationDate: string;
+};
+
+async function roadRankings(run: SourceRun) {
+  const today = isoDate(run.now);
+  const seasons = await run.fetch(`${SITE}/iframe/GetDisciplineSeasons/?disciplineId=${ROAD.id}`);
+  const season = (JSON.parse(seasons.text) as Season[]).find((s) => dataRideDate(s.StartDate) <= today && dataRideDate(s.EndDate) >= today);
+  if (!season) return;
+  for (const category of RANKING_CATEGORIES) {
+    const listed = await run.fetch(`${SITE}/iframe/RankingsDiscipline/`, {
+      form: {
+        disciplineId: String(ROAD.id),
+        ...page(40),
+        ...filters([
+          ["RaceTypeId", "0"],
+          ["CategoryId", String(category.id)],
+          ["SeasonId", String(season.Id)],
+        ]),
+      },
+    });
+    const world = (JSON.parse(listed.text) as RankingListGroup[]).find((g) => g.GroupName === "World Ranking");
+    for (const ranking of world?.Rankings ?? []) {
+      if (ranking.RankingTypeId !== INDIVIDUAL_RANKING && ranking.RankingTypeId !== NATION_RANKING) continue;
+      const fetched = await run.fetch(`${SITE}/iframe/ObjectRankings/`, {
+        form: {
+          rankingId: String(ranking.Id),
+          disciplineId: String(ROAD.id),
+          rankingTypeId: String(ranking.RankingTypeId),
+          ...page(1000),
+          ...filters([
+            ["RaceTypeId", "0"],
+            ["CategoryId", String(category.id)],
+            ["SeasonId", String(season.Id)],
+            ["MomentId", String(ranking.MomentId)],
+            ["CountryId", BELGIUM_COUNTRY_ID],
+            ["IndividualName", ""],
+            ["TeamName", ""],
+          ]),
+        },
+      });
+      for (const r of (JSON.parse(fetched.text) as { data: RankedObject[] }).data) {
+        if (r.NationName?.trim() !== "BEL") continue;
+        const common = {
+          sport: ROAD.sport,
+          asOf: dataRideDate(r.ComputationDate),
+          position: r.Rank,
+          points: r.Points === null ? null : String(r.Points),
+          rawCopyId: fetched.rawCopyId,
+        };
+        if (ranking.RankingTypeId === NATION_RANKING) {
+          const teamId = await run.rows.team({ sport: ROAD.sport, event: category.raceEvent, members: null, rawCopyId: fetched.rawCopyId });
+          await run.rows.ranking({ ...common, ranking: `UCI road world ranking · Nations ${category.name}`, teamId });
+        } else {
+          await run.rows.ranking({ ...common, ranking: `UCI road world ranking · ${category.name}`, person: person({ ...r, RankNumber: r.Rank, ResultValue: null, Irm: null }) });
+        }
+      }
+    }
+  }
+}
+
+/** A Kendo grid's filter, as the DataRide pages send it. */
+function filters(fields: [string, string][]): Record<string, string> {
+  return Object.fromEntries([
+    ["filter[logic]", "and"],
+    ...fields.flatMap(([field, value], i) => [
+      [`filter[filters][${i}][field]`, field],
+      [`filter[filters][${i}][value]`, value],
+    ]),
+  ]);
+}
 
 async function competitions(run: SourceRun, discipline: Discipline, from: string, to: string) {
   const fetched = await run.fetch(`${SITE}/iframe/GetRestrictedResultsDisciplineSeasons/?disciplineId=${discipline.id}`);

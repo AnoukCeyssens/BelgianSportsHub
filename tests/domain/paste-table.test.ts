@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { belgianPastedRows, columnMapping, readHtmlTable, readPastedTable, type PasteColumnRole } from "~/domain";
+import { belgianPastedRows, belgianRankingRows, columnMapping, readHtmlTable, readPastedTable, type PasteColumnRole } from "~/domain";
 
 // Spec #20, story 104; ticket #25: the generic paste importer reads a table
 // pasted from the browser (or a plain HTML page), guesses what each column
@@ -138,6 +138,36 @@ describe("belgianPastedRows", () => {
     const table = { head: [], rows: [["WS", "1", "KOVAC M.", "SLO"], ["MS", "3", "DE WAELE Jonas", "BEL"]] };
     expect(belgianPastedRows(table, ["event", "place", "name", "nation"])).toEqual([
       { index: 1, event: "MS", name: "DE WAELE Jonas", ifId: null, dateOfBirth: null, place: 3, status: "finished", performance: null },
+    ]);
+  });
+});
+
+// #20 review (D): a pasted ranking (Assisted sources' world rankings) uses the
+// same importer, with the ranking position and points as column roles.
+describe("belgianRankingRows", () => {
+  const roles: PasteColumnRole[] = ["ranking-position", "name", "nation", "ranking-points", "if-id"];
+
+  it.each([
+    {
+      name: "an Athlete's position and points",
+      row: ["18", "DE WAELE Jonas", "BEL", "412.50", "BWF-77"],
+      expected: [{ index: 0, event: null, name: "DE WAELE Jonas", ifId: "BWF-77", dateOfBirth: null, position: 18, points: "412.50" }],
+    },
+    {
+      name: "a tied position (T18, =18)",
+      row: ["T18", "DE WAELE Jonas", "Belgium", "", "BWF-77"],
+      expected: [{ index: 0, event: null, name: "DE WAELE Jonas", ifId: "BWF-77", dateOfBirth: null, position: 18, points: null }],
+    },
+    { name: "no position: left out", row: ["", "DE WAELE Jonas", "BEL", "", "BWF-77"], expected: [] },
+    { name: "another nation: left out", row: ["1", "AXELSEN Viktor", "DEN", "110000", "BWF-1"], expected: [] },
+  ])("$name", ({ row, expected }) => {
+    expect(belgianRankingRows({ head: [], rows: [row] }, roles)).toEqual(expected);
+  });
+
+  it("reads a nation ranking (no name column) as Belgium's rows", () => {
+    const table = { head: [], rows: [["7", "Netherlands", "2210"], ["12", "Belgium", "1540"]] };
+    expect(belgianRankingRows(table, ["ranking-position", "nation", "ranking-points"])).toEqual([
+      { index: 1, event: null, name: null, ifId: null, dateOfBirth: null, position: 12, points: "1540" },
     ]);
   });
 });

@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import {
+  TRIATHLON_RANKINGS_RUN,
   TRIATHLON_WORLD_CUP_RUN,
+  triathlonRankingsRun,
   triathlonRefusedRun,
   triathlonWorldCupRun,
 } from "../fixtures/sources/world-triathlon";
@@ -145,5 +147,23 @@ describe("World Triathlon source", () => {
     const page = await (await get(`/teams/${team}`)).text();
     for (const name of ["Lotte Voorbeeld", "Jules Voorbeeld", "Mira Exemplaar", "Arno Specimen"]) expect(page).toContain(name);
     expect(page).not.toContain("Tom Exemplar");
+  });
+
+  it("stores the week's World Rankings of Belgians known by World Triathlon ID, never creating Athletes", async () => {
+    await setSource(env.DB, TRIATHLON, { lastSuccessAt: TRIATHLON_RANKINGS_RUN.lastSuccessAt });
+    const jules = await seedAthlete(env.DB, { name: "Jules Voorbeeld", sport: "Triathlon", externalIds: [{ scheme: "world-triathlon", value: "390002" }] });
+    const lotte = await seedAthlete(env.DB, { name: "Lotte Voorbeeld", sport: "Triathlon", externalIds: [{ scheme: "world-triathlon", value: "390011" }] });
+    fixClock(TRIATHLON_RANKINGS_RUN.now);
+    stubOutboundFetch(triathlonRankingsRun);
+
+    const result = await deliverIngestJobs([job], KEY);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    const rows = await getDb(env.DB).select().from(schema.rankingSnapshot).orderBy(schema.rankingSnapshot.ranking);
+    expect(rows.map(({ athleteId, ranking, sport, position, points, asOf }) => ({ athleteId, ranking, sport, position, points, asOf }))).toEqual([
+      { athleteId: jules, ranking: "World Triathlon Men's World Rankings", sport: "Triathlon", position: 41, points: "1234.56", asOf: "2026-11-09" },
+      { athleteId: lotte, ranking: "World Triathlon Women's World Rankings", sport: "Triathlon", position: 22, points: "1802.1", asOf: "2026-11-09" },
+    ]);
+    expect(await getDb(env.DB).$count(schema.mergeQueueItem)).toBe(0);
   });
 });

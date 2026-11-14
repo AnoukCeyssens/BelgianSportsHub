@@ -99,3 +99,37 @@ export function quotaPlaceTransition(place: QuotaPlaceNow | null, event: QuotaPl
   if (event === "enter" && !place.linked) return { ok: false, reason: "Link the place to its selected Entry before it is Entered" };
   return { ok: true, state: move.to };
 }
+
+/**
+ * How many places a nation ranking position earns (spec #20, story 80), read
+ * from what the Entry's track needs as the owner copied it from the
+ * qualification system: "Top 8 nations" earns one place inside the Top 8;
+ * "Top 12 nations: 3 places" three; bands ("Top 4: 3 places · top 10: 2
+ * places") the best band the position is inside. Null when the text names no
+ * Top N, so nothing is adjusted.
+ */
+export function placesEarned(needed: string, position: number): number | null {
+  const bands = [...needed.matchAll(/\btop[\s-]*(\d+)[^\d·;,]*?(?:[:=→-]\s*(\d+)\s*places?)?(?=\s*(?:[·;,]|$))/gi)].map((m) => ({
+    upTo: Number(m[1]),
+    places: m[2] ? Number(m[2]) : 1,
+  }));
+  if (bands.length === 0) return null;
+  const inside = bands.filter((b) => position <= b.upTo).toSorted((a, b) => a.upTo - b.upTo);
+  return inside[0]?.places ?? 0;
+}
+
+export type RankedQuotaPlace = { id: string; state: QuotaPlaceState; linked: boolean; reallocated: boolean; earnedVia: string | null };
+
+/**
+ * Keeps an event's NOC-owned places at what a nation ranking earns (#20
+ * review, D): idempotent, so a re-fetch of the same list changes nothing.
+ * Places still in play count (Declined and Lost do not); missing ones are held
+ * (Provisional); surplus ones go only when Provisional, unlinked, not
+ * reallocated and earned through this ranking, the last recorded first.
+ */
+export function quotaPlaceAdjustment(places: readonly RankedQuotaPlace[], earned: number, ranking: string): { hold: number; remove: string[] } {
+  const counted = places.filter((p) => p.state !== "declined" && p.state !== "lost");
+  if (counted.length <= earned) return { hold: earned - counted.length, remove: [] };
+  const removable = counted.filter((p) => p.state === "provisional" && !p.linked && !p.reallocated && p.earnedVia === ranking).toReversed();
+  return { hold: 0, remove: removable.slice(0, counted.length - earned).map((p) => p.id) };
+}

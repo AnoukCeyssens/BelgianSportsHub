@@ -1,0 +1,8 @@
+{
+  "url": "https://dataride.uci.ch/iframe/ObjectRankings/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T16:06:53.407Z",
+  "requestBody": "rankingId=32&disciplineId=10&rankingTypeId=1&take=1000&skip=0&page=1&pageSize=1000&filter%5Blogic%5D=and&filter%5Bfilters%5D%5B0%5D%5Bfield%5D=RaceTypeId&filter%5Bfilters%5D%5B0%5D%5Bvalue%5D=0&filter%5Bfilters%5D%5B1%5D%5Bfield%5D=CategoryId&filter%5Bfilters%5D%5B1%5D%5Bvalue%5D=23&filter%5Bfilters%5D%5B2%5D%5Bfield%5D=SeasonId&filter%5Bfilters%5D%5B2%5D%5Bvalue%5D=477&filter%5Bfilters%5D%5B3%5D%5Bfield%5D=MomentId&filter%5Bfilters%5D%5B3%5D%5Bvalue%5D=207044&filter%5Bfilters%5D%5B4%5D%5Bfield%5D=CountryId&filter%5Bfilters%5D%5B4%5D%5Bvalue%5D=21&filter%5Bfilters%5D%5B5%5D%5Bfield%5D=IndividualName&filter%5Bfilters%5D%5B5%5D%5Bvalue%5D=&filter%5Bfilters%5D%5B6%5D%5Bfield%5D=TeamName&filter%5Bfilters%5D%5B6%5D%5Bvalue%5D=",
+  "trimmedByHand": "Trimmed by hand to the first 3 Belgian riders (of 58); the response is otherwise as received."
+}

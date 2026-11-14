@@ -1,0 +1,8 @@
+{
+  "url": "https://dataride.uci.ch/iframe/RankingsDiscipline/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T16:06:45.346Z",
+  "requestBody": "disciplineId=10&take=40&skip=0&page=1&pageSize=40&filter%5Blogic%5D=and&filter%5Bfilters%5D%5B0%5D%5Bfield%5D=RaceTypeId&filter%5Bfilters%5D%5B0%5D%5Bvalue%5D=0&filter%5Bfilters%5D%5B1%5D%5Bfield%5D=CategoryId&filter%5Bfilters%5D%5B1%5D%5Bvalue%5D=23&filter%5Bfilters%5D%5B2%5D%5Bfield%5D=SeasonId&filter%5Bfilters%5D%5B2%5D%5Bvalue%5D=477",
+  "trimmedByHand": "Trimmed by hand to the \"World Ranking\" group; the other groups (One Day Race, Stage Race, continental tours) are left out."
+}

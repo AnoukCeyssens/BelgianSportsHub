@@ -4,14 +4,22 @@
 // source and last check.
 // - `quotaPlacesOf`: a Games' places, for its Qualification phase and the
 //   owner's page;
-// - `recordQuotaPlaces`: records n new places (a nation ranking that earns n
-//   places records n; Rankings ingest (#33) can call it too);
+// - `recordQuotaPlaces`: records n new places by hand (the owner's page);
+// - `holdEarnedPlaces`: keeps an event's places at what a nation ranking
+//   earns (ranking ingest), adjusting rather than appending;
 // - `linkAtSelection`: NOC-owned places follow Selection in their event.
 // Moves go through `quotaPlaceTransition`; the owner's writes are in
 // app/routes/curate.qualification.tsx.
 import { and, asc, eq, inArray, max, sql } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
-import { isQuotaPlaceState, quotaPlaceEnded, quotaPlaceTransition, type QuotaPlaceKind, type QuotaPlaceState } from "~/domain";
+import {
+  isQuotaPlaceState,
+  quotaPlaceAdjustment,
+  quotaPlaceEnded,
+  quotaPlaceTransition,
+  type QuotaPlaceKind,
+  type QuotaPlaceState,
+} from "~/domain";
 
 export type QuotaPlaceView = {
   id: string;
@@ -106,6 +114,51 @@ export async function recordQuotaPlaces(db: Db, places: NewQuotaPlaces): Promise
     })),
   );
   if (places.kind === "noc") await linkAtSelection(db, places.competitionId, places.sport, places.event);
+}
+
+/**
+ * Keeps an event's NOC-owned places at the count a nation ranking earns
+ * (story 80; `quotaPlaceAdjustment`): holds the missing ones (Provisional,
+ * earned via the ranking, its date as the source) and removes surplus
+ * Provisional ones the ranking held. Returns how many rows changed.
+ */
+export async function holdEarnedPlaces(
+  db: Db,
+  input: { competitionId: string; sport: string; event: string; earned: number; ranking: string; source: string; checkedOn: string },
+): Promise<number> {
+  const q = schema.quotaPlace;
+  const places = await db
+    .select()
+    .from(q)
+    .where(and(eq(q.competitionId, input.competitionId), eq(q.kind, "noc"), sameEvent(input.sport, input.event)))
+    .orderBy(asc(q.number));
+  const { hold, remove } = quotaPlaceAdjustment(
+    places.map((p) => ({
+      id: p.id,
+      state: isQuotaPlaceState(p.state) ? p.state : "provisional",
+      linked: p.entryId !== null,
+      reallocated: p.reallocated,
+      earnedVia: p.earnedVia,
+    })),
+    input.earned,
+    input.ranking,
+  );
+  if (remove.length > 0) await db.delete(q).where(inArray(q.id, remove));
+  if (hold > 0) {
+    await recordQuotaPlaces(db, {
+      competitionId: input.competitionId,
+      sport: input.sport,
+      event: input.event,
+      kind: "noc",
+      how: "hold",
+      count: hold,
+      earnedVia: input.ranking,
+      entryId: null,
+      source: input.source,
+      checkedOn: input.checkedOn,
+    });
+  }
+  return hold + remove.length;
 }
 
 function sameEvent(sport: string, event: string) {
