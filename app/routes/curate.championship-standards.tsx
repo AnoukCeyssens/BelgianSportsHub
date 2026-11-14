@@ -36,6 +36,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     publishedOn: c.standardsPublishedOn ?? "",
     url: c.standardsUrl ?? "",
     standards: c.standardsText ?? "",
+    closesOn: c.qualificationClosesOn ?? "",
   };
 }
 
@@ -57,13 +58,14 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       standardsPublishedOn: date("publishedOn"),
       standardsUrl: field("url"),
       standardsText: field("standards"),
+      qualificationClosesOn: date("closesOn"),
     })
     .where(eq(schema.competition.id, c.id));
   return redirect(c.page, 303);
 }
 
 export default function ChampionshipStandards({ loaderData }: Route.ComponentProps) {
-  const { page, name, expectedOn, publishedOn, url, standards } = loaderData;
+  const { page, name, expectedOn, publishedOn, url, standards, closesOn } = loaderData;
   return (
     <>
       <h1>Standards</h1>
@@ -85,6 +87,10 @@ export default function ChampionshipStandards({ loaderData }: Route.ComponentPro
         <label>
           Source URL
           <input type="url" name="url" defaultValue={url} />
+        </label>
+        <label>
+          Qualification window closes on
+          <input type="date" name="closesOn" defaultValue={closesOn} />
         </label>
         <label>
           Standards

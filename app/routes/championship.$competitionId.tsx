@@ -58,6 +58,8 @@ export default function ChampionshipPage({ loaderData }: Route.ComponentProps) {
       {owner && (shown === "standards" || shown === "qualification") ? (
         <p className="sub">
           <Link to={`/curate/championships/${id}/standards`}>Record standards</Link>
+          {" · "}
+          <Link to={`/curate/championships/${id}/qualification`}>Edit qualification</Link>
         </p>
       ) : null}
     </>
