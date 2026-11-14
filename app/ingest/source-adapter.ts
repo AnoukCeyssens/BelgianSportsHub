@@ -6,6 +6,8 @@
 // every row to its raw copy). runSource() in ./source-run.ts does the rest.
 // Register each adapter in ./sources/index.ts under its Source row's key.
 
+import type { ExternalIdScheme } from "~/db/schema";
+
 export type SourceAdapter = {
   run(run: SourceRun): Promise<void>;
   /**
@@ -101,8 +103,8 @@ export type Person = {
   dateOfBirth: string | null;
   /** IOC code of the sporting nationality the source lists. */
   nationality: string;
-  /** The person's ID at this source's federation, e.g. { scheme: "isu", value: "692" }. */
-  ifId: { scheme: string; value: string };
+  /** The person's ID at this source's federation, e.g. { scheme: "isu", value: "692" }: a labelled scheme (EXTERNAL_ID_SCHEMES). */
+  ifId: { scheme: ExternalIdScheme; value: string };
 };
 
 /**

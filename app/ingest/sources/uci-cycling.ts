@@ -17,8 +17,9 @@
 // Championships, the Games and the UCI's named top series (the men's and
 // women's WorldTour) come in; the rest arrives through the UCI rankings
 // (#33). Track, mountain bike and BMX keep their Championships, the Games and
-// their World Cups. DataRide gives no rider ID, only name and date of birth,
-// so the IF ID is the two together. No entry lists, so no Upcoming.
+// their World Cups. DataRide's results give no rider ID, only name and date of
+// birth, so their IF ID is a derived key of the two (scheme "uci-derived",
+// never shown as an ID). No entry lists, so no Upcoming.
 //
 // Rankings (#33; #20 review, D): once a week, on the first run after Tuesday
 // noon UTC (the UCI computes its rankings on Tuesdays), the road UCI World
@@ -28,7 +29,9 @@
 // Athlete matched by name and date of birth) and the nation ranking filtered
 // to Belgium (Belgium's default Team in the category's road race). The other
 // disciplines' rankings are not fetched yet. DataRide's ranking rows do carry
-// the rider's UCI ID (`UciId`), unlike its results grids.
+// the rider's UCI ID (`UciId`), unlike its results grids: a ranking row's
+// person has it (scheme "uci"), so matching the rider on name and date of
+// birth remembers the real UCI ID on the Athlete.
 import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
@@ -159,6 +162,8 @@ const NATION_RANKING = 3;
 type RankingListGroup = { GroupName: string; Rankings: { Id: number; MomentId: number; RankingTypeId: number }[] };
 type RankedObject = {
   Rank: number;
+  /** The rider's UCI ID (11 digits); null on nation rows. */
+  UciId?: number | null;
   DisplayName: string;
   NationName: string | null;
   BirthDate: string | null;
@@ -216,7 +221,7 @@ async function roadRankings(run: SourceRun) {
           const teamId = await run.rows.team({ sport: ROAD.sport, event: category.raceEvent, members: null, rawCopyId: fetched.rawCopyId });
           await run.rows.ranking({ ...common, ranking: `UCI road world ranking · Nations ${category.name}`, teamId });
         } else {
-          await run.rows.ranking({ ...common, ranking: `UCI road world ranking · ${category.name}`, person: person({ ...r, RankNumber: r.Rank, ResultValue: null, Irm: null }) });
+          await run.rows.ranking({ ...common, ranking: `UCI road world ranking · ${category.name}`, person: person({ ...r, RankNumber: r.Rank, ResultValue: null, Irm: null }, r.UciId) });
         }
       }
     }
@@ -298,7 +303,7 @@ async function results(run: SourceRun, discipline: Discipline, c: Competition, c
           performance: status === "finished" ? first.ResultValue?.trim() || null : null,
           sourceRef: `${discipline.id}/${c.CompetitionId}/${event.EventId}/BEL`,
           rawCopyId: fetched.rawCopyId,
-          roster: t.rows.map(person),
+          roster: t.rows.map((r) => person(r)),
         });
       }
       continue;
@@ -369,14 +374,20 @@ function statusOf(r: Result): ResultStatus | null {
   return r.RankNumber === null ? null : "finished";
 }
 
-/** "VAN AERT Wout", born 1994-09-15: DataRide has no rider ID, so name and date of birth stand in for one. */
-function person(r: Result): Person {
+/**
+ * "VAN AERT Wout", born 1994-09-15. With the rider's UCI ID (ranking rows),
+ * that is the IF ID; DataRide's results have none, so name and date of birth
+ * stand in for one as a derived key ("uci-derived").
+ */
+function person(r: Result, uciId?: number | null): Person {
   const dateOfBirth = r.BirthDate ? dataRideDate(r.BirthDate) : null;
   return {
     name: r.DisplayName.trim(),
     dateOfBirth,
     nationality: "BEL",
-    ifId: { scheme: "uci", value: `${r.DisplayName.trim().toUpperCase()} ${dateOfBirth ?? "?"}` },
+    ifId: uciId
+      ? { scheme: "uci", value: String(uciId) }
+      : { scheme: "uci-derived", value: `${r.DisplayName.trim().toUpperCase()} ${dateOfBirth ?? "?"}` },
   };
 }
 

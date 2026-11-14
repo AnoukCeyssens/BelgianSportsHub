@@ -7,4 +7,4 @@ export function getDb(d1: D1Database) {
 
 export type Db = ReturnType<typeof getDb>;
 export { schema };
-export { EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES } from "./schema";
+export { DERIVED_ID_SCHEMES, EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES, isExternalIdScheme, type ExternalIdScheme } from "./schema";

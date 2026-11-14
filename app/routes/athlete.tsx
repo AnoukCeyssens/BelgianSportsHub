@@ -3,7 +3,7 @@ import { and, asc, eq, gte } from "drizzle-orm";
 import { data, Link } from "react-router";
 import { now } from "~/clock";
 import { dbFrom } from "~/context";
-import { EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES, schema } from "~/db/client";
+import { DERIVED_ID_SCHEMES, EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES, isExternalIdScheme, schema } from "~/db/client";
 import { athleteMedals, BELGIAN_ZONE } from "~/domain";
 import { formatDate, formatDay, medalsText, placeText } from "~/format";
 import { activeFactsOf, activeStatuses } from "~/roster/active";
@@ -85,14 +85,16 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 }
 
 const SCHEME_ORDER = Object.keys(EXTERNAL_ID_SCHEMES);
+/** The Athlete's IDs a reader can look up, in display order; derived matching keys (UCI name + date of birth) are left out. */
 function sortedExternalIds(ids: { scheme: string; value: string }[]) {
   const rank = (s: string) => (SCHEME_ORDER.includes(s) ? SCHEME_ORDER.indexOf(s) : SCHEME_ORDER.length);
   return ids
+    .filter((x) => !(isExternalIdScheme(x.scheme) && DERIVED_ID_SCHEMES.has(x.scheme)))
     .toSorted((a, b) => rank(a.scheme) - rank(b.scheme) || a.scheme.localeCompare(b.scheme))
     .map((x) => ({
-      label: EXTERNAL_ID_SCHEMES[x.scheme as keyof typeof EXTERNAL_ID_SCHEMES] ?? x.scheme,
+      label: isExternalIdScheme(x.scheme) ? EXTERNAL_ID_SCHEMES[x.scheme] : x.scheme,
       value: x.value,
-      href: EXTERNAL_ID_LINKS[x.scheme]?.replace("$1", encodeURIComponent(x.value)) ?? null,
+      href: (isExternalIdScheme(x.scheme) ? EXTERNAL_ID_LINKS[x.scheme] : undefined)?.replace("$1", encodeURIComponent(x.value)) ?? null,
     }));
 }
 

@@ -14,7 +14,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { Form, Link } from "react-router";
 import { participationsBetween } from "~/calendar/participations";
-import { type Db, schema } from "~/db/client";
+import { type Db, type ExternalIdScheme, isExternalIdScheme, schema } from "~/db/client";
 import {
   BELGIAN_ZONE,
   belgianPastedRows,
@@ -231,7 +231,7 @@ async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, 
   const rows = belgianPastedRows(table, roles).filter((r) => ticked.has(String(r.index)) && r.ifId !== null);
   if (rows.some((r) => !(r.event ?? field("event")))) throw new Response("Name the event", { status: 400 });
 
-  const scheme = idSchemeOf(source);
+  const scheme = knownSchemeOf(source);
   const identities = await identitiesOf(env.DB, db, scheme, rows);
   const writer = belgianRows(env, source.key, now);
   const competitionRef = reference ? reference.key : `${slug(competitionName)}:${startDate}`;
@@ -309,7 +309,7 @@ async function confirmRanking(
   const nation = !roles.includes("name");
   if (nation && rows.some((r) => !(r.event ?? field("event")))) throw new Response("Name the event", { status: 400 });
 
-  const scheme = idSchemeOf(source);
+  const scheme = knownSchemeOf(source);
   const people = rows.filter((r) => !nation && r.ifId !== null);
   const identities = await identitiesOf(env.DB, db, scheme, people.map((r) => ({ ...r, name: r.name ?? "" })));
   const writer = belgianRows(env, source.key, now);
@@ -351,6 +351,15 @@ function describe(source: SourceRow) {
 
 function idSchemeOf(source: SourceRow) {
   return source.idScheme ?? source.key;
+}
+
+/** The source's IF ID scheme for writing rows: a labelled scheme (EXTERNAL_ID_SCHEMES), else a 400. */
+function knownSchemeOf(source: SourceRow): ExternalIdScheme {
+  const scheme = idSchemeOf(source);
+  if (!isExternalIdScheme(scheme)) {
+    throw new Response(`${source.name}: its ID scheme "${scheme}" is not a known one. Set it on the Sources screen (/curate/sources/${source.key}).`, { status: 400 });
+  }
+  return scheme;
 }
 
 function slug(text: string) {

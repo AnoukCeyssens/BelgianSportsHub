@@ -542,6 +542,15 @@ describe("Rankings ingest (UCI road world ranking, DataRide)", () => {
     expect(await getDb(env.DB).$count(schema.mergeQueueItem)).toBe(0);
   });
 
+  it("remembers the rider's real UCI ID from the ranking and shows it on the Athlete page", async () => {
+    const evenepoel = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling road", dateOfBirth: "2000-01-25" });
+
+    await runAfterTuesday();
+
+    const page = await (await get(`/athletes/${evenepoel}`)).text();
+    expect(page).toContain("UCI ID 10058736615");
+  });
+
   it("reads the rankings once a week: a Thursday run after Wednesday's fetches none", async () => {
     await setSource(env.DB, "uci-cycling", { lastSuccessAt: "2026-11-11T04:00:00.000Z", blockedAt: null, blockedReason: null });
     fixClock("2026-11-12T04:00:00.000Z");

@@ -26,7 +26,12 @@ export const athlete = sqliteTable("athlete", {
   rawCopyId: text("raw_copy_id").references(() => rawCopy.id),
 });
 
-/** Known external ID schemes, in display order. */
+/**
+ * Known external ID schemes, in display order: every scheme an adapter, the
+ * paste importer (a Source row's `id_scheme`) or the roster seed writes. An
+ * adapter's `Person.ifId.scheme` is typed by these keys, and the owner's
+ * Sources screen and paste importer refuse a scheme without a label.
+ */
 export const EXTERNAL_ID_SCHEMES = {
   "team-belgium": "Team Belgium",
   "world-athletics": "World Athletics",
@@ -40,15 +45,67 @@ export const EXTERNAL_ID_SCHEMES = {
   ijf: "IJF",
   fie: "FIE",
   "world-rowing": "World Rowing",
+  uci: "UCI ID",
+  "uci-derived": "UCI (name + date of birth)",
   owgr: "OWGR",
+  bwf: "BWF",
+  wbsc: "WBSC",
+  fiba: "FIBA",
+  "fiba-3x3": "FIBA 3x3",
+  "world-boxing": "World Boxing",
+  "paddle-worldwide": "Paddle Worldwide",
+  icc: "ICC",
+  fei: "FEI",
+  ifaf: "IFAF",
+  fifa: "FIFA",
+  fig: "FIG",
+  ehf: "EHF",
+  fih: "FIH",
+  "world-lacrosse": "World Lacrosse",
+  uipm: "UIPM",
+  "world-rugby": "World Rugby",
+  "world-sailing": "World Sailing",
+  issf: "ISSF",
+  "world-skate": "World Skate",
+  "world-climbing": "World Climbing",
+  psa: "PSA",
+  isa: "ISA",
+  ittf: "ITTF",
+  "world-taekwondo": "World Taekwondo",
+  itf: "ITF",
+  iwf: "IWF",
+  uww: "UWW",
+  ibu: "IBU",
+  ismf: "ISMF",
+  ibsf: "IBSF",
+  fil: "FIL",
+  wcf: "WCF",
+  iihf: "IIHF",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;
 
-/** Where each external ID links to; `$1` is the ID. */
-export const EXTERNAL_ID_LINKS: Record<string, string> = {
+export type ExternalIdScheme = keyof typeof EXTERNAL_ID_SCHEMES;
+
+/** Whether a stored scheme is one of the known, labelled schemes. */
+export function isExternalIdScheme(scheme: string): scheme is ExternalIdScheme {
+  return Object.hasOwn(EXTERNAL_ID_SCHEMES, scheme);
+}
+
+/**
+ * Matching keys a source makes up because it publishes no ID (UCI DataRide's
+ * results: name + date of birth). They match identities but are no ID a reader
+ * can look up, so the Athlete page does not show them.
+ */
+export const DERIVED_ID_SCHEMES: ReadonlySet<ExternalIdScheme> = new Set(["uci-derived"]);
+
+/** Where each external ID links to; `$1` is the ID. Only stable public pages keyed by the stored ID. */
+export const EXTERNAL_ID_LINKS: Partial<Record<ExternalIdScheme, string>> = {
   "team-belgium": "https://www.teambelgium.be/atleten/$1",
   "world-athletics": "https://worldathletics.org/athletes/_/$1",
+  ijf: "https://www.ijf.org/judoka/$1",
+  fie: "https://fie.org/athletes/$1",
+  "world-triathlon": "https://triathlon.org/athletes/profile/$1",
   olympedia: "https://www.olympedia.org/athletes/$1",
   wikidata: "https://www.wikidata.org/wiki/$1",
 };
