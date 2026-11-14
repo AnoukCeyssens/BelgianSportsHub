@@ -28,6 +28,7 @@ export const EXTERNAL_ID_SCHEMES = {
   fivb: "FIVB",
   "world-archery": "World Archery",
   "world-triathlon": "World Triathlon",
+  "world-aquatics-gms": "World Aquatics (GMS)",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;

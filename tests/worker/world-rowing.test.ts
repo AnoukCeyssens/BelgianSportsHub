@@ -2,14 +2,15 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
-import { ROWING_BEACH_SPRINT_RUN, rowingBeachSprintRun } from "../fixtures/sources/world-rowing";
+import { ROWING_BEACH_SPRINT_RUN, ROWING_CUP_1_RUN, rowingBeachSprintRun, rowingCup1Run } from "../fixtures/sources/world-rowing";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, setSource } from "../support/seed";
 import { deliverIngestJobs, get } from "../support/worker";
 
 // Spec #20, Ingest; ticket #43: World Rowing through its site's undocumented
-// JSON:API, against a recorded run after the Beach Sprint Finals (Oct 2026).
+// JSON:API, against recorded runs after the Beach Sprint Finals (Oct 2026)
+// and World Rowing Cup I (May 2026; crews are Teams, ticket #27).
 const ROWING = "world-rowing";
 const job = { kind: "fetch-source", source: ROWING } as const;
 
@@ -42,7 +43,7 @@ describe("World Rowing source", () => {
     expect(html).toContain("world-rowing");
   });
 
-  it("writes one row per Belgian sculler and event, and none for crews", async () => {
+  it("writes one row per Belgian sculler and event", async () => {
     await runAfterBeachSprints();
 
     const rows = await getDb(env.DB).select({ event: schema.result.event, place: schema.result.place }).from(schema.result);
@@ -69,5 +70,56 @@ describe("World Rowing source", () => {
     expect(result.retryMessages).toEqual([]);
     const source = await getDb(env.DB).query.source.findFirst({ where: eq(schema.source.key, ROWING) });
     expect(source?.blockedAt).toBe(ROWING_BEACH_SPRINT_RUN.now);
+  });
+
+  describe("crews", () => {
+    beforeEach(async () => {
+      await setSource(env.DB, ROWING, { lastSuccessAt: ROWING_CUP_1_RUN.lastSuccessAt });
+    });
+
+    async function runAfterCup1() {
+      fixClock(ROWING_CUP_1_RUN.now);
+      stubOutboundFetch(rowingCup1Run);
+      return deliverIngestJobs([job]);
+    }
+
+    it("writes a Belgian crew's place to its Team, on every rower's Athlete page", async () => {
+      const vyvey = await seedAthlete(env.DB, { name: "Tibo Vyvey", sport: "Rowing", dateOfBirth: "2000-12-16" });
+
+      const result = await runAfterCup1();
+
+      expect(result.explicitAcks).toEqual(["msg-1"]);
+      const html = await (await get(`/athletes/${vyvey}`)).text();
+      const results = html.slice(html.indexOf("<h2>Results</h2>"));
+      expect(results).toContain("2026 World Rowing Cup I");
+      expect(results).toContain("Men&#x27;s Double Sculls");
+      expect(results).toContain("2nd");
+      expect(results).toContain("06:18.82");
+      const team = results.match(/href="\/teams\/([^"]+)"[^>]*>/)?.[1];
+      expect(team).toBeDefined();
+      const roster = await (await get(`/teams/${team}`)).text();
+      expect(roster).toContain("Aaron ANDRIES");
+    });
+
+    it("gives each crew one result, its place from the final it reached, and each boat its own partnership Team", async () => {
+      await runAfterCup1();
+
+      const rows = await getDb(env.DB)
+        .select({ event: schema.result.event, place: schema.result.place, status: schema.result.status, team: schema.team.name, kind: schema.team.kind })
+        .from(schema.result)
+        .innerJoin(schema.team, eq(schema.result.teamId, schema.team.id))
+        .orderBy(schema.result.event);
+      expect(rows).toEqual([
+        { event: "Men's Double Sculls", place: 2, status: "finished", team: "Tibo VYVEY / Aaron ANDRIES", kind: "partnership" },
+        {
+          event: "Men's Quadruple Sculls",
+          place: 11,
+          status: "finished",
+          team: "Boris TAELDEMAN / Lukas DEPLA / Marlon COLPAERT / Dean LAUREYNS",
+          kind: "partnership",
+        },
+      ]);
+      expect(await getDb(env.DB).$count(schema.rosterMember)).toBe(6);
+    });
   });
 });
