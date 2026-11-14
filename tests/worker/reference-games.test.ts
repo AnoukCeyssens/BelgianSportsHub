@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
-import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedSource } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedSource, seedTeamResult } from "../support/seed";
 import { get, post } from "../support/worker";
 
 // Spec #20, story 119 and "Reference backfill"; ticket #46. Readers open
@@ -129,6 +129,40 @@ describe("Reference Games", () => {
 
     expect(sports(await page(PARIS))).toEqual([{ sport: "Judo", results: ["30 Jul -81 kg Men Matthias Casse 3rd"] }]);
     expect(await page(PARIS)).toContain(`href="/athletes/${casse}"`);
+  });
+
+  it("shows a Team's result linked to the Team and its roster's Athletes", async () => {
+    const judo = await seedCompetition(env.DB, { name: "Olympic Games Paris", sport: "Judo", kind: "games", source: "ijf", startDate: "2024-07-27", endDate: "2024-08-03" });
+    const casse = await seedAthlete(env.DB, { name: "Matthias Casse", sport: "Judo" });
+    const team = await seedTeamResult(env.DB, { competitionId: judo, sport: "Judo", event: "Mixed Team", place: 5, roster: [casse] });
+
+    const html = await page(PARIS);
+
+    expect(sports(html)).toEqual([{ sport: "Judo", results: ["3 Aug Mixed Team Belgium · Mixed Team · Matthias Casse 5th"] }]);
+    expect(html).toContain(`href="/teams/${team}"`);
+    expect(html).toContain(`href="/athletes/${casse}"`);
+  });
+
+  it("takes a Team's result by hand, with the Athletes the result credits", async () => {
+    // The Red Lions, as an earlier result left them.
+    const earlier = await seedCompetition(env.DB, { name: "FIH Pro League", sport: "Hockey", startDate: "2024-06-01" });
+    const boon = await seedAthlete(env.DB, { name: "Tom Boon", sport: "Hockey" });
+    const team = await seedTeamResult(env.DB, { competitionId: earlier, sport: "Hockey", event: "Men", place: 2, roster: [boon] });
+
+    const res = await postForm(ENTER_PARIS, [
+      ["team", team],
+      ["roster", boon],
+      ["sport", "Hockey"],
+      ["event", "Men"],
+      ["place", "6"],
+      ["status", "finished"],
+      ["date", "2024-08-04"],
+      ["sourceUrl", "https://www.olympedia.org/results/9000002"],
+    ]);
+    expect(res.status).toBe(303);
+
+    expect(sports(await page(PARIS))).toEqual([{ sport: "Hockey", results: ["4 Aug Men Belgium · Men · Tom Boon 6th"] }]);
+    expect(text(await page(`/athletes/${boon}`))).toContain("Paris 2024");
   });
 
   it("includes Olympic results a source published on the Games' days", async () => {

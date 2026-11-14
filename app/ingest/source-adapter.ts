@@ -121,6 +121,8 @@ export type ResultInput = {
   | { person: Person }
   /** An Athlete the owner already named (the Manual results form): no identity matching. */
   | { athleteId: string }
+  /** A Team and the Athletes its result credits, as the owner named them (a reference Games result by hand). */
+  | { teamId: string; roster: string[] }
 );
 
 /**

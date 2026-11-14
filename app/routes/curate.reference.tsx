@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { data, Form, Link, redirect } from "react-router";
 import { now } from "~/clock";
 import { referenceGamesRow } from "~/competition/reference-games";
@@ -40,8 +40,13 @@ function referenceGames(key: string) {
 export async function loader({ context, params }: Route.LoaderArgs) {
   const games = referenceGames(params.key);
   const a = schema.athlete;
-  const athletes = await dbFrom(context).select({ id: a.id, name: a.name, sport: a.sport }).from(a).orderBy(asc(a.name));
-  return { games: { key: games.key, name: games.name, startDate: games.startDate, endDate: games.endDate }, athletes };
+  const t = schema.team;
+  const db = dbFrom(context);
+  const [athletes, teams] = await Promise.all([
+    db.select({ id: a.id, name: a.name, sport: a.sport }).from(a).orderBy(asc(a.name)),
+    db.select({ id: t.id, name: t.name, sport: t.sport }).from(t).orderBy(asc(t.sport), asc(t.name)),
+  ]);
+  return { games: { key: games.key, name: games.name, startDate: games.startDate, endDate: games.endDate }, athletes, teams };
 }
 
 export async function action({ context, params, request }: Route.ActionArgs) {
@@ -51,9 +56,16 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const field = (name: string) => String(form.get(name) ?? "").trim();
   const bad = (why: string) => data(why, { status: 400 });
 
-  const athlete = await dbFrom(context).query.athlete.findFirst({ where: eq(schema.athlete.id, field("athlete")) });
-  if (!athlete) throw bad("Choose the Athlete");
-  const sport = field("sport") || athlete.sport;
+  const db = dbFrom(context);
+  // The Entry: an Athlete, or a Team with the Athletes its result credits.
+  const athlete = field("athlete") ? await db.query.athlete.findFirst({ where: eq(schema.athlete.id, field("athlete")) }) : undefined;
+  const team = field("team") ? await db.query.team.findFirst({ where: eq(schema.team.id, field("team")) }) : undefined;
+  if (!athlete === !team) throw bad("Choose either the Athlete or the Team");
+  const roster = team ? [...new Set(form.getAll("roster").map(String).filter(Boolean))] : [];
+  const known = roster.length === 0 ? [] : await db.select({ id: schema.athlete.id }).from(schema.athlete).where(inArray(schema.athlete.id, roster));
+  if (known.length !== roster.length) throw bad("The roster names an unknown Athlete");
+  const entry = (athlete ?? team)!;
+  const sport = field("sport") || entry.sport;
   const event = field("event");
   if (!event) throw bad("Name the event");
   const date = field("date");
@@ -71,18 +83,19 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
   const at = now();
   const competitionId = await referenceGamesRow(env, games, at);
-  const typed = { games: games.key, athlete: athlete.id, sport, event, date, status, place: placeText, performance };
+  const who = athlete ? { athlete: athlete.id } : { team: team!.id, roster };
+  const typed = { games: games.key, ...who, sport, event, date, status, place: placeText, performance };
   const rawCopyId = await keepRawCopy(env, { source: GAMES_SOURCE, url: sourceUrl, body: JSON.stringify(typed), contentType: "application/json", fetchedAt: at });
   await belgianRows(env.DB, GAMES_SOURCE, at).result({
     competitionId,
-    athleteId: athlete.id,
+    ...(athlete ? { athleteId: athlete.id } : { teamId: team!.id, roster }),
     sport,
     event,
     date,
     place,
     status,
     performance,
-    sourceRef: `${games.key}:${slug(sport)}:${slug(event)}:${athlete.id}`,
+    sourceRef: `${games.key}:${slug(sport)}:${slug(event)}:${entry.id}`,
     rawCopyId,
   });
   return redirect(`/reference/${games.key}`, 303);
@@ -96,28 +109,46 @@ function slug(text: string) {
 }
 
 export default function EnterReferenceResult({ loaderData }: Route.ComponentProps) {
-  const { games, athletes } = loaderData;
+  const { games, athletes, teams } = loaderData;
   return (
     <>
       <h1>Enter a result</h1>
       <p className="meta">
         <Link to={`/reference/${games.key}`}>{games.name}</Link>
       </p>
-      <p className="sub">One Belgian result, as read on a public page (Olympedia by hand only). The same Athlete, sport and event again corrects it.</p>
+      <p className="sub">
+        One Belgian result, as read on a public page (Olympedia by hand only): an Athlete's, or a Team's with the Athletes it credits. The same Entry,
+        sport and event again corrects it.
+      </p>
       <Form method="post" className="standards-form">
         <label>
           Athlete
-          <select name="athlete" required defaultValue="">
-            <option value="" disabled>
-              Choose…
-            </option>
+          <select name="athlete" defaultValue="">
+            <option value="">(a Team's result)</option>
             {athletes.map((a) => (
               <option key={a.id} value={a.id}>{`${a.name} (${a.sport})`}</option>
             ))}
           </select>
         </label>
         <label>
-          Sport (if not the Athlete's)
+          or Team
+          <select name="team" defaultValue="">
+            <option value="">(an Athlete's result)</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>{`${t.name} (${t.sport})`}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          The Team's credited Athletes
+          <select name="roster" multiple size={6}>
+            {athletes.map((a) => (
+              <option key={a.id} value={a.id}>{`${a.name} (${a.sport})`}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sport (if not the Athlete's or Team's)
           <input name="sport" />
         </label>
         <label>

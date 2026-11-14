@@ -1,6 +1,6 @@
 import { data, Link } from "react-router";
 import { sportColour } from "~/calendar/sport-colours";
-import { referenceResults } from "~/competition/reference-games";
+import { referenceResults, type ReferenceEntry } from "~/competition/reference-games";
 import { cloudflareContext, dbFrom } from "~/context";
 import { REFERENCE_GAMES, TRACKED_GAMES } from "~/domain";
 import { formatDay, formatDayRange, placeText } from "~/format";
@@ -54,12 +54,12 @@ export default function Reference({ loaderData }: Route.ComponentProps) {
           <table>
             <tbody>
               {s.results.map((r) => (
-                <tr key={`${r.event}-${r.athleteId}`}>
+                <tr key={`${r.event}-${r.entry.kind}-${r.entry.id}`}>
                   <td className="when">{formatDay(r.date)}</td>
                   <td>
                     {r.event}
                     <div className="sub">
-                      <Link to={`/athletes/${r.athleteId}`}>{r.athlete}</Link>
+                      <Entry entry={r.entry} />
                     </div>
                   </td>
                   <td className="n">
@@ -77,6 +77,22 @@ export default function Reference({ loaderData }: Route.ComponentProps) {
           <Link to={`/curate/reference/${games.key}`}>Enter a result by hand</Link>
         </p>
       ) : null}
+    </>
+  );
+}
+
+/** An Athlete, or a Team followed by the Athletes its result credits; each links to its page. */
+function Entry({ entry }: { entry: ReferenceEntry }) {
+  if (entry.kind === "athlete") return <Link to={`/athletes/${entry.id}`}>{entry.name}</Link>;
+  return (
+    <>
+      <Link to={`/teams/${entry.id}`}>{entry.name}</Link>
+      {entry.roster.map((m) => (
+        <span key={m.id}>
+          {" · "}
+          <Link to={`/athletes/${m.id}`}>{m.name}</Link>
+        </span>
+      ))}
     </>
   );
 }

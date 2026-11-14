@@ -73,6 +73,19 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
     },
 
     async result(input: ResultInput) {
+      if ("teamId" in input) {
+        await writeResult(input, { athleteId: null, mergeQueueItemId: null, teamId: input.teamId });
+        for (const athleteId of input.roster) {
+          const added = await db
+            .insert(schema.rosterMember)
+            .values({ teamId: input.teamId, competitionId: input.competitionId, athleteId, rawCopyId: input.rawCopyId })
+            .onConflictDoNothing()
+            .returning();
+          changes += added.length;
+          if (input.status !== "DNS") await extendAthleteSince(athleteId, input.date, input.competitionId);
+        }
+        return;
+      }
       let athleteId: string | null;
       let item: MergeQueueItem | null = null;
       if ("athleteId" in input) athleteId = input.athleteId;
@@ -87,7 +100,7 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
 
     async teamResult(input: TeamResultInput) {
       if (input.nationality !== BELGIUM) return;
-      const sport = await sportOf(input.competitionId);
+      const sport = input.sport ?? (await sportOf(input.competitionId));
       const belgians = input.roster.filter((p) => p.nationality === BELGIUM);
       const teamId = await findOrCreateTeam({ sport, event: input.teamEvent ?? input.event, members: belgians, rawCopyId: input.rawCopyId });
       await writeResult(input, { athleteId: null, mergeQueueItemId: null, teamId });
@@ -144,7 +157,7 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
 
   /** Inserts or updates the result with this source ref, belonging to the given Entry. */
   async function writeResult(
-    input: Omit<ResultInput, "person" | "athleteId">,
+    input: Omit<ResultInput, "person" | "athleteId" | "teamId" | "roster">,
     entry: { athleteId: string | null; mergeQueueItemId: string | null; teamId: string | null },
   ) {
     const values = {
