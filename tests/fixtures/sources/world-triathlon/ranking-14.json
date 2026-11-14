@@ -1,0 +1,45 @@
+{
+  "code": 200,
+  "status": "success",
+  "data": {
+    "ranking_id": 14,
+    "ranking_cat_id": 3,
+    "ranking_name": "Women's World Rankings",
+    "published": "2026-11-09 11:00:02",
+    "region_id": null,
+    "week": "2026-W46",
+    "region_name": null,
+    "rankings": [
+      {
+        "athlete_id": 390011,
+        "athlete_title": "Lotte Voorbeeld",
+        "athlete_slug": "lotte_voorbeeld",
+        "athlete_first": "Lotte",
+        "athlete_last": "Voorbeeld",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "2000",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "BEL",
+        "athlete_country_name": "Belgium",
+        "athlete_country_isoa2": "BE",
+        "athlete_listing": null,
+        "athlete_flag": null,
+        "athlete_api_listing": "https://api.triathlon.org/v1/athletes/390011",
+        "athlete_categories": [
+          42
+        ],
+        "rank": 22,
+        "last_rank": 22,
+        "change": 0,
+        "last_total": 1802.1,
+        "total": 1802.1,
+        "total_current_period": 1802.1,
+        "total_previous_period": 0,
+        "events_current_period": 3,
+        "events_previous_period": 0
+      }
+    ]
+  }
+}

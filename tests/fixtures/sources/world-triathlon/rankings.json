@@ -1,0 +1,46 @@
+{
+  "code": 200,
+  "status": "success",
+  "data": [
+    {
+      "ranking_id": 13,
+      "ranking_name": "Men's World Rankings",
+      "ranking_cat_id": 3,
+      "ranking_category_name": "World Rankings",
+      "published_date": "2026-11-09 11:00:02",
+      "region_id": null,
+      "week": "2026-W46",
+      "region_name": null
+    },
+    {
+      "ranking_id": 14,
+      "ranking_name": "Women's World Rankings",
+      "ranking_cat_id": 3,
+      "ranking_category_name": "World Rankings",
+      "published_date": "2026-11-09 11:00:02",
+      "region_id": null,
+      "week": "2026-W46",
+      "region_name": null
+    },
+    {
+      "ranking_id": 1,
+      "ranking_name": "Men's PT1",
+      "ranking_cat_id": 1,
+      "ranking_category_name": "Paratriathlon",
+      "published_date": "2026-11-09 11:00:02",
+      "region_id": null,
+      "week": "2026-W46",
+      "region_name": null
+    },
+    {
+      "ranking_id": 30,
+      "ranking_name": "Men's Junior Rankings",
+      "ranking_cat_id": 4,
+      "ranking_category_name": "Junior Rankings",
+      "published_date": "2026-11-09 11:00:02",
+      "region_id": null,
+      "week": "2026-W46",
+      "region_name": null
+    }
+  ]
+}
