@@ -10,6 +10,10 @@
 //   - "bsh.example.com"        → the real custom domain
 //   - "REPLACE_WITH_*_D1_ID"   → ids printed by `wrangler d1 create`
 //   - "owner@example.com"      → the owner's Cloudflare Access email (OWNER_EMAIL)
+//
+// Secrets (never in this file; `wrangler secret put <NAME> --env test|live`):
+//   - ICAL_FEED_TOKEN          → the iCal feed's token (/ical/<token>.ics); unset = feed off
+//   - WORLD_TRIATHLON_API_KEY  → World Triathlon's API key
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "belgian-sports-hub",

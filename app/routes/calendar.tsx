@@ -1,9 +1,10 @@
 import { Link } from "react-router";
 import { lastDayOf, monthGrid, shiftMonth } from "~/calendar/month-grid";
+import { feedUrl } from "~/calendar/feed";
 import { participationsBetween, participationText } from "~/calendar/participations";
 import { sportColour } from "~/calendar/sport-colours";
 import { now } from "~/clock";
-import { dbFrom } from "~/context";
+import { cloudflareContext, dbFrom } from "~/context";
 import { BELGIAN_ZONE, onCalendar } from "~/domain";
 import { formatDay, formatDayRange } from "~/format";
 import type { Route } from "./+types/calendar";
@@ -35,6 +36,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     weeks: monthGrid(month, shown, today),
     list: inMonth,
     sports: [...new Set(inMonth.map((c) => c.sport))].sort().map((sport) => ({ sport, colour: sportColour(sport) })),
+    feed: feedUrl(context.get(cloudflareContext).env, new URL(request.url).origin),
   };
 }
 
@@ -45,7 +47,7 @@ function monthTitle(month: string) {
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function Calendar({ loaderData }: Route.ComponentProps) {
-  const { month, previous, next, weeks, list, sports } = loaderData;
+  const { month, previous, next, weeks, list, sports, feed } = loaderData;
   return (
     <>
       <div className="mhead">
@@ -97,6 +99,15 @@ export default function Calendar({ loaderData }: Route.ComponentProps) {
         ))}
         <span className="chip champ">Bold = Championship or the Games</span>
       </div>
+      {feed ? (
+        <p className="note subscribe">
+          <a href={feed.replace(/^https?:/, "webcal:")}>Subscribe in your calendar app</a>
+          <span className="sub">
+            {" "}
+            or add this address by URL: <code>{feed}</code>. Keep it to yourself: anyone with it can read the calendar.
+          </span>
+        </p>
+      ) : null}
 
       <h2>This month</h2>
       {list.length > 0 ? (
