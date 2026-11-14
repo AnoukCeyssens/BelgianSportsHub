@@ -4,7 +4,10 @@ import { data, Link } from "react-router";
 import { dbFrom } from "~/context";
 import { schema } from "~/db/client";
 import { belgiumMedals } from "~/domain";
-import { formatDate, formatDay, medalsText, placeText } from "~/format";
+import { formatDay, medalsText, placeText } from "~/format";
+import { now } from "~/clock";
+import { activeFactsOf, activeStatuses } from "~/roster/active";
+import { ActiveStatusLine, factBehind } from "~/roster/status-line";
 import type { Route } from "./+types/team";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -61,8 +64,12 @@ export async function loader({ context, params }: Route.LoaderArgs) {
       entry: { kind: "team" as const, teamId: team.id, roster: [] },
     })),
   );
+  const status = (await activeStatuses(db, now(), { teamIds: [team.id] })).teams.get(team.id)!;
+  const fact = factBehind(status, await activeFactsOf(db, { teamId: team.id }));
   return {
     team,
+    status,
+    fact,
     medals: medalsText(medals),
     results: results.map((r) => ({ ...r, roster: rosterAt(r.competitionId) })),
   };
@@ -74,18 +81,18 @@ function CompetitionName({ name, kind }: { name: string; kind: string }) {
 }
 
 export default function Team({ loaderData }: Route.ComponentProps) {
-  const { team, medals, results } = loaderData;
+  const { team, status, fact, medals, results } = loaderData;
   const facts = [
     team.sport,
     team.event,
     team.kind === "partnership" ? "Partnership" : null,
-    team.dissolvedOn ? `dissolved ${formatDate(team.dissolvedOn)}` : null,
   ].filter(Boolean);
   return (
     <>
       <h1>{team.name}</h1>
       <div className="meta">{facts.join(" · ")}</div>
       {medals ? <div className="sub">{medals}</div> : null}
+      <ActiveStatusLine status={status} fact={fact} editHref={`/curate/teams/${team.id}/status`} />
 
       <h2>Results</h2>
       {results.length > 0 ? (

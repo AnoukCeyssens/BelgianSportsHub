@@ -167,6 +167,7 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const db = getDb(env.DB);
   for (const table of [
     schema.participationCuration,
+    schema.activeFact,
     schema.gamesSportWindow,
     schema.entrant,
     schema.rosterMember,

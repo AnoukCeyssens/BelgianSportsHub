@@ -104,7 +104,7 @@ describe("Teams and rosters", () => {
     const item = (await getDb(env.DB).query.mergeQueueItem.findFirst({ where: eq(schema.mergeQueueItem.value, "2124") }))!;
     await post("/curate/run/merge-queue", { item: item.id, intent: "create" });
 
-    const list = await page("/athletes");
+    const list = await page("/athletes?q=daan");
     const athlete = list.match(/href="\/athletes\/([^"]+)"[^>]*>Daan Van Der Elst/)?.[1];
     expect(athlete).toBeDefined();
     const html = await page(`/athletes/${athlete}`);

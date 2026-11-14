@@ -3,12 +3,15 @@
 // feed. Gathers the facts from storage and hands them to the domain rule:
 // - named: an entry list (`entrant`) or a result names a Belgian Athlete
 //   (start lists and Selections join here when they arrive);
-// - previous edition: a Belgian result at the latest earlier competition of
-//   the same series;
+// - previous edition: a result of a currently Active Belgian Entry at the
+//   latest earlier competition of the same series (inactive Entries drop out
+//   of likely Participation, story 25);
 // - in contention: not tracked yet (Qualification status, #32);
 // - the owner's word: `participation_curation`.
 import { and, asc, eq, gte, inArray, isNotNull, lt, lte, or, sql } from "drizzle-orm";
+import { now } from "~/clock";
 import { type Db, schema } from "~/db/client";
+import { activeStatuses } from "~/roster/active";
 import { participation, type OwnerParticipationDecision, type Participation, type ParticipationReason } from "~/domain";
 
 export type CompetitionParticipation = {
@@ -106,21 +109,22 @@ async function previousEditionsWithBelgians(db: Db, competitions: (typeof schema
     .from(c)
     .where(and(inArray(c.series, [...new Set(withSeries.map((x) => x.series!))]), lt(c.startDate, latestStart)));
   const editionIds = editions.map((e) => e.id);
-  const withBelgians = new Set(
-    editionIds.length === 0
-      ? []
-      : (
-          await db
-            .selectDistinct({ id: schema.result.competitionId })
-            .from(schema.result)
-            .where(
-              and(
-                inArray(schema.result.competitionId, editionIds),
-                or(isNotNull(schema.result.athleteId), isNotNull(schema.result.teamId)),
-              ),
-            )
-        ).map((r) => r.id),
-  );
+  const withBelgians = new Set<string>();
+  if (editionIds.length > 0) {
+    const r = schema.result;
+    const entries = await db
+      .selectDistinct({ id: r.competitionId, athleteId: r.athleteId, teamId: r.teamId })
+      .from(r)
+      .where(and(inArray(r.competitionId, editionIds), or(isNotNull(r.athleteId), isNotNull(r.teamId))));
+    const active = await activeStatuses(db, now(), {
+      athleteIds: [...new Set(entries.flatMap((e) => (e.athleteId ? [e.athleteId] : [])))],
+      teamIds: [...new Set(entries.flatMap((e) => (e.teamId ? [e.teamId] : [])))],
+    });
+    for (const e of entries) {
+      const status = e.teamId ? active.teams.get(e.teamId) : active.athletes.get(e.athleteId!);
+      if (status?.active) withBelgians.add(e.id);
+    }
+  }
   for (const comp of withSeries) {
     const previous = editions
       .filter((e) => e.series === comp.series && e.startDate < comp.startDate)

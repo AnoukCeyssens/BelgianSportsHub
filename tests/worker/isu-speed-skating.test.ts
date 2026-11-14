@@ -100,7 +100,7 @@ describe("ISU speed skating source", () => {
     expect(queue).toContain("Indra Medard");
     expect(queue).toContain("4 Oct 1998");
     expect(queue).toContain("ISU 2049");
-    expect(await (await get("/athletes")).text()).not.toContain("Indra Medard");
+    expect(await (await get("/athletes?q=indra")).text()).not.toContain("Indra Medard");
   });
 
   it("makes a queued Belgian an Athlete, with his results, once the owner resolves the identity", async () => {
@@ -109,7 +109,7 @@ describe("ISU speed skating source", () => {
     const res = await post("/curate/run/merge-queue", { item: (await queuedItem("2049")).id, intent: "create" });
 
     expect(res.status).toBe(303);
-    const list = await (await get("/athletes")).text();
+    const list = await (await get("/athletes?q=indra")).text();
     const id = list.match(/href="\/athletes\/([^"]+)"[^>]*>Indra Medard/)?.[1];
     expect(id).toBeDefined();
     const html = await athletePage(id!);
@@ -141,7 +141,7 @@ describe("ISU speed skating source", () => {
     await runWorldCup1();
 
     expect(await (await get("/curate/run/merge-queue")).text()).not.toContain("ISU 2049");
-    expect(await (await get("/athletes")).text()).not.toContain("Indra Medard");
+    expect(await (await get("/athletes?q=indra")).text()).not.toContain("Indra Medard");
   });
 
   it("keeps every fetch as received in R2 and links each written row to the raw copy it came from", async () => {

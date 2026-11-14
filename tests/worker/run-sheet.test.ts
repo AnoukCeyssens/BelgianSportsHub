@@ -248,7 +248,7 @@ describe("Run sheet", () => {
 
       await post(MERGE_QUEUE, { intent: "create", item });
 
-      expect(await page("/athletes")).toContain("Arne Mertens");
+      expect(await page("/athletes?q=arne")).toContain("Arne Mertens");
       expect(sessionLog(await page(MERGE_QUEUE))).toEqual(["13:00 · Arne Mertens: created a new Athlete"]);
     });
 
@@ -259,7 +259,7 @@ describe("Run sheet", () => {
 
       const html = await page(MERGE_QUEUE);
       expect(html).not.toContain("ISU 9999");
-      expect(await page("/athletes")).not.toContain("Junior Skater");
+      expect(await page("/athletes?q=junior")).not.toContain("Junior Skater");
       expect(sessionLog(html)).toEqual(["13:00 · Junior Skater: not an Athlete"]);
     });
   });

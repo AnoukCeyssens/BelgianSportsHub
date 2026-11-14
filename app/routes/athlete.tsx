@@ -6,6 +6,8 @@ import { dbFrom } from "~/context";
 import { EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES, schema } from "~/db/client";
 import { athleteMedals, BELGIAN_ZONE } from "~/domain";
 import { formatDate, formatDay, medalsText, placeText } from "~/format";
+import { activeFactsOf, activeStatuses } from "~/roster/active";
+import { ActiveStatusLine, factBehind } from "~/roster/status-line";
 import type { Route } from "./+types/athlete";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -73,7 +75,9 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     .innerJoin(competition, eq(schema.entrant.competitionId, competition.id))
     .where(and(eq(schema.entrant.athleteId, athlete.id), gte(competition.endDate, today)))
     .orderBy(asc(competition.startDate));
-  return { athlete, externalIds: sortedExternalIds(externalIds), results, upcoming, medals: medalsText(medals) };
+  const status = (await activeStatuses(db, now(), { athleteIds: [athlete.id] })).athletes.get(athlete.id)!;
+  const fact = factBehind(status, await activeFactsOf(db, { athleteId: athlete.id }));
+  return { athlete, externalIds: sortedExternalIds(externalIds), results, upcoming, medals: medalsText(medals), status, fact };
 }
 
 const SCHEME_ORDER = Object.keys(EXTERNAL_ID_SCHEMES);
@@ -100,7 +104,7 @@ function athleteSince(isoDate: string, competition: string | null) {
 }
 
 export default function Athlete({ loaderData }: Route.ComponentProps) {
-  const { athlete, externalIds, results, upcoming, medals } = loaderData;
+  const { athlete, externalIds, results, upcoming, medals, status, fact } = loaderData;
   const facts = [
     athlete.sport,
     athlete.dateOfBirth ? `born ${formatDate(athlete.dateOfBirth)}` : null,
@@ -121,6 +125,7 @@ export default function Athlete({ loaderData }: Route.ComponentProps) {
         </div>
       ) : null}
       {medals ? <div className="sub">{medals}</div> : null}
+      <ActiveStatusLine status={status} fact={fact} editHref={`/curate/athletes/${athlete.id}/status`} />
       {athlete.note ? <p className="note">{athlete.note}</p> : null}
 
       <h2>Upcoming</h2>

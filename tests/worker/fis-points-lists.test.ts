@@ -124,7 +124,7 @@ describe("FIS points-list sources", () => {
     expect(queue).toContain("Nicolas Hotermans");
     expect(queue).toContain("31 Jan 2002");
     expect(queue).toContain("FIS 60297");
-    expect(await (await get("/athletes")).text()).not.toContain("Nicolas Hotermans");
+    expect(await (await get("/athletes?q=nicolas")).text()).not.toContain("Nicolas Hotermans");
   });
 
   it("keeps the ZIP in R2 exactly as received and links each written row to it", async () => {

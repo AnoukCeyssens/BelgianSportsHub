@@ -44,3 +44,4 @@ export { athleteMedals, belgiumMedals, teamIdentity, type MedalCount, type Medal
 export { combinedPhaseInputs, currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
 export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";
 export { chosenSports, GAMES_SOURCE, standardsForSports, toggledSports, TRACKED_GAMES, type TrackedGames } from "./games";
+export { activeStatus, isActive, type ActiveEntity, type ActiveFacts, type ActivePerformance, type ActiveReason, type ActiveStatus } from "./active";
