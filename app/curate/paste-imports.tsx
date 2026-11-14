@@ -29,6 +29,7 @@ import {
   readPastedTable,
   REFERENCE_GAMES,
   sameSport,
+  seriesKey,
   type KnownIdentity,
   type PasteColumnRole,
   type PastedResultRow,
@@ -246,6 +247,8 @@ async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, 
         country: null,
         venueZone: null,
         sourceRef: competitionRef,
+        // The recurring competition (previous edition, likely Participation): as typed, else from its name.
+        series: field("series") || seriesKey({ source: source.key, name: competitionName, kind, sport, city: null }),
         rawCopyId: copy.id,
       });
   for (const row of rows) {
@@ -604,6 +607,10 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
             <label>
               Competition
               <input name="competition" />
+            </label>
+            <label>
+              Series (previous edition)
+              <input name="series" placeholder="from the name, e.g. isu:world-cup:calgary" />
             </label>
             <label>
               Kind

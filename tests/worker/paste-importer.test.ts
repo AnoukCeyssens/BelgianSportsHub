@@ -163,6 +163,29 @@ describe("Paste imports step", () => {
     expect(items.map((i) => i.rawCopyId)).toEqual([raw]);
   });
 
+  it("files the competition under the series the owner typed, else one derived from its name (previous edition)", async () => {
+    const typed = await read({ text: pastedTable });
+    await postForm(STEP, [
+      ["intent", "confirm"],
+      ["source", SOURCE],
+      ["raw", new URL(typed, "https://bsh.test").searchParams.get("raw")!],
+      ...Object.entries({ ...COMPETITION, competition: "ISU Short Track World Tour, Beijing", series: "isu-st:world-tour:beijing" }),
+      ...GUESSED.map((role, i): [string, string] => [`col.${i}`, role]),
+      ["row", "2"],
+    ]);
+    await confirm(await read({ text: pastedTable }), GUESSED, [2]);
+
+    const competitions = await getDb(env.DB)
+      .select({ name: schema.competition.name, series: schema.competition.series })
+      .from(schema.competition)
+      .where(eq(schema.competition.source, SOURCE))
+      .orderBy(schema.competition.name);
+    expect(competitions).toEqual([
+      { name: "ISU Short Track World Tour #3", series: "isu-short-track:isu-short-track-world-tour-3" },
+      { name: "ISU Short Track World Tour, Beijing", series: "isu-st:world-tour:beijing" },
+    ]);
+  });
+
   it("writes only the ticked rows", async () => {
     const importer = await read({ text: pastedTable });
 

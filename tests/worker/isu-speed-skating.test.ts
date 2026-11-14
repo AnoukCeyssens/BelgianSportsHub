@@ -218,7 +218,7 @@ describe("ISU speed skating source", () => {
     const competitions = await getDb(env.DB)
       .select({ name: schema.competition.name, kind: schema.competition.kind, zone: schema.competition.venueZone, series: schema.competition.series })
       .from(schema.competition);
-    expect(competitions).toEqual([{ name: "Olympic Games Milano Cortina", kind: "games", zone: "Europe/Rome", series: "olympic-games" }]);
+    expect(competitions).toEqual([{ name: "Olympic Games Milano Cortina", kind: "games", zone: "Europe/Rome", series: "olympic-winter-games" }]);
   });
 
   it("flags a source that refuses the Worker as blocked (dropped to Assisted), without retrying it", async () => {
