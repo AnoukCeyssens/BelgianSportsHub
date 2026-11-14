@@ -37,15 +37,7 @@ export async function runIngest(jobs: IngestJob[]) {
   const retried: IngestJob[] = [];
   let pending = jobs;
   while (pending.length > 0) {
-    const queued: IngestJob[] = [];
-    const capture = {
-      async send(body: IngestJob) {
-        queued.push(body);
-      },
-      async sendBatch(messages: Iterable<MessageSendRequest<IngestJob>>) {
-        for (const m of messages) queued.push(m.body);
-      },
-    } as unknown as Queue<IngestJob>;
+    const { queue: capture, queued } = captureQueue();
     const batch = createMessageBatch<IngestJob>(
       "bsh-ingest-dev",
       pending.map((body, i) => ({ id: `msg-${i + 1}`, timestamp: new Date(), attempts: 1, body })),
@@ -61,10 +53,30 @@ export async function runIngest(jobs: IngestJob[]) {
   return { acked, retried };
 }
 
-/** Fire a cron trigger at the scheduled handler, as Cloudflare would at `scheduledTime`. */
+/**
+ * Fire a cron trigger at the scheduled handler, as Cloudflare would at
+ * `scheduledTime`. Returns the ingest jobs it queued; they are captured, not
+ * sent to the real local queue.
+ */
 export async function runScheduled(cron: string, scheduledTime: string) {
+  const { queue: capture, queued } = captureQueue();
   const controller = createScheduledController({ cron, scheduledTime: new Date(scheduledTime) });
   const ctx = createExecutionContext();
-  await worker.scheduled(controller, env, ctx);
+  await worker.scheduled(controller, { ...env, INGEST: capture }, ctx);
   await waitOnExecutionContext(ctx);
+  return queued;
+}
+
+/** An INGEST queue binding that only records what is sent to it. */
+function captureQueue() {
+  const queued: IngestJob[] = [];
+  const queue = {
+    async send(body: IngestJob) {
+      queued.push(body);
+    },
+    async sendBatch(messages: Iterable<MessageSendRequest<IngestJob>>) {
+      for (const m of messages) queued.push(m.body);
+    },
+  } as unknown as Queue<IngestJob>;
+  return { queue, queued };
 }

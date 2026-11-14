@@ -1,13 +1,14 @@
-import { fetchAndKeep } from "./raw-copy";
 import { seedAthleteProfile, startRosterSeed, type SeedAthleteProfileJob } from "./roster-seed";
+import { runSource } from "./source-run";
 
 /**
- * One ingest job. `fetch-source` is queued by the daily scheduled handler;
+ * One ingest job. `fetch-source` (one run of one Automatic source) is queued
+ * by the daily scheduled handler;
  * `seed-roster` by the owner (Team Belgium roster seed), which fans out into
  * one `seed-athlete-profile` job per profile.
  */
 export type IngestJob =
-  | { kind: "fetch-source"; source: string; url: string }
+  | { kind: "fetch-source"; source: string }
   | { kind: "seed-roster" }
   | SeedAthleteProfileJob;
 
@@ -30,9 +31,7 @@ export async function consumeIngestBatch(batch: MessageBatch<IngestJob>, env: En
 async function runJob(job: IngestJob, env: Env) {
   switch (job.kind) {
     case "fetch-source":
-      await fetchAndKeep(env, job.source, job.url);
-      // Next slices: parse with the source's adapter, match identities, write Belgian rows, update source health.
-      return;
+      return runSource(env, job.source);
     case "seed-roster":
       return startRosterSeed(env);
     case "seed-athlete-profile":

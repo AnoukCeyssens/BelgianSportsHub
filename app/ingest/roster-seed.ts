@@ -7,7 +7,8 @@
 // fetched, kept and retried on its own.
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "~/db/client";
-import { identityMatch, isSeniorInternationalPerformance, type ExternalId, type KnownIdentity } from "~/domain";
+import { identityMatch, isSeniorInternationalPerformance, type ExternalId } from "~/domain";
+import { knownIdentities } from "./identities";
 import { fetchAndKeep } from "./raw-copy";
 import { athleteProfileUrls, childSitemaps, parseProfile, TEAM_BELGIUM_SITEMAP_URL } from "./sources/team-belgium";
 import { parseCrosswalk, WIKIDATA_CROSSWALK_URL } from "./sources/wikidata";
@@ -95,22 +96,4 @@ export async function seedAthleteProfile(env: Env, job: SeedAthleteProfileJob) {
     .insert(schema.athleteExternalId)
     .values(externalIds.map((x) => ({ athleteId, ...x })))
     .onConflictDoNothing();
-}
-
-async function knownIdentities(d1: D1Database): Promise<KnownIdentity[]> {
-  const db = getDb(d1);
-  const [athletes, ids] = await Promise.all([
-    db.select({ id: schema.athlete.id, name: schema.athlete.name, dateOfBirth: schema.athlete.dateOfBirth }).from(schema.athlete),
-    db.select().from(schema.athleteExternalId),
-  ]);
-  const idsByAthlete = new Map<string, ExternalId[]>();
-  for (const { athleteId, scheme, value } of ids) {
-    idsByAthlete.set(athleteId, [...(idsByAthlete.get(athleteId) ?? []), { scheme, value }]);
-  }
-  return athletes.map((a) => ({
-    athleteId: a.id,
-    name: a.name,
-    dateOfBirth: a.dateOfBirth,
-    externalIds: idsByAthlete.get(a.id) ?? [],
-  }));
 }

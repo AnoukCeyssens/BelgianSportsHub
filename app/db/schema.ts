@@ -1,6 +1,6 @@
 // D1 schema (Drizzle). After changing this file run `npm run db:generate` to
 // write the next migration into db/migrations; never edit applied migrations.
-import { primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /** A Belgian Athlete (see GLOSSARY.md). Internal ID; external IDs live in athlete_external_id. */
 export const athlete = sqliteTable("athlete", {
@@ -23,6 +23,7 @@ export const athlete = sqliteTable("athlete", {
 export const EXTERNAL_ID_SCHEMES = {
   "team-belgium": "Team Belgium",
   "world-athletics": "World Athletics",
+  isu: "ISU",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;
@@ -66,3 +67,138 @@ export const rawCopy = sqliteTable("raw_copy", {
   /** ISO 8601 instant of the fetch or paste. */
   fetchedAt: text("fetched_at").notNull(),
 });
+
+/**
+ * A data source (spec #20, Ingest). Tier and cadence are data, so they change
+ * without a deploy; the health columns are written by every run. Each
+ * Automatic source has an adapter registered under `key` in
+ * app/ingest/sources/index.ts.
+ */
+export const source = sqliteTable("source", {
+  /** e.g. "isu-speed-skating"; also the source key of its raw copies. */
+  key: text("key").primaryKey(),
+  name: text("name").notNull(),
+  /** "automatic" | "assisted" | "manual" (SourceTier). */
+  tier: text("tier").notNull(),
+  cadenceDays: integer("cadence_days").notNull(),
+  /** ISO instants from here on. */
+  addedAt: text("added_at").notNull(),
+  lastAttemptAt: text("last_attempt_at"),
+  /** Last run that fetched and wrote everything it needed. */
+  lastSuccessAt: text("last_success_at"),
+  /** Last run that inserted or changed a row. */
+  lastChangeAt: text("last_change_at"),
+  lastFailureAt: text("last_failure_at"),
+  lastError: text("last_error"),
+  /** Set when the source refused a Worker request; it is then Assisted until cleared. */
+  blockedAt: text("blocked_at"),
+  blockedReason: text("blocked_reason"),
+});
+
+/** A competition as a source publishes it: a Championship, the Games, or a circuit event. */
+export const competition = sqliteTable(
+  "competition",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    sport: text("sport").notNull(),
+    /** "championship" | "games" | "circuit" (CompetitionKind). */
+    kind: text("kind").notNull(),
+    /** YYYY-MM-DD, venue-local. */
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    city: text("city"),
+    /** IOC code of the host country. */
+    country: text("country"),
+    /** IANA zone of the venue. */
+    venueZone: text("venue_zone"),
+    source: text("source").notNull(),
+    /** The source's own ID for this competition. */
+    sourceRef: text("source_ref").notNull(),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+  },
+  (t) => [uniqueIndex("competition_source_ref").on(t.source, t.sourceRef)],
+);
+
+/**
+ * An incoming identity that matched no Athlete (spec #20, stories 4 and 6),
+ * waiting for the owner to link it, create an Athlete from it, or mark it
+ * "not an Athlete". One item per external ID.
+ */
+export const mergeQueueItem = sqliteTable(
+  "merge_queue_item",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    source: text("source").notNull(),
+    name: text("name").notNull(),
+    dateOfBirth: text("date_of_birth"),
+    sport: text("sport").notNull(),
+    /** The incoming IF ID. */
+    scheme: text("scheme").notNull(),
+    value: text("value").notNull(),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+    createdAt: text("created_at").notNull(),
+    /** "open" | "linked" | "created" | "not-an-athlete". */
+    status: text("status").notNull().default("open"),
+    athleteId: text("athlete_id").references(() => athlete.id),
+    resolvedAt: text("resolved_at"),
+  },
+  (t) => [uniqueIndex("merge_queue_item_external_id").on(t.scheme, t.value)],
+);
+
+/**
+ * A Belgian result in one event of a competition (spec #20, Data model). Until
+ * Teams and Entries arrive (#27) it belongs to an Athlete, or to a merge-queue
+ * item while that identity is unresolved.
+ */
+export const result = sqliteTable(
+  "result",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id),
+    athleteId: text("athlete_id").references(() => athlete.id),
+    mergeQueueItemId: text("merge_queue_item_id").references(() => mergeQueueItem.id),
+    /** Event as the source titles it, e.g. "1000m Women". */
+    event: text("event").notNull(),
+    /** YYYY-MM-DD, venue-local. */
+    date: text("date").notNull(),
+    /** Official classification place; null when there is none. */
+    place: integer("place"),
+    /** "finished" | "eliminated" | "DNF" | "DSQ" (ResultStatus). */
+    status: text("status").notNull(),
+    /** As published, e.g. "1:18.060". */
+    performance: text("performance"),
+    source: text("source").notNull(),
+    sourceRef: text("source_ref").notNull(),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+  },
+  (t) => [uniqueIndex("result_source_ref").on(t.source, t.sourceRef)],
+);
+
+/**
+ * An Athlete named on a competition's entry list (e.g. ISU's competitors
+ * list) before event start lists exist. Shown under Upcoming on the Athlete page.
+ */
+export const entrant = sqliteTable(
+  "entrant",
+  {
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id),
+    athleteId: text("athlete_id")
+      .notNull()
+      .references(() => athlete.id),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+  },
+  (t) => [primaryKey({ columns: [t.competitionId, t.athleteId] })],
+);

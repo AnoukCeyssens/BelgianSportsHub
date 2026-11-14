@@ -13,7 +13,8 @@ Set by the walking skeleton (#21). Every later ticket follows them. Vocabulary: 
 | `app/db/schema.ts` | The Drizzle schema (D1). `app/db/client.ts` gives `getDb(d1)`. |
 | `app/context.ts` | `cloudflareContext` (bindings) and `dbFrom(context)` for loaders and actions. |
 | `app/clock.ts` | `now()`: the only place the I/O shell reads the time. |
-| `app/ingest/` | Queue consumer and raw-copy keeping; source adapters go in `app/ingest/sources/<source>.ts`. |
+| `app/ingest/` | Queue consumer, raw-copy keeping, the source run (`source-run.ts`), the adapter seam (`source-adapter.ts`), the Belgian-row writer (`belgian-rows.ts`) and merge-queue resolution. Source adapters go in `app/ingest/sources/<source>.ts`, registered in `app/ingest/sources/index.ts`. See "Sources and adapters". |
+| `app/format.ts` | Shared display formats (dates, ordinals). |
 | `app/backup/` | Weekly D1 export to R2 (`backups/`, last 12), run by the scheduled handler on its own cron. |
 | `app/offline.tsx`, `pwa/service-worker.ts`, `public/` | Installable app: service worker (built by vite-plugin-pwa, own `tsconfig.pwa.json`), offline fallback pages, icons. The manifest is in `vite.config.ts`. |
 | `db/migrations/` | Generated SQL migrations (+ drizzle-kit `meta/`). Applied by wrangler and by the test pool. |
@@ -61,7 +62,9 @@ Runs in workerd through `@cloudflare/vitest-plugin`, with a real local D1 (all m
 - **Fix the clock** with `fixClock("2026-11-14T04:00:00.000Z")`. It fakes `Date` for the test and the Worker (same isolate). Production code reads time through `now()` from `~/clock` or `new Date()`, never via timers.
 - **Stub outbound fetch** with `stubOutboundFetch([{ ...meta, body }])`. An unstubbed URL throws, so tests never hit the network.
 - Both are reset after every test by `tests/support/setup.ts`.
-- Examples: `tests/worker/athlete-page.test.ts` (page), `tests/worker/ingest-raw-copy.test.ts` (queue + clock + fetch stub + R2).
+- Examples: `tests/worker/athlete-page.test.ts` (page), `tests/worker/isu-speed-skating.test.ts` (queue + clock + fetch stub + R2 + health), `tests/worker/daily-ingest.test.ts` (cron).
+- `runScheduled(cron, time)` and `runIngest(jobs)` capture whatever the Worker queues and return it; nothing reaches the real local queue. An action that queues through `env.INGEST` does use the real local queue: wait for its effect with `vi.waitFor` and give the test a longer timeout.
+- Storage is shared by the tests in one file. When tests ingest overlapping data, start each from `clearIngestedData(env)` (`tests/support/seed.ts`).
 
 ### Recording fixtures for source raw copies
 
@@ -73,7 +76,32 @@ Adapters are tested against real federation payloads.
 4. When a source changes format, record a new fixture next to the old one; the old one stays as a regression case.
 5. A payload too big to keep whole (e.g. Team Belgium's 1 MB sitemaps) may be trimmed by hand after recording; say so in a `trimmedByHand` field of its `.meta.json`. A source whose test needs many files gets an `index.ts` next to them exporting the ready-to-stub list (see `tests/fixtures/sources/team-belgium/index.ts`).
 
-`tests/fixtures/sources/example/` is a hand-made stand-in used by the skeleton test, not a real source.
+
+## Sources and adapters
+
+Set by the first Automatic source, ISU speed skating (#23). Every later Automatic source (#42, #43, #44) follows it.
+
+**Source rows are data.** The `source` table holds each source's `key`, `tier` (`automatic` / `assisted` / `manual`), `cadenceDays` and health columns (`lastAttemptAt`, `lastSuccessAt`, `lastChangeAt`, `lastFailureAt`, `lastError`, `blockedAt`, `blockedReason`). Add a source with an `INSERT` appended to the migration that ships its adapter (see `db/migrations/0003_sources_and_results.sql`); change cadence or tier with an `UPDATE`, never a deploy. The domain rule `sourceHealth(source, now)` decides `due` (cadence elapsed, 2 h slack for cron jitter), `stale` (more than twice the cadence since the last success, or since `addedAt`), `blocked`, and the tier in effect (blocked → Assisted).
+
+**The flow.** The daily cron calls `queueDueSources()`, which sends one `{ kind: "fetch-source", source }` job per due Automatic source. The queue consumer (one message per invocation, `max_retries` 3) calls `runSource(env, key)`, which:
+1. stamps `lastAttemptAt`;
+2. calls the adapter with a `SourceRun`;
+3. on success stamps `lastSuccessAt`, and `lastChangeAt` when any row was inserted or changed;
+4. on `SourceBlocked` (401, 403, 451 or a Cloudflare bot challenge) sets `blockedAt` / `blockedReason` and acks: a refusal is never retried, the source is Assisted until the owner retries it ("Fetch now" on `/curate/sources` clears the block);
+5. on any other error stamps `lastFailureAt` / `lastError` and rethrows, so the job is retried.
+
+**The adapter seam** (`app/ingest/source-adapter.ts`). An adapter is `{ run(run: SourceRun) }` and knows only its source's URLs and payloads:
+- `run.now`, and `run.since` (start of the last successful run, null on the first): fetch only what changed since; on the first run choose a bounded backfill (ISU: one year).
+- `run.fetch(url)` fetches politely, keeps the body as received in R2 and a `raw_copy` row, and returns `{ text, rawCopyId }`. Never call `fetch()` directly. Binary or streamed payloads (FIS ZIPs) will need a sibling of `fetch` on `SourceRun`; add it there, not in the adapter.
+- `run.rows` takes what was parsed: `competition()` (returns its id; only qualification-relevant senior competitions), `result()` (one Belgian performance; leave out DNS and withdrawals) and `entrants()` (a competition's entry list, replaced as a whole). Each input carries the `rawCopyId` it was parsed from, so every row links to its raw copy. A `sourceRef` (the source's own ID) makes a re-fetch update the same row instead of duplicating it.
+- The writer keeps Belgian rows only (`person.nationality === "BEL"`), but filter early anyway. It matches identities with `identityMatch` (IF ID, then name + date of birth), remembers the IF ID on a name + date-of-birth match, moves "Athlete since" back for an earlier performance, and sends anything unmatched to the merge queue with its results attached.
+- Adapters never touch D1, R2, identity rules or health.
+
+**Merge queue.** An unmatched person becomes one `merge_queue_item` per IF ID (`scheme` + `value`); their results wait on it (`result.mergeQueueItemId`). `resolveMergeQueueItem(d1, itemId, resolution)` in `app/ingest/merge-queue.ts` links them to an Athlete, creates a new Athlete (from the item, "Athlete since" from its earliest result) or marks them "not an Athlete"; later runs then match on the IF ID, or keep attaching to the not-an-Athlete item. `/curate/merge-queue` is the bare page for it until the Run sheet (#24) takes over.
+
+**Results and Upcoming.** Until Teams and Entries arrive (#27), a `result` belongs to an Athlete (or a merge-queue item) and names its event as text; team events (ISU team pursuit) are not ingested yet. An `entrant` is an Athlete named on a competition's entry list; the Athlete page lists those competitions that have not ended yet under Upcoming.
+
+**Adding an Automatic source:** record fixtures of one realistic run (trim by hand where large, note it in `trimmedByHand`), export the ready-to-stub list from `tests/fixtures/sources/<source>/index.ts`, write the Worker test against `deliverIngestJobs([{ kind: "fetch-source", source }])`, then the adapter, its registry entry and the Source row. Before it counts as Automatic, the owner runs "Fetch now" on the deployed test copy; a refusal shows it as blocked (Assisted).
 
 ## Offline reading and curation routes
 
@@ -81,7 +109,7 @@ The service worker caches every page and its React Router data (`<path>.data`) a
 
 ## Cron triggers
 
-The scheduled handler dispatches on `controller.cron`: `0 4 * * *` daily ingest, `0 3 * * 1` weekly backup (`runScheduled(cron, time)` in tests). Both run on the live copy only; the test copy has none.
+The scheduled handler dispatches on `controller.cron`: `0 4 * * *` daily ingest (queues due sources), `0 3 * * 1` weekly backup (`runScheduled(cron, time)` in tests). Both run on the live copy only; the test copy has none.
 
 ## Environments and deploying
 

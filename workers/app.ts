@@ -2,6 +2,7 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 import { runWeeklyBackup, WEEKLY_BACKUP_CRON } from "~/backup/weekly-backup";
 import { cloudflareContext } from "~/context";
 import { consumeIngestBatch, type IngestJob } from "~/ingest/queue";
+import { queueDueSources } from "~/ingest/source-run";
 
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
 
@@ -20,8 +21,8 @@ export default {
       await runWeeklyBackup(env, new Date(controller.scheduledTime));
       return;
     }
-    // Daily cron (live copy only; off in test). The ingest slice makes this
-    // queue one IngestJob per Source whose cadence is due. No Sources exist yet.
+    // Daily cron (live copy only; off in test): one job per due Automatic source.
+    await queueDueSources(env, new Date(controller.scheduledTime));
   },
   async queue(batch, env, _ctx) {
     await consumeIngestBatch(batch, env);
