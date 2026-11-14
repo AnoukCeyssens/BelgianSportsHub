@@ -164,6 +164,7 @@ export {
   type Shortcut,
 } from "./expectations";
 export {
+  belgiumCounts,
   impliedCounts,
   outcomeOf,
   tally,
@@ -172,6 +173,7 @@ export {
   VERDICTS,
   withdrawnBeforeLock,
   type DelegationCounts,
+  type ExpectationKind,
   type Outcome,
   type Tally,
   type Verdict,
