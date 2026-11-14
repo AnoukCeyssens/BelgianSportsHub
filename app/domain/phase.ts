@@ -59,6 +59,28 @@ export function currentPhase(competition: PhaseInputs, now: Date): Phase {
 }
 
 /**
+ * The inputs of several Games sports taken together (ticket #35): the chosen
+ * sport chips, or every sport plus the Games' own dates for the Games as a
+ * whole. Live from the first Session in any of them (day-one midnight for a
+ * sport without one), After once the last of them has ended; the earliest
+ * published standards and Selection count. The parts share the Games' venue
+ * zone.
+ */
+export function combinedPhaseInputs(parts: readonly PhaseInputs[]): PhaseInputs {
+  if (parts.length === 0) throw new Error("combinedPhaseInputs needs at least one part");
+  const earliest = (values: (string | null)[]) => values.filter((v) => v !== null).sort()[0] ?? null;
+  return {
+    startDate: earliest(parts.map((p) => p.startDate))!,
+    endDate: parts.map((p) => p.endDate).sort().at(-1)!,
+    venueZone: parts[0].venueZone,
+    standardsPublishedOn: earliest(parts.map((p) => p.standardsPublishedOn)),
+    firstSelectedOn: earliest(parts.map((p) => p.firstSelectedOn)),
+    // A sport without a Session starts at midnight on its day one, which may be before another sport's first Session.
+    firstSessionStart: earliest(parts.map((p) => p.firstSessionStart ?? `${p.startDate}T00:00`)),
+  };
+}
+
+/**
  * The phase a page shows: the one asked for (`?phase=`) when it is the
  * current phase or an earlier one, otherwise the current phase. Later phases
  * have nothing to show yet.

@@ -1,5 +1,5 @@
 import type { Db } from "~/db/client";
-import { belgianDate, PHASE_LABELS, type Phase } from "~/domain";
+import { belgianDate, PHASE_LABELS, standardsForSports, type Phase } from "~/domain";
 import { formatDate } from "~/format";
 import type { CompetitionRow } from "./phase-inputs";
 
@@ -16,7 +16,9 @@ import type { CompetitionRow } from "./phase-inputs";
 // 3. render it in that phase's component below, replacing the "not recorded
 //    yet" line. Keep the `<section class="phase">` wrapper: tests find it.
 // Games-only content (sport chips, medal table) takes the sport filter as an
-// extra argument rather than a second set of panels.
+// extra argument rather than a second set of panels: `SportChips` (#35) holds
+// the Games' sports and the chosen chips (none chosen = All sports). Filter
+// each phase's rows by `chips.chosen` as they arrive (Entries by their sport).
 
 export type PublishedStandards = { expectedOn: string | null; publishedOn: string | null; url: string | null; lines: string[] };
 
@@ -27,11 +29,22 @@ export type PhasePanelData =
   | { phase: "live" }
   | { phase: "after" };
 
-export async function loadPhasePanel(_db: Db, competition: CompetitionRow, phase: Phase, now: Date): Promise<PhasePanelData> {
+/** A Games' sports and the chosen chips; none chosen means All sports. A Championship has none. */
+export type SportChips = { sports: readonly string[]; chosen: readonly string[] };
+
+const NO_CHIPS: SportChips = { sports: [], chosen: [] };
+
+export async function loadPhasePanel(
+  _db: Db,
+  competition: CompetitionRow,
+  phase: Phase,
+  now: Date,
+  chips: SportChips = NO_CHIPS,
+): Promise<PhasePanelData> {
   switch (phase) {
     case "standards":
     case "qualification":
-      return { phase, standards: standardsOf(competition, now) };
+      return { phase, standards: standardsOf(competition, now, chips) };
     case "selection":
     case "live":
     case "after":
@@ -39,15 +52,16 @@ export async function loadPhasePanel(_db: Db, competition: CompetitionRow, phase
   }
 }
 
-/** The recorded standards; only the expected date until they are published. */
-function standardsOf(c: CompetitionRow, now: Date): PublishedStandards {
+/** The recorded standards; only the expected date until they are published. Lines headed by a sport not chosen are left out. */
+function standardsOf(c: CompetitionRow, now: Date, chips: SportChips): PublishedStandards {
   const published = c.standardsPublishedOn !== null && c.standardsPublishedOn <= belgianDate(now);
+  const lines = (c.standardsText ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
   return published
     ? {
         expectedOn: null,
         publishedOn: c.standardsPublishedOn,
         url: c.standardsUrl,
-        lines: (c.standardsText ?? "").split("\n").map((l) => l.trim()).filter(Boolean),
+        lines: standardsForSports(lines, chips.sports, chips.chosen),
       }
     : { expectedOn: c.standardsExpectedOn, publishedOn: null, url: null, lines: [] };
 }
