@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
+import { FIS_ALPINE_RUN, FIS_SNOWBOARD_RUN, fisAlpineRun, fisSnowboardRun } from "../fixtures/sources/fis-points-lists";
 import { ISU_TEAM_PURSUIT_RUN, ISU_WORLD_CUP_1_RUN, isuTeamPursuitRun, isuWorldCup1Run } from "../fixtures/sources/isu-speed-skating";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
@@ -350,5 +351,39 @@ describe("Qualification review (Run sheet step 5)", () => {
     await post(REVIEW, { intent: "keep-status", entryId });
     expect(await reviewItems()).toEqual([]);
     expect((await db.select().from(schema.rankingSnapshot).where(and(eq(schema.rankingSnapshot.asOf, "2026-11-14")))).length).toBe(1);
+  });
+});
+
+describe("Rankings ingest (FIS points lists)", () => {
+  beforeEach(async () => {
+    await clearIngestedData(env);
+  });
+
+  it("stores each Belgian's FIS points and position per discipline, as of the list's valid-from date", async () => {
+    await seedAthlete(env.DB, { name: "Sam Maes", sport: "Alpine skiing", externalIds: [{ scheme: "fis", value: "60261" }] });
+    await setSource(env.DB, "fis-alpine", { lastSuccessAt: FIS_ALPINE_RUN.lastSuccessAt, blockedAt: null, blockedReason: null });
+    fixClock(FIS_ALPINE_RUN.now);
+    stubOutboundFetch(fisAlpineRun);
+
+    await deliverIngestJobs([{ kind: "fetch-source", source: "fis-alpine" }]);
+
+    // His Super-G has no valid points (999.99): no snapshot.
+    expect((await snapshots()).map(({ who, ranking, position, points, asOf, source }) => ({ who, ranking, position, points, asOf, source }))).toEqual([
+      { who: "Sam Maes", ranking: "FIS points list · Giant slalom Men", position: 17, points: "8.37", asOf: "2026-11-12", source: "fis-alpine" },
+      { who: "Sam Maes", ranking: "FIS points list · Slalom Men", position: 43, points: "13.88", asOf: "2026-11-12", source: "fis-alpine" },
+    ]);
+  });
+
+  it("names snowboard rankings by discipline", async () => {
+    await seedAthlete(env.DB, { name: "Joewen Frijns", sport: "Snowboard", dateOfBirth: "1998-05-07" });
+    await setSource(env.DB, "fis-snowboard", { lastSuccessAt: null, blockedAt: null, blockedReason: null });
+    fixClock(FIS_SNOWBOARD_RUN.now);
+    stubOutboundFetch(fisSnowboardRun);
+
+    await deliverIngestJobs([{ kind: "fetch-source", source: "fis-snowboard" }]);
+
+    const rankings = (await snapshots()).map((s) => `${s.ranking} #${s.position} (${s.points}) ${s.asOf}`);
+    expect(rankings.length).toBeGreaterThan(0);
+    expect(rankings.every((r) => r.startsWith("FIS points list · ") && r.endsWith(" 2026-11-05"))).toBe(true);
   });
 });

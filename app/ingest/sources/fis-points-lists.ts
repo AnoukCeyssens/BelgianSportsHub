@@ -8,8 +8,10 @@
 //    the list is already in, and the run stops here;
 // 2. the ZIP, streamed (never held whole): competitors (`com`), events
 //    (`evt`), races (`rac`) and results (`res`) are tab-separated files in it.
-//    Only Belgian result rows are kept while reading; points (`pts`) are left
-//    for rankings (#33).
+//    Only Belgian result rows are kept while reading. The list's points
+//    (`pts`, read after `com`) are a ranking per discipline and gender: one
+//    snapshot per matched Belgian (ticket #33), as of the list's "valid
+//    from" date (`hdr`).
 // Only senior international competitions are written: the Olympic Games, the
 // World Championships, World Cups and the continental cups. FIS races,
 // national championships, junior and youth categories, qualification heats
@@ -68,19 +70,55 @@ async function newestList(run: SourceRun, page: string): Promise<{ url: string; 
 }
 
 type Row = Record<string, string>;
-type PointsList = { competitors: Map<string, Row>; events: Map<string, Row>; races: Map<string, Row>; results: Row[] };
+type PointsList = {
+  competitors: Map<string, Row>;
+  events: Map<string, Row>;
+  races: Map<string, Row>;
+  results: Row[];
+  /** Belgian rows of the points file (`pts`). */
+  points: Row[];
+  /** The list's header (`hdr`): Listname, Validfrom, … */
+  header: Row | null;
+};
+
+/** FIS discipline codes in the points files, as the rankings are named. */
+const DISCIPLINES: Record<string, string> = {
+  DH: "Downhill",
+  SL: "Slalom",
+  GS: "Giant slalom",
+  SG: "Super-G",
+  AC: "Alpine combined",
+  DI: "Distance",
+  SP: "Sprint",
+  AE: "Aerials",
+  MO: "Moguls",
+  SX: "Ski cross",
+  HP: "Halfpipe",
+  SS: "Slopestyle",
+  BA: "Big air",
+  SBX: "Snowboard cross",
+  PGS: "Parallel giant slalom",
+  PSL: "Parallel slalom",
+  ST: "Street style",
+};
+
+/** FIS writes 999.99 for a discipline with no valid points. */
+const NO_POINTS = "999.99";
 
 /** Streams through the ZIP once, keeping the small tables whole and Belgian rows of the big ones. */
 async function readList(body: ReadableStream<Uint8Array>): Promise<PointsList> {
-  const list: PointsList = { competitors: new Map(), events: new Map(), races: new Map(), results: [] };
+  const list: PointsList = { competitors: new Map(), events: new Map(), races: new Map(), results: [], points: [], header: null };
   for await (const entry of zipEntries(body)) {
-    const table = entry.name.match(/(com|evt|rac|res)\.csv$/)?.[1];
+    const table = entry.name.match(/(com|evt|rac|res|pts|hdr)\.csv$/)?.[1];
     if (!table) continue;
     for await (const row of tsvRows(entry.lines())) {
       if (table === "com" && row.Nationcode === "BEL") list.competitors.set(row.Competitorid, row);
       if (table === "evt") list.events.set(row.Eventid, row);
       if (table === "rac" && row.Catcode in KIND_BY_CATEGORY) list.races.set(row.Raceid, row);
       if (table === "res" && row.Nationcode === "BEL") list.results.push(row);
+      // The ZIP lists its files alphabetically, so `com` (who is Belgian) is read before `pts`.
+      if (table === "pts" && list.competitors.has(row.Competitorid) && row.Fispoints !== NO_POINTS) list.points.push(row);
+      if (table === "hdr") list.header = row;
     }
   }
   return list;
@@ -120,6 +158,24 @@ async function writeBelgianRows(run: SourceRun, discipline: Discipline, list: Po
       status,
       performance: (r.Timetot ?? r.Tot) || null,
       sourceRef: `${race.Raceid}/${r.Competitorid}`,
+      rawCopyId,
+    });
+  }
+
+  const asOf = list.header?.Validfrom;
+  if (!asOf) return;
+  for (const p of list.points) {
+    const competitor = list.competitors.get(p.Competitorid)!;
+    const position = Number(p.Position);
+    if (!Number.isInteger(position) || position < 1) continue;
+    const gender = competitor.Gender === "W" || competitor.Gender === "L" ? "Women" : "Men";
+    await run.rows.ranking({
+      ranking: `FIS points list · ${DISCIPLINES[p.Disciplinecode] ?? p.Disciplinecode} ${gender}`,
+      sport: discipline.sport,
+      asOf,
+      position,
+      points: p.Fispoints,
+      person: person(competitor),
       rawCopyId,
     });
   }
