@@ -190,7 +190,7 @@ describe("Quota places", () => {
     expect((await post(curate(la), { intent: "link-quota-place", placeId: first, entryId: remco })).status).toBe(400);
 
     await post(curate(la), { intent: "set-status", entryId: remco, status: "selected", source: "BOIC board, 2 Jun 2028" });
-    html = await page(`/games/${la}`);
+    html = await page(`/games/${la}?phase=qualification`);
     expect(quotaRows(html)[0]).toContain("place 1 of 2 NOC-owned Provisional via UCI nation ranking (#4) Remco Evenepoel");
     expect(quotaRows(html)[1]).toContain("place 2 of 2 NOC-owned Provisional via UCI nation ranking (#4) at Selection");
   });
@@ -206,7 +206,7 @@ describe("Quota places", () => {
     expect((await post(curate(la), { ...unnamed, entryId: entry, count: "2" })).status).toBe(400);
     await post(curate(la), { ...unnamed, sport: "", event: "", entryId: entry });
 
-    const html = await page(`/games/${la}`);
+    const html = await page(`/games/${la}?phase=qualification`);
     expect(quotaRows(html)).toEqual(["Judo · Men -81 kg Named Provisional via IJF Olympic ranking Matthias Casse https://www.ijf.org/wrl · checked 14 Nov 2026"]);
     expect(html).toContain(`href="/athletes/${casse}"`);
   });
@@ -231,19 +231,19 @@ describe("Quota places", () => {
     const [place] = placeIdsOn(owner);
     const oldEntry = entryIdOn(owner, "Tim Brys / Niels Van Zandweghe · Men's double sculls");
     // Selected before the place was recorded: it links as it is recorded.
-    expect(quotaRows(await page(`/games/${la}`))[0]).toContain("Allocated via World Rowing Championships 2027 Tim Brys");
+    expect(quotaRows(await page(`/games/${la}?phase=qualification`))[0]).toContain("Allocated via World Rowing Championships 2027 Tim Brys");
 
     // The place passes to the new partnership: old Team Not selected, new Team Selected.
     await post(curate(la), { intent: "set-status", entryId: oldEntry, status: "not-selected", source: "BOIC board, 2 Jun 2028" });
     await post(curate(la), { intent: "add-entry", who: `team:${fresh}`, event: "Men's double sculls", status: "selected", source: "BOIC board, 2 Jun 2028" });
 
-    let html = await page(`/games/${la}`);
+    let html = await page(`/games/${la}?phase=qualification`);
     expect(quotaRows(html)[0]).toContain("Allocated via World Rowing Championships 2027 Tibo Vyvey");
     expect(entryRows(html)).toEqual(["Tibo Vyvey / Aaron Andries Men's double sculls Selected", "Tim Brys / Niels Van Zandweghe Men's double sculls Not selected"]);
 
     await post(curate(la), { intent: "move-quota-place", placeId: place, event: "accept", source: "BOIC confirmation to World Rowing" });
     await post(curate(la), { intent: "move-quota-place", placeId: place, event: "enter", source: "LA28 entries list" });
-    html = await page(`/games/${la}`);
+    html = await page(`/games/${la}?phase=qualification`);
     expect(panel(html)?.text).toContain("Quota places 1 entered");
     expect(quotaRows(html)[0]).toContain("Entered via World Rowing Championships 2027 Tibo Vyvey");
   });

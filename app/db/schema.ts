@@ -438,6 +438,20 @@ export const entry = sqliteTable(
     /** Where the owner read the status (a URL or a short description), and the Belgian date it was last checked. */
     qualificationSource: text("qualification_source"),
     qualificationCheckedOn: text("qualification_checked_on"),
+    /**
+     * The Selection behind a Selected / Not selected status (GLOSSARY
+     * "Selection", ticket #34): who selects (the national federation for a
+     * Championship, the Belgian Olympic Committee for the Games), where it was
+     * published (the press release or IF entry list URL), which of the two it
+     * is ("press-release" | "entry-list"; the entry list replaces the press
+     * release), the Belgian date it was announced, and the raw copy it was
+     * read from. Null while no Selection names the Entry.
+     */
+    selector: text("selector"),
+    selectionSource: text("selection_source"),
+    selectionKind: text("selection_kind"),
+    selectedOn: text("selected_on"),
+    selectionRawCopyId: text("selection_raw_copy_id").references(() => rawCopy.id),
   },
   (t) => [
     uniqueIndex("entry_athlete").on(t.competitionId, t.event, t.athleteId),
