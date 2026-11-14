@@ -8,4 +8,6 @@ export default [
   route("championship", "routes/championship.tsx"),
   route("games", "routes/games.tsx"),
   route("curate/roster-seed", "routes/curate.roster-seed.tsx"),
+  route("curate/sources", "routes/curate.sources.tsx"),
+  route("curate/merge-queue", "routes/curate.merge-queue.tsx"),
 ] satisfies RouteConfig;

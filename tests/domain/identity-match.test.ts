@@ -14,6 +14,7 @@ const roster: KnownIdentity[] = [
     ],
   },
   { athleteId: "nafy", name: "Nafy Thiam", dateOfBirth: "2007-09-19", externalIds: [] },
+  { athleteId: "swings", name: "Bart Swings", dateOfBirth: null, externalIds: [{ scheme: "isu", value: "692" }] },
   { athleteId: "desmet", name: "Hanne Desmet", dateOfBirth: "1996-10-26", externalIds: [] },
   { athleteId: "vanhoutte", name: "Fran Vanhoutte", dateOfBirth: null, externalIds: [] },
   { athleteId: "twin-a", name: "Jan Peeters", dateOfBirth: "2001-05-05", externalIds: [] },
@@ -26,6 +27,11 @@ describe("identityMatch", () => {
       name: "same external ID in the same scheme",
       incoming: { name: "THIAM Nafi", dateOfBirth: null, externalIds: [{ scheme: "world-athletics", value: "14428253" }] },
       expected: { kind: "external-id", athleteId: "thiam" },
+    },
+    {
+      name: "an ISU skater ID remembered from an earlier run, even without a date of birth on the roster",
+      incoming: { name: "Bart Swings", dateOfBirth: "1991-02-12", externalIds: [{ scheme: "isu", value: "692" }] },
+      expected: { kind: "external-id", athleteId: "swings" },
     },
     {
       name: "the external ID wins over a different name + date of birth",
