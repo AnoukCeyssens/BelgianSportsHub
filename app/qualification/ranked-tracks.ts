@@ -2,10 +2,12 @@
 // snapshot on that ranking (`rankedTrack`), so ranking ingest updates what a
 // track "has" and stamps `changed_on` only on a real change. Called by the
 // ingest writer after every snapshot and by the owner's page when a track is
-// linked to a ranking.
+// linked to a ranking. The followed ranking also gives the Entry's monthly
+// world-rank Seed snapshot until its final Seed exists (#40, `recordWorldRanks`).
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 import { belgianDate, rankedTrack, type TrackState } from "~/domain";
+import { recordWorldRanks } from "~/expectations/expectations";
 
 export type RankedWho = { athleteId: string } | { teamId: string };
 
@@ -32,7 +34,7 @@ export async function followRanking(db: Db, ranking: { source: string; ranking: 
   const e = schema.entry;
   const t = schema.qualificationTrack;
   const entries = await db
-    .select({ id: e.id, closesOn: schema.competition.qualificationClosesOn })
+    .select({ id: e.id, closesOn: schema.competition.qualificationClosesOn, startDate: schema.competition.startDate })
     .from(e)
     .innerJoin(schema.competition, eq(schema.competition.id, e.competitionId))
     .where("athleteId" in ranking.who ? eq(e.athleteId, ranking.who.athleteId) : eq(e.teamId, ranking.who.teamId));
@@ -66,5 +68,12 @@ export async function followRanking(db: Db, ranking: { source: string; ranking: 
       .where(eq(t.id, track.id));
     changed++;
   }
+  // The ranking a track follows is the Entry's world ranking: one Seed snapshot a month until the final Seed (#40).
+  const seeded = entries.filter((x) => x.startDate > snapshot.asOf && tracks.some((track) => track.entryId === x.id));
+  await recordWorldRanks(
+    db,
+    seeded.map((x) => ({ entryId: x.id, rank: snapshot.position, asOf: snapshot.asOf, sourceUrl: null, rawCopyId: snapshot.rawCopyId })),
+    now,
+  );
   return changed;
 }

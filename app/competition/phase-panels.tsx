@@ -4,6 +4,8 @@ import type { Db } from "~/db/client";
 import {
   belgianDate,
   PHASE_LABELS,
+  placeRangeLabel,
+  SEED_METHOD_LABELS,
   QUALIFICATION_STATUS_LABELS,
   QUOTA_PLACE_KIND_LABELS,
   QUOTA_PLACE_STATE_LABELS,
@@ -13,7 +15,8 @@ import {
   type Phase,
   type QualificationStatus,
 } from "~/domain";
-import { formatDate } from "~/format";
+import { expectationsOf, pickLockFor, type PickView, type SnapshotView } from "~/expectations/expectations";
+import { formatBelgianClock, formatDate, formatDay } from "~/format";
 import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
 import { quotaPlacesOf, type QuotaPlaceView } from "~/qualification/quota-places";
 import { QualificationBadge, TrackMark } from "~/qualification/qualification-section";
@@ -61,9 +64,16 @@ export type PhasePanelData =
       notSelected: PotentialEntry[];
       stillQualifying: PotentialEntry[];
       games: boolean;
+      /** Each Selected Entry's external Expectation and personal pick (ticket #40), by Entry id. */
+      expectations: Record<string, SelectedExpectations>;
+      /** When personal picks lock (ISO instant): the first Session (the Games: in any sport). */
+      picksLockAt: string;
     }
   | { phase: "live"; day: LiveDayView | null; medals: MedalTableView }
   | { phase: "after" };
+
+/** Shown next to a Selected Entry: the latest Seed, how the monthly world rank moved before a final Seed, and the pick. */
+export type SelectedExpectations = { seed: SnapshotView | null; worldRanks: SnapshotView[]; pick: PickView | null };
 
 /** A Games' sports and the chosen chips; none chosen means All sports. A Championship has none. */
 export type SportChips = { sports: readonly string[]; chosen: readonly string[] };
@@ -99,9 +109,25 @@ export async function loadPhasePanel(
     }
     case "selection": {
       const entries = chosenOnly(await potentialEntries(db, [competition.id], now), chips);
+      const selected = entries.filter((e) => e.status === "selected");
+      const [expectations, lockAt] = await Promise.all([
+        expectationsOf(
+          db,
+          selected.map((e) => e.id),
+          now,
+        ),
+        pickLockFor(db, competition),
+      ]);
       return {
         phase,
-        selected: entries.filter((e) => e.status === "selected"),
+        selected,
+        expectations: Object.fromEntries(
+          [...expectations].map(([id, x]) => [
+            id,
+            { seed: x.seed, worldRanks: x.seed?.method === "world-rank" ? [] : x.seeds.filter((s) => s.method === "world-rank"), pick: x.pick },
+          ]),
+        ),
+        picksLockAt: lockAt.toISOString(),
         notSelected: entries.filter((e) => e.status === "not-selected"),
         stillQualifying: entries.filter((e) => e.status !== "selected" && e.status !== "not-selected" && e.status !== "withdrawn"),
         games: competition.kind === "games",
@@ -312,6 +338,57 @@ function EntryTable({ label, entries, games, badge = false }: { label: string; e
   );
 }
 
+/**
+ * Spec stories 46, 64 and 67 (ticket #40): the selector's final list with each
+ * Entry's external Expectation (the latest Seed, its method and date, and how
+ * the monthly world rank moved before the final Seed) and the owner's pick.
+ */
+function SelectedTable({ data }: { data: Extract<PhasePanelData, { phase: "selection" }> }) {
+  return (
+    <table aria-label="Selected Entries">
+      <thead>
+        <tr>
+          <th>Entry</th>
+          <th>Event</th>
+          <th className="n">Seed</th>
+          <th className="n">Pick</th>
+        </tr>
+      </thead>
+      <tbody>
+        {data.selected.map((e) => {
+          const x = data.expectations[e.id];
+          return (
+            <tr key={e.id}>
+              <EntryCells entry={e} games={data.games} />
+              <td className="n">
+                {x?.seed ? (
+                  <>
+                    {placeRangeLabel(x.seed)}
+                    <div className="sub">{`${x.seed.method ? SEED_METHOD_LABELS[x.seed.method] : "seed"} · ${formatDay(x.seed.asOf)}`}</div>
+                    {x.worldRanks.length > 0 ? <div className="sub">{`world ranking ${x.worldRanks.map((s) => placeRangeLabel(s)).join(" → ")}`}</div> : null}
+                  </>
+                ) : (
+                  "–"
+                )}
+              </td>
+              <td className="n">
+                {x?.pick ? (
+                  <>
+                    {x.pick.label}
+                    {x.pick.label !== placeRangeLabel(x.pick) ? <div className="sub">{placeRangeLabel(x.pick)}</div> : null}
+                  </>
+                ) : (
+                  "–"
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 /** Spec story 46: the selector's final list, the non-selected Entries underneath; others may still be qualifying. */
 function Selection({ data }: { data: Extract<PhasePanelData, { phase: "selection" }> }) {
   return (
@@ -324,7 +401,10 @@ function Selection({ data }: { data: Extract<PhasePanelData, { phase: "selection
         </p>
       ))}
       {data.selected.length > 0 ? (
-        <EntryTable label="Selected Entries" entries={data.selected} games={data.games} />
+        <>
+          <SelectedTable data={data} />
+          <p className="sub">{`Personal picks lock ${formatDate(belgianDate(new Date(data.picksLockAt)))}, ${formatBelgianClock(data.picksLockAt)} (Belgian time).`}</p>
+        </>
       ) : (
         <p className="sub">No Entry Selected in these sports yet.</p>
       )}

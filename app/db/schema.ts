@@ -731,3 +731,58 @@ export const quotaPlace = sqliteTable("quota_place", {
   source: text("source").notNull(),
   checkedOn: text("checked_on").notNull(),
 });
+
+/**
+ * One dated snapshot of an external Expectation for an Entry (GLOSSARY
+ * "Expectation", "Seed"; decided in #12; ticket #40): a finishing place
+ * (place_from = place_to) or a place range. A series per source and Entry;
+ * a second snapshot on the same `as_of` date replaces the first. Seeds: the
+ * Entry's world-ranking position monthly (`method` "world-rank") until the
+ * entry list exists, then the final Seed ("federation-seed" | "ranking" |
+ * "season-best"). Gracenote snapshots (Games only) are #41's, `method` null.
+ * Verdicts (#41) compare with the last snapshot before the start, per source
+ * (`lastSnapshotBefore`). Personal picks are not snapshots: `personal_pick`.
+ */
+export const expectationSnapshot = sqliteTable(
+  "expectation_snapshot",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    entryId: text("entry_id")
+      .notNull()
+      .references(() => entry.id, { onDelete: "cascade" }),
+    /** "seed" | "gracenote" (ExpectationSource). */
+    source: text("source").notNull(),
+    placeFrom: integer("place_from").notNull(),
+    placeTo: integer("place_to").notNull(),
+    /** How a Seed was taken (SeedMethod); null for other sources. */
+    method: text("method"),
+    /** Belgian date the forecast was taken (the ranking's or entry list's date, the article's date). */
+    asOf: text("as_of").notNull(),
+    /** Where it was read (ranking page, entry list, article URL). */
+    sourceUrl: text("source_url"),
+    /** The raw copy it was read from, when an import kept one. */
+    rawCopyId: text("raw_copy_id").references(() => rawCopy.id),
+    /** ISO instant it was recorded. */
+    recordedAt: text("recorded_at").notNull(),
+  },
+  (t) => [uniqueIndex("expectation_snapshot_entry_source_as_of").on(t.entryId, t.source, t.asOf)],
+);
+
+/**
+ * The owner's personal pick for one Entry (GLOSSARY "Expectation"; decided in
+ * #16; ticket #40): one editable value, no history. Made once the Entry is
+ * Selected; changed or cleared freely until the competition's first Session
+ * (`pickLockAt`, `canPick`); only the locked value counts. Owner-only.
+ */
+export const personalPick = sqliteTable("personal_pick", {
+  entryId: text("entry_id")
+    .primaryKey()
+    .references(() => entry.id, { onDelete: "cascade" }),
+  /** The shortcut as typed back into the input (`shortcutText`): "medal", "QF exit", "5", "5-8". */
+  shortcut: text("shortcut").notNull(),
+  /** Its place range (`expandShortcut`). */
+  placeFrom: integer("place_from").notNull(),
+  placeTo: integer("place_to").notNull(),
+  /** ISO instant of the last change. */
+  pickedAt: text("picked_at").notNull(),
+});

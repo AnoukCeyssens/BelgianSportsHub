@@ -162,6 +162,13 @@
       "when": 1794668330095,
       "tag": "0022_ranking_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1794668659534,
+      "tag": "0023_expectations_and_picks",
+      "breakpoints": true
     }
   ]
 }
