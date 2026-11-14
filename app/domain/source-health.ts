@@ -43,7 +43,21 @@ export function sourceHealth(source: SourceState, now: Date): SourceHealth {
   };
 }
 
-export type SourceAttentionState = SourceState & {
+/** A weekly session can start earlier in the day than the last one did. */
+const SESSION_SLACK_MS = DAY_MS;
+
+/**
+ * Ticket #25: whether the Paste imports step lists this source. Every source
+ * in effect Assisted (configured so, or blocked) is due once its cadence has
+ * come round since its last paste.
+ */
+export function pasteImportDue(source: SourceState & { lastPastedAt: string | null }, now: Date): boolean {
+  if (sourceHealth(source, now).tier !== "assisted") return false;
+  if (source.lastPastedAt === null) return true;
+  return now.getTime() - Date.parse(source.lastPastedAt) >= source.cadenceDays * DAY_MS - SESSION_SLACK_MS;
+}
+
+export type SourceAttentionState =SourceState & {
   lastFailureAt: string | null;
   lastError: string | null;
   /** When the owner last acknowledged (or retried) the source's problem. */
