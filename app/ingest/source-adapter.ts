@@ -113,7 +113,11 @@ export type ResultInput = {
   competitionId: string;
   /** As the source titles it, e.g. "1000m Women". */
   event: string;
-  /** The event's sport, only where the competition spans several (a reference Games); the competition's sport otherwise. */
+  /**
+   * The event's sport where the competition spans several (the Games: a source
+   * whose Olympic Games holds several sports names each result's); left out,
+   * it is the source competition's sport. Stored only where it differs.
+   */
   sport?: string | null;
   /** YYYY-MM-DD, venue-local. */
   date: string;

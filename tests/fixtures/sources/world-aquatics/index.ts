@@ -96,3 +96,27 @@ export const aquaticsParisDuetsRun: RecordedResponse[] = [
   { ...parisDuetFreeMeta, body: parisDuetFree },
 ];
 export const AQUATICS_PARIS_DUETS_RUN = { now: "2026-03-30T04:00:00.000Z", lastSuccessAt: "2026-03-29T04:00:00.000Z" };
+
+import la28Competitions from "./la28-competitions.json?raw";
+import la28CompetitionsMeta from "./la28-competitions.json.meta.json";
+import la28Events from "./la28-events.json?raw";
+import la28EventsMeta from "./la28-events.json.meta.json";
+import la28W50free from "./la28-w50free.json?raw";
+import la28W50freeMeta from "./la28-w50free.json.meta.json";
+import la28DuetFree from "./la28-duet-free.json?raw";
+import la28DuetFreeMeta from "./la28-duet-free.json.meta.json";
+
+/**
+ * A daily run during LA 2028 (22 Jul 2028, after a run on 21 Jul), built by
+ * hand (`builtByHand` in each meta; made-up names and places) in the shape of
+ * the recorded runs, since the Games have not happened yet: World Aquatics' own
+ * Olympic Games row (swimming and artistic swimming), the women's 50m freestyle
+ * (Ana Example 3rd) and the women's duet free (Bea and Cleo Example 5th).
+ */
+export const aquaticsLa28Run: RecordedResponse[] = [
+  { ...la28CompetitionsMeta, body: la28Competitions },
+  { ...la28EventsMeta, body: la28Events },
+  { ...la28W50freeMeta, body: la28W50free },
+  { ...la28DuetFreeMeta, body: la28DuetFree },
+];
+export const AQUATICS_LA28_RUN = { now: "2028-07-22T04:00:00.000Z", lastSuccessAt: "2028-07-21T04:00:00.000Z" };
