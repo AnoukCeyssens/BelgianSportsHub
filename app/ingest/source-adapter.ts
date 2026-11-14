@@ -8,6 +8,13 @@
 
 export type SourceAdapter = {
   run(run: SourceRun): Promise<void>;
+  /**
+   * The Source whose rows this adapter writes, when not its own: a
+   * Championship timetable source (#39) fetches on its own cadence and health
+   * row, but its competitions are its federation's results source's, so both
+   * find the same competition by that source's IDs.
+   */
+  writesAs?: string;
 };
 
 export type SourceRun = {

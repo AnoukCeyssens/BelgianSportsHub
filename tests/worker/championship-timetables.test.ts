@@ -3,10 +3,10 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { ISU_WORLDS_2026_RUN, isuWorlds2026Run } from "../fixtures/sources/isu-speed-skating";
-import type { RecordedResponse } from "../support/outbound-fetch";
+import { WA_TIMETABLE_RUN, waTimetableRun } from "../fixtures/sources/world-athletics";
 import { fixClock } from "../support/clock";
-import { stubOutboundFetch } from "../support/outbound-fetch";
-import { clearIngestedData, seedAthlete, seedEntry, setSource } from "../support/seed";
+import { stubOutboundFetch, type RecordedResponse } from "../support/outbound-fetch";
+import { clearIngestedData, seedAthlete, seedCompetition, seedEntry, seedTeam, setSource } from "../support/seed";
 import { deliverIngestJobs, get } from "../support/worker";
 
 // Spec #20, stories 61–63; ticket #39. Championship timetables of ISU speed
@@ -124,5 +124,45 @@ describe("ISU speed skating timetables (through the #23 adapter)", () => {
     await runWorlds("2026-03-02T04:00:00.000Z");
     expect(await getDb(env.DB).select().from(schema.timetableVersion)).toHaveLength(1);
     expect(await getDb(env.DB).select().from(schema.session)).toHaveLength(1);
+  });
+});
+
+describe("World Athletics timetables", () => {
+  const SOURCE = "world-athletics-timetables";
+  let beijing: string;
+
+  beforeEach(async () => {
+    await clearIngestedData(env);
+    // The Worlds as the World Athletics results source knows them, with two Belgian Entries named the owner's way.
+    beijing = await seedCompetition(env.DB, {
+      name: "World Athletics Championships, Beijing 2027",
+      sport: "Athletics",
+      source: "world-athletics",
+      sourceRef: "7216591",
+      kind: "championship",
+      startDate: "2027-09-10",
+      endDate: "2027-09-19",
+      city: "Beijing",
+    });
+    const thiam = await seedAthlete(env.DB, { name: "Nafissatou Thiam", sport: "Athletics" });
+    const relay = await seedTeam(env.DB, { name: "Belgium mixed relay", sport: "Athletics", event: "Mixed 4x400m Relay" });
+    await seedEntry(env.DB, { competitionId: beijing, sport: "Athletics", event: "Women's Heptathlon", athleteId: thiam });
+    await seedEntry(env.DB, { competitionId: beijing, sport: "Athletics", event: "Mixed 4x400m Relay", teamId: relay });
+  });
+
+  it("fetches the Worlds' timetable onto the results source's competition, keeping only the Belgian events", async () => {
+    await runSource(SOURCE, WA_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", waTimetableRun);
+
+    expect(await storedTimetables()).toEqual(["World Athletics Championships, Beijing 2027 · fetched 2026-11-14 9 Sessions source Name Entries"]);
+    const competitions = await getDb(env.DB).select().from(schema.competition);
+    expect(competitions.map((c) => [c.id, c.venueZone])).toEqual([[beijing, "Asia/Shanghai"]]);
+  });
+
+  it("shows the Belgian rounds in Belgian time, then Beijing time", async () => {
+    await runSource(SOURCE, WA_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", waTimetableRun);
+
+    fixClock("2027-09-10T14:00:00.000Z"); // 22:00 in Beijing on day 1
+    expect(dayRows(await page(`/championship/${beijing}`))).toEqual(["13:02 · 19:02 Beijing Belgium mixed relay Mixed 4x400m Relay · Round 1"]);
+    expect(dayRows(await page(`/championship/${beijing}?day=2027-09-18`))[0]).toBe("03:05 · 09:05 Beijing Nafissatou Thiam Women's Heptathlon · 100 Metres Hurdles");
   });
 });

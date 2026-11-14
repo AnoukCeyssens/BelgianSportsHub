@@ -1,1 +1,4 @@
-ALTER TABLE `timetable_version` ADD `fingerprint` text;
+ALTER TABLE `timetable_version` ADD `fingerprint` text;--> statement-breakpoint
+INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-athletics-timetables', 'World Athletics Championship timetables (worldathletics.org page data)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));--> statement-breakpoint
+INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-aquatics-timetables', 'World Aquatics Championship schedules (api.worldaquatics.com)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));--> statement-breakpoint
+INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-archery-timetables', 'World Archery Championship schedules (api.worldarchery.org)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

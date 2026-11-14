@@ -1,0 +1,7 @@
+{
+  "url": "https://worldathletics.org/competition/calendar-results?startDate=2026-11-14&endDate=2027-12-19&rankingCategoryId=4",
+  "status": 200,
+  "contentType": "text/html; charset=utf-8",
+  "recordedAt": "2026-11-14T14:38:13.398Z",
+  "trimmedByHand": "Kept only the __NEXT_DATA__ script, and in it the calendar events."
+}

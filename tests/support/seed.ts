@@ -75,6 +75,8 @@ type CompetitionSeed = {
   series?: string;
   /** IANA zone of the venue. */
   venueZone?: string;
+  /** The source's own ID; random when it does not matter. */
+  sourceRef?: string;
 };
 
 /** Adds a competition as its source would publish it (with a raw copy it came from). */
@@ -92,7 +94,7 @@ export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promi
       series: c.series,
       venueZone: c.venueZone,
       source,
-      sourceRef: crypto.randomUUID(),
+      sourceRef: c.sourceRef ?? crypto.randomUUID(),
       rawCopyId: await seedRawCopy(d1, source),
     })
     .returning({ id: schema.competition.id });
