@@ -5,7 +5,9 @@
 // the last snapshot before the start, at the Games the start of the Entry's
 // sport; the pick as locked), the outcome (`outcomeOf` over the Entry's results
 // in its event), and applies the pure rules (`verdict`, `tally`,
-// `impliedCounts`, app/domain/verdicts.ts). The BOIC target (the Games) is a
+// `impliedCounts`, app/domain/verdicts.ts). Belgium's own medal and top-8
+// counts come from every Belgian result at the competition (`belgiumCounts`),
+// in the chosen sports. The BOIC target (the Games) is a
 // delegation-level count compared with Belgium's, never an Expectation.
 // Expectations are compared here only, never on an Athlete page.
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -13,6 +15,7 @@ import { gamesPhaseInputs, phaseInputsFor, type CompetitionRow } from "~/competi
 import { type Db, schema } from "~/db/client";
 import {
   BELGIAN_ZONE,
+  belgiumCounts,
   impliedCounts,
   isQualificationStatus,
   lastSnapshotBefore,
@@ -24,6 +27,7 @@ import {
   withdrawnBeforeLock,
   zonedWallClockToInstant,
   type DelegationCounts,
+  type ExpectationKind,
   type Outcome,
   type PlaceRange,
   type Tally,
@@ -78,8 +82,8 @@ export async function loadAfter(db: Db, competition: CompetitionRow, chosen: rea
     timingOf(db, competition),
     chosen.length === 0 ? boicTargetOf(db, competition) : null,
   ]);
-  const wanted = chosen.map((s) => s.toLowerCase());
-  const shown = entries.filter(({ entry }) => wanted.length === 0 || wanted.includes(entry.sport.toLowerCase()));
+  const inChosen = (sport: string) => chosen.length === 0 || chosen.some((c) => sameSport(c, sport));
+  const shown = entries.filter(({ entry }) => inChosen(entry.sport));
   const r = schema.result;
   const [expectations, results] = await Promise.all([
     expectationsOf(
@@ -106,8 +110,8 @@ export async function loadAfter(db: Db, competition: CompetitionRow, chosen: rea
       const place = outcomeOf(own);
       const final = own.findLast((x) => x.place === place) ?? own.at(-1) ?? null;
       const outcome: Outcome = { place, withdrawnBeforeLock: withdrawn && withdrawnBeforeLock(withdrawnMoment(entry), timing.lockAt) };
-      const compare = (expected: (PlaceRange & { asOf?: string; sourceUrl?: string | null }) | null): Compared => {
-        const v = verdict(expected, outcome);
+      const compare = (expected: (PlaceRange & { asOf?: string; sourceUrl?: string | null }) | null, kind: ExpectationKind): Compared => {
+        const v = verdict(expected, outcome, kind);
         return expected && v ? { from: expected.from, to: expected.to, verdict: v, asOf: expected.asOf ?? null, sourceUrl: expected.sourceUrl ?? null } : null;
       };
       return {
@@ -116,14 +120,30 @@ export async function loadAfter(db: Db, competition: CompetitionRow, chosen: rea
         event: entry.event,
         who: entry.teamId ? { kind: "team", id: entry.teamId, name: team ?? "" } : { kind: "athlete", id: entry.athleteId!, name: athlete ?? "" },
         outcome: { place, status: final?.status ?? null, performance: final?.performance ?? null, withdrawn },
-        compared: { seed: compare(seed), gracenote: compare(gracenote), pick: compare(x.pick) },
+        compared: { seed: compare(seed, "external"), gracenote: compare(gracenote, "external"), pick: compare(x.pick, "personal") },
       };
     })
     .filter((row): row is AfterRow => row !== null)
     .sort((a, b) => a.who.name.localeCompare(b.who.name) || a.event.localeCompare(b.event));
 
   const counted = (source: AfterSource) => rows.map((row) => row.compared[source]).filter((c) => c !== null && c.verdict !== "voided");
-  const counts: AfterView["counts"] = [{ label: "Belgium", counts: impliedCounts(rows.map((row) => (row.outcome.place ? { from: row.outcome.place, to: row.outcome.place } : null))) }];
+  // Belgium's counts: every Belgian result at the competition, not only the Entries compared above.
+  // A result's sport: its own, else its Entry's (a Games result without one), else the competition's.
+  const sportOf = (x: (typeof results)[number]) =>
+    x.sport ??
+    entries.find(
+      ({ entry }) => entry.event.toLowerCase() === x.event.toLowerCase() && (x.teamId ? entry.teamId === x.teamId : entry.athleteId !== null && entry.athleteId === x.athleteId),
+    )?.entry.sport ??
+    competition.sport;
+  const belgian = results.filter((x) => (x.athleteId || x.teamId || x.mergeQueueItemId) && inChosen(sportOf(x)));
+  const counts: AfterView["counts"] = [
+    {
+      label: "Belgium",
+      counts: belgiumCounts(
+        belgian.map((x) => ({ entry: x.teamId ? `team:${x.teamId}` : `athlete:${x.athleteId ?? x.mergeQueueItemId}`, event: x.event, place: x.place, date: x.date })),
+      ),
+    },
+  ];
   if (target) counts.push({ label: "BOIC target", counts: { medals: target.medals, top8: target.top8 }, sourceUrl: target.sourceUrl });
   for (const source of sources) counts.push({ label: `Implied by ${source === "seed" ? "Seeds" : source === "pick" ? "my picks" : "Gracenote"}`, counts: impliedCounts(counted(source)) satisfies DelegationCounts });
 
