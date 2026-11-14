@@ -74,6 +74,7 @@ export {
 export { venueZoneOf } from "./venue-zone";
 export {
   dayToShow,
+  isCombinedEvent,
   liveDays,
   roundsFor,
   venueLabel,

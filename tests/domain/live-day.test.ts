@@ -89,6 +89,79 @@ describe("roundsFor", () => {
   });
 });
 
+describe("roundsFor: a combined event's disciplines are not elimination rounds", () => {
+  const hept = [r("100 m hurdles", "2027-09-18"), r("High jump", "2027-09-18"), r("Shot put", "2027-09-18"), r("200 m", "2027-09-18"), r("Long jump", "2027-09-19"), r("Javelin throw", "2027-09-19"), r("800 m", "2027-09-19")];
+  it.each([
+    {
+      name: "a heptathlete competes in all seven disciplines",
+      event: "Women's Heptathlon",
+      rounds: hept,
+      expected: hept.map((x) => [x.round, "scheduled"]),
+    },
+    {
+      name: "a decathlete's second day is not 'if through'",
+      event: "Decathlon Men",
+      rounds: [r("100 m", "2027-09-14"), r("Long jump", "2027-09-14"), r("110 m hurdles", "2027-09-15"), r("1500 m", "2027-09-15")],
+      expected: [
+        ["100 m", "scheduled"],
+        ["Long jump", "scheduled"],
+        ["110 m hurdles", "scheduled"],
+        ["1500 m", "scheduled"],
+      ],
+    },
+    {
+      name: "a track omnium's races all count",
+      event: "Track: Women Elite - Omnium",
+      rounds: [r("Scratch race", "2027-10-15"), r("Tempo race", "2027-10-15"), r("Elimination race", "2027-10-15"), r("Points race", "2027-10-15")],
+      expected: [
+        ["Scratch race", "scheduled"],
+        ["Tempo race", "scheduled"],
+        ["Elimination race", "scheduled"],
+        ["Points race", "scheduled"],
+      ],
+    },
+    {
+      name: "Nordic combined: the cross-country part follows the ski jump for everyone",
+      event: "Individual Gundersen Large Hill/10 km",
+      rounds: [r("Ski jumping", "2030-02-10"), r("Cross-country", "2030-02-10")],
+      expected: [
+        ["Ski jumping", "scheduled"],
+        ["Cross-country", "scheduled"],
+      ],
+    },
+    {
+      name: "modern pentathlon has semi-finals: its final stays if through",
+      event: "Modern Pentathlon Women's Individual",
+      rounds: [r("Semi-final A", "2028-07-20"), r("Final", "2028-07-22")],
+      expected: [
+        ["Semi-final A", "scheduled"],
+        ["Final", "if-through"],
+      ],
+    },
+    {
+      name: "a swim event with ordinary rounds is still an elimination event",
+      event: "Women's 100m Freestyle",
+      rounds: [r("Heats", "2027-07-26"), r("Final", "2027-07-27")],
+      expected: [
+        ["Heats", "scheduled"],
+        ["Final", "if-through"],
+      ],
+    },
+  ])("$name", ({ event, rounds, expected }) => {
+    expect(roundsFor({ firstRound: null, event }, rounds).map((x) => [x.round, x.state])).toEqual(expected);
+  });
+
+  it("a heptathlete who does not finish drops out of the disciplines after her last result", () => {
+    const placed = roundsFor({ firstRound: null, event: "Women's Heptathlon" }, hept, { rounds: [], result: { date: "2027-09-18", status: "DNF" } });
+    expect(placed.map((x) => [x.round, x.state])).toEqual([
+      ["100 m hurdles", "scheduled"],
+      ["High jump", "scheduled"],
+      ["Shot put", "scheduled"],
+      ["200 m", "scheduled"],
+    ]);
+  });
+});
+
 describe("roundsFor moves on from results and start lists (#38)", () => {
   const swim = [r("Heats", "2027-07-26"), r("Semi-finals", "2027-07-26"), r("Final", "2027-07-27")];
   const relay = [r("Heats", "2027-07-26"), r("Heats", "2027-07-26"), r("Final", "2027-07-27")];
