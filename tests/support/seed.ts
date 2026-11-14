@@ -7,6 +7,7 @@ type AthleteSeed = {
   name: string;
   sport: string;
   dateOfBirth?: string;
+  note?: string;
   externalIds?: { scheme: string; value: string }[];
 };
 
@@ -14,7 +15,7 @@ export async function seedAthlete(d1: D1Database, a: AthleteSeed): Promise<strin
   const db = getDb(d1);
   const [row] = await db
     .insert(schema.athlete)
-    .values({ name: a.name, sport: a.sport, dateOfBirth: a.dateOfBirth })
+    .values({ name: a.name, sport: a.sport, dateOfBirth: a.dateOfBirth, note: a.note })
     .returning({ id: schema.athlete.id });
   for (const x of a.externalIds ?? []) {
     await db.insert(schema.athleteExternalId).values({ athleteId: row.id, ...x });

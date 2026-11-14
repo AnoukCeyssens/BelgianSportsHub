@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["pwa/**/*", "app/domain/offline-reading.ts"],
+  "compilerOptions": {
+    "composite": true,
+    "strict": true,
+    "lib": ["WebWorker", "ES2023"],
+    "types": [],
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler"
+  }
+}

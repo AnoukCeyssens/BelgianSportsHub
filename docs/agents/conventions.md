@@ -14,6 +14,8 @@ Set by the walking skeleton (#21). Every later ticket follows them. Vocabulary: 
 | `app/context.ts` | `cloudflareContext` (bindings) and `dbFrom(context)` for loaders and actions. |
 | `app/clock.ts` | `now()`: the only place the I/O shell reads the time. |
 | `app/ingest/` | Queue consumer and raw-copy keeping; source adapters go in `app/ingest/sources/<source>.ts`. |
+| `app/backup/` | Weekly D1 export to R2 (`backups/`, last 12), run by the scheduled handler on its own cron. |
+| `app/offline.tsx`, `pwa/service-worker.ts`, `public/` | Installable app: service worker (built by vite-plugin-pwa, own `tsconfig.pwa.json`), offline fallback pages, icons. The manifest is in `vite.config.ts`. |
 | `db/migrations/` | Generated SQL migrations (+ drizzle-kit `meta/`). Applied by wrangler and by the test pool. |
 | `db/seed/dev.sql` | Idempotent hand seed for local dev and fresh copies. |
 | `tests/domain/` | Seam 2: table-driven tests of `app/domain`. |
@@ -71,6 +73,14 @@ Adapters are tested against real federation payloads.
 4. When a source changes format, record a new fixture next to the old one; the old one stays as a regression case.
 
 `tests/fixtures/sources/example/` is a hand-made stand-in used by the skeleton test, not a real source.
+
+## Offline reading and curation routes
+
+The service worker caches every page and its React Router data (`<path>.data`) as it is viewed, network first, and precaches the app shell. **Curation routes must live under `/curate`** (`CURATION_PATH` in `app/domain/offline-reading.ts`): they are never cached, and offline the root layout replaces them with an offline message, so the owner never fills in a stale form. Anything else counts as a reader page. Static files are served as named (`assets.html_handling: "none"`). The service worker is registered in production builds only.
+
+## Cron triggers
+
+The scheduled handler dispatches on `controller.cron`: `0 4 * * *` daily ingest, `0 3 * * 1` weekly backup (`runScheduled(cron, time)` in tests). Both run on the live copy only; the test copy has none.
 
 ## Environments and deploying
 
