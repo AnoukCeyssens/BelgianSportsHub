@@ -190,6 +190,13 @@
       "when": 1794672862630,
       "tag": "0026_assisted_and_manual_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1794673484253,
+      "tag": "0027_curated_sources",
+      "breakpoints": true
     }
   ]
 }

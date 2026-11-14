@@ -250,7 +250,7 @@ describe("Selection", () => {
     await post(schedules, { intent: "save-sport-days", games: "la-2028", sport: "Athletics", firstDay: "2028-07-15", lastDay: "2028-07-24", sourceUrl: "https://la28.example" });
     await post(schedules, { intent: "save-sport-days", games: "la-2028", sport: "Swimming", firstDay: "2028-07-15", lastDay: "2028-07-23", sourceUrl: "https://la28.example" });
     const la = (await getDb(env.DB).query.competition.findFirst({ where: eq(schema.competition.sourceRef, "la-2028") }))!.id;
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-30" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-30", closesSource: "https://example.org/qualification-window" });
     const thiam = await activeAthlete("Nafissatou Thiam", "Athletics", "2028-03-10");
     const verbeke = await activeAthlete("Lucas Verbeke", "Swimming", "2028-03-10");
     await addEntry(la, `athlete:${thiam}`, "Heptathlon", "qualified", "games");

@@ -210,17 +210,25 @@ export const competition = sqliteTable(
      * the Games: when the qualification system or entry standards are
      * expected (YYYY-MM-DD) and, once out, when they were published (Belgian
      * date), where, and what they say (one line per event or track).
+     * Every curated value carries its source (URL) and the Belgian date the
+     * owner last checked it (#20 review): the expected date its own source,
+     * the published standards `standardsUrl`.
      */
     standardsExpectedOn: text("standards_expected_on"),
+    standardsExpectedSource: text("standards_expected_source"),
+    standardsExpectedCheckedOn: text("standards_expected_checked_on"),
     standardsPublishedOn: text("standards_published_on"),
     standardsUrl: text("standards_url"),
     standardsText: text("standards_text"),
+    standardsCheckedOn: text("standards_checked_on"),
     /**
      * YYYY-MM-DD the qualification window closes for this target (ticket
      * #32; LA28: 11 Jun 2028, its last qualification event), curated with the
      * standards. The Athlete page counts down to it.
      */
     qualificationClosesOn: text("qualification_closes_on"),
+    qualificationClosesSource: text("qualification_closes_source"),
+    qualificationClosesCheckedOn: text("qualification_closes_checked_on"),
     source: text("source").notNull(),
     /** The source's own ID for this competition. */
     sourceRef: text("source_ref").notNull(),
@@ -405,8 +413,12 @@ export const participationCuration = sqliteTable("participation_curation", {
   addedAt: text("added_at"),
   /** "confirmed" | "kept" | "dropped"; null when only added. */
   decision: text("decision"),
-  /** Where the owner saw it (e.g. an entry list or a federation post), when given. */
-  sourceUrl: text("source_url"),
+  /**
+   * Where the owner saw it (e.g. an entry list or a federation post). Rows
+   * from before the #20 review were backfilled with "unrecorded (before the
+   * #20 review)".
+   */
+  sourceUrl: text("source_url").notNull(),
   /** ISO instant of the owner's last check. */
   checkedAt: text("checked_at").notNull(),
 });
@@ -572,6 +584,11 @@ export const entryRound = sqliteTable(
     startsAt: text("starts_at"),
     /** ISO instant the owner last looked for heat or match detail (saved, or none published). */
     detailCheckedAt: text("detail_checked_at"),
+    /** The start list the detail was read on (URL); null when none was published. */
+    detailSource: text("detail_source"),
+    /** The results page the outcome was read on (URL), and the ISO instant it was recorded. */
+    outcomeSource: text("outcome_source"),
+    outcomeCheckedAt: text("outcome_checked_at"),
     /** ISO instant of the owner's last change. */
     updatedAt: text("updated_at").notNull(),
   },

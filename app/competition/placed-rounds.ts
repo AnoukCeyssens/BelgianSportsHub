@@ -27,8 +27,9 @@ export type PlacedRound = {
   outcome: RoundOutcome | null;
   /** The heat or match detail, when any was given. */
   detail: RoundDetail | null;
-  /** When the owner last looked for detail on this round. */
+  /** When the owner last looked for detail on this round, and the start list it was read on. */
   detailCheckedAt: string | null;
+  detailSource: string | null;
   /** The Entry's final result in the event, when there is one. */
   result: EventResultRow | null;
   /** The last round of the event the Entry can still reach (its result shows there). */
@@ -97,6 +98,7 @@ export async function loadPlacedRounds(db: Db, competition: CompetitionRow, chos
           outcome: x.outcome,
           detail: a && hasDetail(a) ? { heat: a.heat, lane: a.lane, opponent: a.opponent, startsAt: a.startsAt } : null,
           detailCheckedAt: a?.detailCheckedAt ?? null,
+          detailSource: a?.detailSource ?? null,
           result: result ? { place: result.place, status: result.status, performance: result.performance, date: result.date } : null,
           last: x.round === lastRound,
         };

@@ -74,6 +74,7 @@ async function worlds() {
     url: "https://worldathletics.org/beijing27/standards",
     standards: "Heptathlon: 6 500 pts or World Ranking top 24",
     closesOn: "2027-08-24",
+    closesSource: "https://worldathletics.org/beijing27/qualification-period",
   });
   return id;
 }
@@ -120,7 +121,7 @@ describe("Qualification status and tracks", () => {
 
     const html = await page(`/championship/${beijing}`);
     expect(panel(html)?.phase).toBe("Qualification");
-    expect(panel(html)?.text).toContain("Qualification window closes 24 Aug 2027 · 283 days left");
+    expect(panel(html)?.text).toContain("Qualification window closes 24 Aug 2027 · 283 days left · source · checked 14 Nov 2026");
     expect(panel(html)?.text).toContain("1 qualified · 1 at risk");
     expect(qualificationRows(html)).toEqual([
       "Elise Vanderelst Women's 1500 m ✗ Entry standard need 4:01.50 · has 4:04.10 … Federation selection need Belgian Athletics, Aug 2027 · has Pending At risk",
@@ -172,7 +173,7 @@ describe("Qualification status and tracks", () => {
       endDate: "2028-07-30",
       venueZone: "America/Los_Angeles",
     });
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-11" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-11", closesSource: "https://example.org/qualification-window" });
     const indoors = await seedCompetition(env.DB, { name: "European Athletics Indoor Championships", sport: "Athletics", kind: "championship", startDate: "2027-03-05", endDate: "2027-03-07" });
     const beijing = await worlds();
     const thiam = await activeAthlete("Nafissatou Thiam");
@@ -248,7 +249,7 @@ describe("Qualification status and tracks", () => {
 
   it("filters the Games' Qualification phase by sport chip", async () => {
     const la = await seedCompetition(env.DB, { name: "LA 2028", sport: "Olympic Games", kind: "games", source: "owner", startDate: "2028-07-14", endDate: "2028-07-30" });
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-11" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-11", closesSource: "https://example.org/qualification-window" });
     const db = getDb(env.DB);
     for (const sport of ["Athletics", "Hockey"]) {
       await db.insert(schema.gamesSportWindow).values({ competitionId: la, sport, firstDay: "2028-07-15", lastDay: "2028-07-24", sourceUrl: "https://la28.example", checkedOn: "2026-11-14" });

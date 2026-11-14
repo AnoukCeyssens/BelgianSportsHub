@@ -35,6 +35,7 @@ function medalRows(html: string) {
 const TODAY = "/curate/live/today-tomorrow";
 const RESULTS = "/curate/live/todays-results";
 const URL_ = "https://isu.example/results/500m.pdf";
+const START_LIST = "https://isu.example/startlists/500m-heats.pdf";
 
 describe("Live day pass and medal table", () => {
   let europeans: string;
@@ -90,7 +91,7 @@ describe("Live day pass and medal table", () => {
     expect(step).not.toContain("Final");
     expect(step).toContain("Today & tomorrow ~10 min · 3 open");
 
-    const saved = await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "4", opponent: "", start: "13:24" });
+    const saved = await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "4", opponent: "", start: "13:24", sourceUrl: START_LIST });
     expect(saved.status).toBe(303);
     expect(text(await page(TODAY))).toContain("Today & tomorrow ~10 min · 2 open");
     expect(text(await page(TODAY))).toContain("Hanne Desmet · Women's 500 m · Heats: heat 2 · lane 4 · 13:24");
@@ -102,6 +103,33 @@ describe("Live day pass and medal table", () => {
     ]);
   });
 
+  it("refuses heat detail or a round's outcome without the page it was read on, and keeps that page with it", async () => {
+    expect((await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "", opponent: "", start: "" })).status).toBe(400);
+    expect((await post(RESULTS, { intent: "through", entry: w500, round: "Heats" })).status).toBe(400);
+    expect((await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: "" })).status).toBe(400);
+    expect(text(await page(TODAY))).toContain("Today & tomorrow ~10 min · 3 open");
+
+    await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "4", opponent: "", start: "", sourceUrl: START_LIST });
+    expect(await page(TODAY)).toContain(`href="${START_LIST}"`);
+    fixClock("2027-01-15T19:00:00.000Z");
+    await post(RESULTS, { intent: "through", entry: w500, round: "Heats", sourceUrl: URL_ });
+
+    const [round] = await getDb(env.DB).select().from(schema.entryRound);
+    expect({
+      detailSource: round.detailSource,
+      detailCheckedAt: round.detailCheckedAt,
+      outcome: round.outcome,
+      outcomeSource: round.outcomeSource,
+      outcomeCheckedAt: round.outcomeCheckedAt,
+    }).toEqual({
+      detailSource: START_LIST,
+      detailCheckedAt: "2027-01-15T18:00:00.000Z",
+      outcome: "advanced",
+      outcomeSource: URL_,
+      outcomeCheckedAt: "2027-01-15T19:00:00.000Z",
+    });
+  });
+
   it("moves a later round on once the Entry is through, and drops the rounds after it is out", async () => {
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-16`))).toEqual([
       "12:00 Hanne Desmet Women's 500 m · Quarter-finals if through [greyed]",
@@ -110,20 +138,20 @@ describe("Live day pass and medal table", () => {
     expect(due).toContain("Hanne Desmet · Women's 500 m · Heats");
     expect(due).toContain("Hanne Desmet · Women's 1000 m · Heats");
 
-    expect((await post(RESULTS, { intent: "through", entry: w500, round: "Heats" })).status).toBe(303);
+    expect((await post(RESULTS, { intent: "through", entry: w500, round: "Heats", sourceUrl: URL_ })).status).toBe(303);
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-15`))[0]).toBe("13:00 Hanne Desmet Women's 500 m · Heats through");
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-16`))).toEqual(["12:00 Hanne Desmet Women's 500 m · Quarter-finals"]);
 
-    await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: "" });
+    await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: URL_ });
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-17`))).toEqual(["15:00 Hanne Desmet Women's 500 m · Final if through [greyed]"]);
     expect(text(await page(RESULTS))).not.toContain("Hanne Desmet · Women's");
     expect(text(await page(RESULTS))).toContain("Hanne Desmet: Women's 1000 m · Heats out");
   });
 
   it("shows a final result on its round and counts it in the medal table, Belgium highlighted", async () => {
-    await post(RESULTS, { intent: "through", entry: w500, round: "Heats" });
+    await post(RESULTS, { intent: "through", entry: w500, round: "Heats", sourceUrl: URL_ });
     fixClock("2027-01-16T18:00:00.000Z");
-    await post(RESULTS, { intent: "through", entry: w500, round: "Quarter-finals" });
+    await post(RESULTS, { intent: "through", entry: w500, round: "Quarter-finals", sourceUrl: URL_ });
     fixClock("2027-01-17T17:00:00.000Z");
     expect(text(await page(RESULTS))).toContain("Hanne Desmet · Women's 500 m · Final");
     const final = await post(RESULTS, { intent: "final", entry: w500, round: "Final", place: "2", performance: "43.10", sourceUrl: URL_ });

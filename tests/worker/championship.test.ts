@@ -113,10 +113,11 @@ describe("Championship tab", () => {
     ]);
     expect(panel(html)).toEqual({ phase: "Standards", text: "Publication date of the standards not known yet." });
 
-    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", publishedOn: "", url: "", standards: "" });
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
 
     html = await page(`/championship/${beijing}`);
-    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 15 Jan 2027." });
+    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 15 Jan 2027 · source · checked 14 Nov 2026." });
+    expect(html).toContain('href="https://worldathletics.org/calendar-note"');
   });
 
   it("moves to Qualification once the owner records the published standards, which stay visible", async () => {
@@ -124,6 +125,7 @@ describe("Championship tab", () => {
 
     const saved = await post(`/curate/championships/${beijing}/standards`, {
       expectedOn: "2026-10-01",
+      expectedSource: "https://worldathletics.org/calendar-note",
       publishedOn: "2026-10-03",
       url: "https://worldathletics.org/beijing27-entry-standards",
       standards: "Heptathlon: 6 500 pts or World Ranking top 24\nMen 400 m: 44.85 or World Ranking top 48",
@@ -147,9 +149,31 @@ describe("Championship tab", () => {
     expect(panel(html)).toEqual({
       phase: "Standards",
       text:
-        "Published 3 Oct 2026 · source Heptathlon: 6 500 pts or World Ranking top 24 Men 400 m: 44.85 or World Ranking top 48",
+        "Published 3 Oct 2026 · source · checked 14 Nov 2026 Heptathlon: 6 500 pts or World Ranking top 24 Men 400 m: 44.85 or World Ranking top 48",
     });
     expect(html).toContain('href="https://worldathletics.org/beijing27-entry-standards"');
+  });
+
+  it("refuses a standards date without the source it was read on", async () => {
+    const beijing = await worlds();
+    const standards = (form: Record<string, string>) => post(`/curate/championships/${beijing}/standards`, { expectedOn: "", publishedOn: "", url: "", standards: "", closesOn: "", ...form });
+
+    expect((await standards({ expectedOn: "2027-01-15" })).status).toBe(400);
+    expect((await standards({ publishedOn: "2026-10-03", standards: "Heptathlon: 6 500 pts" })).status).toBe(400);
+    expect((await standards({ closesOn: "2027-08-24" })).status).toBe(400);
+    expect((await standards({ closesOn: "2027-08-24", closesSource: "not a link" })).status).toBe(400);
+
+    expect(panel(await page(`/championship/${beijing}`))).toEqual({ phase: "Standards", text: "Publication date of the standards not known yet." });
+  });
+
+  it("stamps each recorded date checked on the day the owner saves it again", async () => {
+    const beijing = await worlds();
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
+
+    fixClock("2026-12-02T12:00:00.000Z");
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
+
+    expect(panel(await page(`/championship/${beijing}`))?.text).toBe("Standards expected 15 Jan 2027 · source · checked 2 Dec 2026.");
   });
 
   it("never opens a later phase than the current one", async () => {
@@ -191,12 +215,13 @@ describe("Championship tab", () => {
 
   it("shows the owner's standards form filled with what is recorded", async () => {
     const beijing = await worlds();
-    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", publishedOn: "", url: "", standards: "" });
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
 
     const html = await page(`/curate/championships/${beijing}/standards`);
 
     expect(text(html)).toContain("World Athletics Championships, Beijing");
     expect(html).toMatch(/name="expectedOn"[^>]*value="2027-01-15"/);
+    expect(html).toMatch(/name="expectedSource"[^>]*value="https:\/\/worldathletics.org\/calendar-note"/);
   });
 
   it("has no page for a competition that is not a Championship", async () => {

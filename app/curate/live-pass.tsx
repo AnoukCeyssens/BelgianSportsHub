@@ -30,6 +30,8 @@ type LiveRound = {
   state: PlacedRound["state"];
   last: boolean;
   detail: string | null;
+  /** The start list the detail was read on. */
+  detailSource: string | null;
 };
 
 const shortDay = (isoDate: string) =>
@@ -70,6 +72,7 @@ function liveRound(competition: CompetitionRow, p: PlacedRound): LiveRound {
     state: p.state,
     last: p.last,
     detail: detail || null,
+    detailSource: p.detailSource,
   };
 }
 
@@ -128,7 +131,16 @@ async function entryOf(db: Db, form: FormData) {
   return { ...row, who: row.who ?? row.team ?? "", round };
 }
 
-type Attachment = Partial<Pick<typeof schema.entryRound.$inferInsert, "outcome" | "heat" | "lane" | "opponent" | "startsAt" | "detailCheckedAt">>;
+type Attachment = Partial<
+  Pick<typeof schema.entryRound.$inferInsert, "outcome" | "outcomeSource" | "outcomeCheckedAt" | "heat" | "lane" | "opponent" | "startsAt" | "detailCheckedAt" | "detailSource">
+>;
+
+/** The web address a curated value was read on (#20 review); a 400 without one. */
+function sourceOf(form: FormData, what: string): string {
+  const url = field(form, "sourceUrl");
+  if (!/^https?:\/\/\S+$/.test(url)) throw new Response(`Give the web address ${what} was read on`, { status: 400 });
+  return url;
+}
 
 async function attach(db: Db, entryId: string, round: string, values: Attachment, now: Date) {
   const updatedAt = now.toISOString();
@@ -143,14 +155,17 @@ export async function actOnRoundDetail(db: Db, intent: string, form: FormData, n
   const { entry, who, round } = await entryOf(db, form);
   const title = `${who} · ${entry.event} · ${round}`;
   if (intent === "no-detail") {
-    await attach(db, entry.id, round, { detailCheckedAt: now.toISOString() }, now);
+    // Nothing published: the page looked at is kept when given.
+    const looked = field(form, "sourceUrl");
+    await attach(db, entry.id, round, { detailCheckedAt: now.toISOString(), detailSource: /^https?:\/\/\S+$/.test(looked) ? looked : null }, now);
     return `${title}: no detail published`;
   }
   if (intent !== "save-detail") throw new Response(`Unknown action ${intent}`, { status: 400 });
   const start = field(form, "start");
   if (start && !/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) throw new Response("The start must be a venue time, HH:mm", { status: 400 });
   const detail = { heat: field(form, "heat") || null, lane: field(form, "lane") || null, opponent: field(form, "opponent") || null, startsAt: start || null };
-  await attach(db, entry.id, round, { ...detail, detailCheckedAt: now.toISOString() }, now);
+  const detailSource = sourceOf(form, "the start list");
+  await attach(db, entry.id, round, { ...detail, detailCheckedAt: now.toISOString(), detailSource }, now);
   return `${title}: ${[detailText(detail), detail.startsAt].filter(Boolean).join(" · ") || "no detail"}`;
 }
 
@@ -161,7 +176,7 @@ export async function actOnTodaysResult(env: Pick<Env, "DB" | "RAW">, intent: st
   const { entry, who, round, competition } = await entryOf(db, form);
   const label = `${who}: ${entry.event} · ${round}`;
   if (intent === "through") {
-    await attach(db, entry.id, round, { outcome: "advanced" }, now);
+    await attach(db, entry.id, round, { outcome: "advanced", outcomeSource: sourceOf(form, "the outcome"), outcomeCheckedAt: now.toISOString() }, now);
     return `${label} through`;
   }
   if (intent !== "out" && intent !== "final") throw new Response(`Unknown action ${intent}`, { status: 400 });
@@ -170,9 +185,9 @@ export async function actOnTodaysResult(env: Pick<Env, "DB" | "RAW">, intent: st
   if (typed.place && !/^[1-9]\d*$/.test(typed.place)) throw new Response("The place must be a whole number", { status: 400 });
   const final = intent === "final";
   if (final && !typed.place && !typed.performance) throw new Response("Give a place or a performance", { status: 400 });
-  if (!final) await attach(db, entry.id, round, { outcome: "eliminated" }, now);
+  const outcomeSource = sourceOf(form, "the result");
+  if (!final) await attach(db, entry.id, round, { outcome: "eliminated", outcomeSource, outcomeCheckedAt: now.toISOString() }, now);
   if (!typed.place && !typed.performance) return `${label} out`;
-  if (!/^https?:\/\/\S+$/.test(typed.sourceUrl)) throw new Response("The source URL must be a web address", { status: 400 });
 
   // The day of the round (its last Session), venue-local.
   const [day] = await db
@@ -260,6 +275,10 @@ export function TodayTomorrowStep({ data }: { data: TodayTomorrowData }) {
               Start, venue time
               <input name="start" type="time" />
             </label>
+            <label className="wide">
+              Start list (URL), needed to save detail
+              <input name="sourceUrl" type="url" placeholder="https://…" />
+            </label>
           </div>
           <div className="actions">
             <button type="submit" name="intent" value="save-detail">
@@ -276,7 +295,15 @@ export function TodayTomorrowStep({ data }: { data: TodayTomorrowData }) {
           <h3>Checked</h3>
           <ul>
             {data.checked.map((item) => (
-              <li key={item.key}>{`${item.title}: ${item.detail ?? "no detail published"}`}</li>
+              <li key={item.key}>
+                {`${item.title}: ${item.detail ?? "no detail published"}`}
+                {item.detailSource ? (
+                  <>
+                    {" · "}
+                    <a href={item.detailSource}>source</a>
+                  </>
+                ) : null}
+              </li>
             ))}
           </ul>
         </div>
@@ -308,8 +335,8 @@ export function TodaysResultsStep({ data }: { data: TodaysResultsData }) {
               <input name="performance" size={10} />
             </label>
             <label className="wide">
-              Source URL (the results page), for a place or performance
-              <input name="sourceUrl" type="url" placeholder="https://…" />
+              Source URL (the results page)
+              <input name="sourceUrl" type="url" required placeholder="https://…" />
             </label>
           </div>
           <div className="actions">

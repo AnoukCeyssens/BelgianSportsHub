@@ -148,13 +148,13 @@ describe("Games", () => {
     expect(tab).toContain(`href="/games/${alps}"`);
 
     expect(await page(`/games/${alps}`, signedInAs(OWNER_EMAIL))).toContain(`href="/curate/games/${alps}/standards"`);
-    const recorded = await post(`/curate/games/${alps}/standards`, { expectedOn: "2027-12-01", publishedOn: "", url: "", standards: "" });
+    const recorded = await post(`/curate/games/${alps}/standards`, { expectedOn: "2027-12-01", expectedSource: "https://example.org/calendar", publishedOn: "", url: "", standards: "" });
     expect(recorded.headers.get("Location")).toBe(`/games/${alps}`);
 
     const html = await page(`/games/${alps}`);
     expect(text(html)).toContain("French Alps 2030");
     expect(phaseBar(html)[0]).toBe("Standards ● now");
-    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 1 Dec 2027." });
+    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 1 Dec 2027 · source · checked 14 Nov 2026." });
   });
 
   it("offers combinable sport chips, All sports by default", async () => {

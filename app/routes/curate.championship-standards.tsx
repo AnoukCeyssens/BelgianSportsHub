@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { data, Form, Link, redirect } from "react-router";
 import { dbFrom } from "~/context";
 import { schema } from "~/db/client";
+import { belgianDate } from "~/domain";
+import { now } from "~/clock";
 import type { Route } from "./+types/curate.championship-standards";
 
 // Owner-only (under /curate); spec #20, stories 43 and 44; tickets #31 and
@@ -10,7 +12,9 @@ import type { Route } from "./+types/curate.championship-standards";
 // were published and what they say. Publishing moves the competition from
 // Standards to Qualification. Served at /curate/championships/:id/standards
 // and /curate/games/:id/standards; for the Games, a line headed "<Sport>:"
-// shows only under that sport's chip.
+// shows only under that sport's chip. Each recorded value needs the source
+// it was read on (URL) and is stamped checked on the day it is saved (#20
+// review): the expected date, the published standards and the window's close.
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `Standards · ${loaderData?.name ?? "Championship"} · BelgianSportsHub` }];
@@ -33,14 +37,17 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     page: c.page,
     name: c.name,
     expectedOn: c.standardsExpectedOn ?? "",
+    expectedSource: c.standardsExpectedSource ?? "",
     publishedOn: c.standardsPublishedOn ?? "",
     url: c.standardsUrl ?? "",
     standards: c.standardsText ?? "",
     closesOn: c.qualificationClosesOn ?? "",
+    closesSource: c.qualificationClosesSource ?? "",
   };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const URL_PATTERN = /^https?:\/\/\S+$/;
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const c = await championship(context, params.competitionId, request);
@@ -51,21 +58,37 @@ export async function action({ context, params, request }: Route.ActionArgs) {
     if (value !== null && !DATE.test(value)) throw data(`${name} must be a date (YYYY-MM-DD)`, { status: 400 });
     return value;
   };
+  /** A recorded value's source: required (a web address) when the value is set, dropped with it. */
+  const source = (value: string | null, name: string, what: string) => {
+    if (value === null) return null;
+    const url = field(name);
+    if (url === null || !URL_PATTERN.test(url)) throw data(`Give the web address ${what} was read on`, { status: 400 });
+    return url;
+  };
+  const today = belgianDate(now());
+  const expectedOn = date("expectedOn");
+  const publishedOn = date("publishedOn");
+  const closesOn = date("closesOn");
   await dbFrom(context)
     .update(schema.competition)
     .set({
-      standardsExpectedOn: date("expectedOn"),
-      standardsPublishedOn: date("publishedOn"),
-      standardsUrl: field("url"),
+      standardsExpectedOn: expectedOn,
+      standardsExpectedSource: source(expectedOn, "expectedSource", "the expected publication date"),
+      standardsExpectedCheckedOn: expectedOn && today,
+      standardsPublishedOn: publishedOn,
+      standardsUrl: publishedOn ? source(publishedOn, "url", "the published standards") : field("url"),
       standardsText: field("standards"),
-      qualificationClosesOn: date("closesOn"),
+      standardsCheckedOn: publishedOn && today,
+      qualificationClosesOn: closesOn,
+      qualificationClosesSource: source(closesOn, "closesSource", "the window's closing date"),
+      qualificationClosesCheckedOn: closesOn && today,
     })
     .where(eq(schema.competition.id, c.id));
   return redirect(c.page, 303);
 }
 
 export default function ChampionshipStandards({ loaderData }: Route.ComponentProps) {
-  const { page, name, expectedOn, publishedOn, url, standards, closesOn } = loaderData;
+  const { page, name, expectedOn, expectedSource, publishedOn, url, standards, closesOn, closesSource } = loaderData;
   return (
     <>
       <h1>Standards</h1>
@@ -73,7 +96,8 @@ export default function ChampionshipStandards({ loaderData }: Route.ComponentPro
         <Link to={page}>{name}</Link>
       </p>
       <p className="sub">
-        Until a publication date is filled in, readers see only the expected date. Write one line per event or Qualification track.
+        Until a publication date is filled in, readers see only the expected date. Write one line per event or Qualification track. Every date
+        needs the page it was read on; saving stamps it checked today.
       </p>
       <Form method="post" className="standards-form">
         <label>
@@ -81,16 +105,24 @@ export default function ChampionshipStandards({ loaderData }: Route.ComponentPro
           <input type="date" name="expectedOn" defaultValue={expectedOn} />
         </label>
         <label>
+          Expected date read on (URL)
+          <input type="url" name="expectedSource" defaultValue={expectedSource} />
+        </label>
+        <label>
           Published on
           <input type="date" name="publishedOn" defaultValue={publishedOn} />
         </label>
         <label>
-          Source URL
+          Published standards (URL)
           <input type="url" name="url" defaultValue={url} />
         </label>
         <label>
           Qualification window closes on
           <input type="date" name="closesOn" defaultValue={closesOn} />
+        </label>
+        <label>
+          Closing date read on (URL)
+          <input type="url" name="closesSource" defaultValue={closesSource} />
         </label>
         <label>
           Standards

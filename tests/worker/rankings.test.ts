@@ -82,6 +82,7 @@ async function speedSkatingEuros() {
     url: "https://isu.org/euros-2027",
     standards: "1000m: World Cup top 20",
     closesOn: "2026-12-14",
+    closesSource: "https://isu.org/euros-2027/qualification",
   });
   return id;
 }
@@ -359,7 +360,7 @@ describe("Qualification review (Run sheet step 5)", () => {
   it("suggests Eligible to three Belgians who meet the criteria for two NOC-owned places", async () => {
     fixClock("2026-11-01T10:00:00.000Z");
     const la = await seedCompetition(env.DB, { name: "LA 2028", sport: "Olympic Games", kind: "games", source: "owner", startDate: "2028-07-14", endDate: "2028-07-30" });
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "", standards: "", closesOn: "2028-05-03" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "https://example.org/standards", standards: "", closesOn: "2028-05-03", closesSource: "https://example.org/qualification-window" });
     const curateLa = `/curate/games/${la}/qualification`;
     const runners: string[] = [];
     for (const name of ["Hanne Verbruggen", "Chloé Herbiet", "Lotte Scheldeman"]) {

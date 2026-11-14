@@ -42,7 +42,17 @@ import type { CompetitionRow } from "./phase-inputs";
 // the Games' sports and the chosen chips (none chosen = All sports). Filter
 // each phase's rows by `chips.chosen` as they arrive (Entries by their sport).
 
-export type PublishedStandards = { expectedOn: string | null; publishedOn: string | null; url: string | null; lines: string[] };
+/** A curated value's source (URL) and the Belgian date it was last checked (#20 review). */
+export type Sourced = { source: string | null; checkedOn: string | null };
+
+export type PublishedStandards = {
+  expectedOn: string | null;
+  expected: Sourced;
+  publishedOn: string | null;
+  url: string | null;
+  checkedOn: string | null;
+  lines: string[];
+};
 
 export type PhasePanelData =
   | { phase: "standards"; standards: PublishedStandards }
@@ -51,6 +61,7 @@ export type PhasePanelData =
       standards: PublishedStandards;
       /** When the qualification window closes (YYYY-MM-DD) and the days left; null when not recorded. */
       closesOn: string | null;
+      closes: Sourced;
       closesIn: number | null;
       /** Active potential Entries with their tracks (ticket #32), filtered by the chosen sport chips. */
       entries: PotentialEntry[];
@@ -108,6 +119,7 @@ export async function loadPhasePanel(
         phase,
         standards: standardsOf(competition, now, chips),
         closesOn: competition.qualificationClosesOn,
+        closes: { source: competition.qualificationClosesSource, checkedOn: competition.qualificationClosesCheckedOn },
         closesIn: windowCountdown(competition.qualificationClosesOn, now),
         entries: shown(entries),
         games,
@@ -161,14 +173,17 @@ function chosenOnly(entries: PotentialEntry[], chips: SportChips) {
 function standardsOf(c: CompetitionRow, now: Date, chips: SportChips): PublishedStandards {
   const published = c.standardsPublishedOn !== null && c.standardsPublishedOn <= belgianDate(now);
   const lines = (c.standardsText ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const expected = { source: c.standardsExpectedSource, checkedOn: c.standardsExpectedCheckedOn };
   return published
     ? {
         expectedOn: null,
+        expected,
         publishedOn: c.standardsPublishedOn,
         url: c.standardsUrl,
+        checkedOn: c.standardsCheckedOn,
         lines: standardsForSports(lines, chips.sports, chips.chosen),
       }
-    : { expectedOn: c.standardsExpectedOn, publishedOn: null, url: null, lines: [] };
+    : { expectedOn: c.standardsExpectedOn, expected, publishedOn: null, url: null, checkedOn: null, lines: [] };
 }
 
 /** `dayHref` links a Live day (`?day=`), keeping the page's other choices. */
@@ -210,7 +225,14 @@ function Standards({ standards }: { standards: PublishedStandards }) {
   if (!standards.publishedOn) {
     return (
       <p className="note">
-        {standards.expectedOn ? `Standards expected ${formatDate(standards.expectedOn)}.` : "Publication date of the standards not known yet."}
+        {standards.expectedOn ? (
+          <>
+            {`Standards expected ${formatDate(standards.expectedOn)}`}
+            <SourceAndCheck {...standards.expected} />.
+          </>
+        ) : (
+          "Publication date of the standards not known yet."
+        )}
       </p>
     );
   }
@@ -218,14 +240,24 @@ function Standards({ standards }: { standards: PublishedStandards }) {
     <>
       <p className="meta">
         {`Published ${formatDate(standards.publishedOn)}`}
-        {standards.url ? (
-          <>
-            {" · "}
-            <a href={standards.url}>source</a>
-          </>
-        ) : null}
+        <SourceAndCheck source={standards.url} checkedOn={standards.checkedOn} />
       </p>
       <StandardLines lines={standards.lines} />
+    </>
+  );
+}
+
+/** " · source · checked 14 Nov 2026": the link to where a curated value was read, and when. */
+function SourceAndCheck({ source, checkedOn }: Sourced) {
+  return (
+    <>
+      {source && /^https?:\/\//.test(source) ? (
+        <>
+          {" · "}
+          <a href={source}>source</a>
+        </>
+      ) : null}
+      {checkedOn ? ` · checked ${formatDate(checkedOn)}` : null}
     </>
   );
 }
@@ -260,6 +292,7 @@ function Qualification({ data }: { data: Extract<PhasePanelData, { phase: "quali
         <p className="note">
           {`Qualification window closes ${formatDate(data.closesOn)}`}
           {data.closesIn !== null && data.closesIn >= 0 ? ` · ${data.closesIn} days left` : " · closed"}
+          <SourceAndCheck {...data.closes} />
         </p>
       ) : null}
       {data.entries.length > 0 ? (

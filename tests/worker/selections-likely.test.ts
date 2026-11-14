@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
@@ -70,7 +71,7 @@ describe("Selections & likely step", () => {
   });
 
   it("confirms a likely Participation, logging it", async () => {
-    const res = await post(STEP, { intent: "confirm", competition: montreal });
+    const res = await post(STEP, { intent: "confirm", competition: montreal, sourceUrl: "https://www.isu.org/montreal-entries" });
     expect(res.status).toBe(303);
 
     const html = await page(STEP);
@@ -79,8 +80,23 @@ describe("Selections & likely step", () => {
     expect(await calendarRow("Montréal")).toBe("27–29 Nov Short Track World Tour, Montréal Short track speed skating · Confirmed");
   });
 
+  it("refuses a decision without the page it was based on, and keeps the source and the check with it", async () => {
+    expect((await post(STEP, { intent: "confirm", competition: montreal })).status).toBe(400);
+    expect((await post(STEP, { intent: "keep", competition: montreal, sourceUrl: "isu.org" })).status).toBe(400);
+    expect(likelyRows(await page(STEP))).toHaveLength(1);
+
+    await post(STEP, { intent: "confirm", competition: montreal, sourceUrl: "https://www.isu.org/montreal-entries" });
+
+    const [row] = await getDb(env.DB).select().from(schema.participationCuration).where(eq(schema.participationCuration.competitionId, montreal));
+    expect({ decision: row.decision, sourceUrl: row.sourceUrl, checkedAt: row.checkedAt }).toEqual({
+      decision: "confirmed",
+      sourceUrl: "https://www.isu.org/montreal-entries",
+      checkedAt: "2026-11-14T12:00:00.000Z",
+    });
+  });
+
   it("keeps a likely Participation: off this week's list, still likely, back next week", async () => {
-    await post(STEP, { intent: "keep", competition: montreal });
+    await post(STEP, { intent: "keep", competition: montreal, sourceUrl: "https://www.isu.org/montreal-entries" });
 
     expect(likelyRows(await page(STEP))).toEqual([]);
     expect(await calendarRow("Montréal")).toContain("Likely: Belgian Entry at the previous edition");
@@ -90,7 +106,7 @@ describe("Selections & likely step", () => {
   });
 
   it("drops a likely Participation from the calendar", async () => {
-    await post(STEP, { intent: "drop", competition: montreal });
+    await post(STEP, { intent: "drop", competition: montreal, sourceUrl: "https://www.isu.org/montreal-entries" });
 
     expect(likelyRows(await page(STEP))).toEqual([]);
     expect(await calendarRow("Montréal")).toBeUndefined();
@@ -103,7 +119,7 @@ describe("Selections & likely step", () => {
     const form = await page(STEP);
     expect(form).toMatch(/<option value="[^"]+">BWF World Tour Finals · 9 Dec 2026<\/option>/);
 
-    await post(STEP, { intent: "add", competition: tour });
+    await post(STEP, { intent: "add", competition: tour, sourceUrl: "https://bwfworldtourfinals.example/entries" });
 
     expect(await calendarRow("BWF", "2026-12")).toBe("9–13 Dec BWF World Tour Finals Badminton · Likely: added by hand");
     expect(await page(STEP)).toContain("BWF World Tour Finals: added as a likely Participation");

@@ -65,7 +65,7 @@ async function la2028() {
     endDate: "2028-07-30",
     venueZone: "America/Los_Angeles",
   });
-  await post(`/curate/games/${id}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-11" });
+  await post(`/curate/games/${id}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-11", closesSource: "https://example.org/qualification-window" });
   return id;
 }
 
@@ -268,7 +268,7 @@ describe("Quota places", () => {
 
   it("gives Championships no Quota places", async () => {
     const worlds = await seedCompetition(env.DB, { name: "World Rowing Championships", sport: "Rowing", kind: "championship", startDate: "2027-09-01", endDate: "2027-09-08" });
-    await post(`/curate/championships/${worlds}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "", standards: "", closesOn: "2027-08-01" });
+    await post(`/curate/championships/${worlds}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "https://example.org/standards", standards: "", closesOn: "2027-08-01", closesSource: "https://example.org/qualification-window" });
 
     const refused = await post(curate(worlds, "championships"), {
       intent: "add-quota-places",
