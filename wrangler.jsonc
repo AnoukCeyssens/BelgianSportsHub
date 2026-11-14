@@ -19,6 +19,9 @@
   "workers_dev": false,
   "preview_urls": false,
   "observability": { "enabled": true },
+  // Static files (build/client) are served as named: the service worker precaches
+  // offline.html and offline-curation.html by those exact URLs.
+  "assets": { "html_handling": "none" },
   "vars": { "APP_ENV": "dev" },
   "d1_databases": [
     {
@@ -63,8 +66,9 @@
       "preview_urls": false,
       "routes": [{ "pattern": "bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
       "vars": { "APP_ENV": "live" },
-      // Daily ingest: the scheduled handler queues one job per due source.
-      "triggers": { "crons": ["0 4 * * *"] },
+      // Daily ingest (the scheduled handler queues one job per due source) and the
+      // weekly D1 export to R2 under backups/, last 12 kept (app/backup/weekly-backup.ts).
+      "triggers": { "crons": ["0 4 * * *", "0 3 * * 1"] },
       "d1_databases": [
         {
           "binding": "DB",
