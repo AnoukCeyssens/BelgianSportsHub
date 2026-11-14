@@ -9,11 +9,21 @@ import {
   olympicCycleOf,
   QUALIFICATION_STATUS_LABELS,
   QUALIFICATION_STATUSES,
+  isQuotaPlaceEvent,
+  isQuotaPlaceState,
+  NEW_QUOTA_PLACE_EVENTS,
+  QUOTA_PLACE_KIND_LABELS,
+  QUOTA_PLACE_STATE_LABELS,
+  quotaPlaceEnded,
+  quotaPlaceLinkable,
+  quotaPlaceTransition,
   referenceGamesOf,
   TRACK_STATES,
+  type QuotaPlaceKind,
   type TrackState,
 } from "~/domain";
 import { potentialEntries } from "~/qualification/entries";
+import { linkAtSelection, quotaPlacesOf, recordQuotaPlaces } from "~/qualification/quota-places";
 import { activeStatuses } from "~/roster/active";
 import type { Route } from "./+types/curate.qualification";
 
@@ -26,7 +36,11 @@ import type { Route } from "./+types/curate.qualification";
 // never to a roster member: an Athlete cannot get an Entry in an event where
 // a Team whose roster credits them competes. Statuses are curated; #33's
 // Qualification review suggests them and applies the owner's choice through
-// the same columns.
+// the same columns. At the Games the owner also records Belgium's Quota
+// places (ticket #36, ADR 0002): NOC-owned or named, moved only along their
+// lifecycle (`quotaPlaceTransition`), each with its source and checked today.
+// NOC-owned places follow Selection in their event (`linkAtSelection`).
+// Championships have no Quota places.
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `Qualification · ${loaderData?.competition.name ?? "Championship"} · BelgianSportsHub` }];
@@ -57,8 +71,9 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const target = await targetOf(db, params.competitionId, request);
   const at = now();
   const fits = sportFits(target);
-  const [entries, athletes, teams, active] = await Promise.all([
+  const [entries, quotaPlaces, athletes, teams, active] = await Promise.all([
     potentialEntries(db, [target.id], at),
+    target.kind === "games" ? quotaPlacesOf(db, target.id) : null,
     db.select({ id: schema.athlete.id, name: schema.athlete.name, sport: schema.athlete.sport }).from(schema.athlete).orderBy(asc(schema.athlete.name)),
     db
       .select({ id: schema.team.id, name: schema.team.name, sport: schema.team.sport, event: schema.team.event })
@@ -73,6 +88,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     competition: { name: target.name, page: target.page, here: target.here },
     entries,
+    quotaPlaces,
     candidates,
     statuses: QUALIFICATION_STATUSES.map((s) => ({ value: s, label: QUALIFICATION_STATUS_LABELS[s] })),
   };
@@ -87,6 +103,19 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const today = belgianDate(now());
   const e = schema.entry;
   const t = schema.qualificationTrack;
+  const q = schema.quotaPlace;
+  const games = target.kind === "games";
+  /** NOC-owned places follow Selection in the Entry's event (Games only). */
+  const followSelection = async (sport: string, event: string) => {
+    if (games) await linkAtSelection(db, target.id, sport, event);
+  };
+  /** One of this Games' Quota places; Championships have none. */
+  const quotaPlace = async (placeId: string) => {
+    if (!games) refuse("Championships have no Quota places");
+    const row = await db.query.quotaPlace.findFirst({ where: and(eq(q.id, placeId), eq(q.competitionId, target.id)) });
+    if (!row || !isQuotaPlaceState(row.state)) refuse("No such Quota place at this Games");
+    return { ...row, state: row.state, kind: (row.kind === "named" ? "named" : "noc") as QuotaPlaceKind };
+  };
 
   /** One of this competition's Entries, of an Active Athlete or Team. */
   const activeEntry = async (entryId: string) => {
@@ -137,6 +166,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
           checkedOn: today,
           ...qualification,
         });
+      await followSelection(sport, event);
       break;
     }
     case "set-status": {
@@ -145,6 +175,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
         .update(e)
         .set({ qualificationStatus: status(), qualificationSource: required("source"), qualificationCheckedOn: today })
         .where(eq(e.id, row.id));
+      await followSelection(row.sport, row.event);
       break;
     }
     case "save-track": {
@@ -176,6 +207,68 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       await db.delete(t).where(eq(t.id, track.id));
       break;
     }
+    case "add-quota-places": {
+      if (!games) refuse("Championships have no Quota places, only per-nation entry caps");
+      const kind = field("kind");
+      if (kind !== "noc" && kind !== "named") refuse("A Quota place is NOC-owned or named");
+      const how = NEW_QUOTA_PLACE_EVENTS.find((x) => x === field("how"));
+      if (!how) refuse("A new place is held, allocated or reallocated");
+      // A nation ranking that earns n places records n (story 80).
+      const count = Number(field("count") ?? "1");
+      if (!Number.isInteger(count) || count < 1 || count > 20) refuse("Count is a whole number of places, 1 to 20");
+      let sport = field("sport");
+      let event = field("event");
+      const entryId = field("entryId");
+      if (kind === "named") {
+        // A named place links to the Entry that earned it, when earned (story 81).
+        if (!entryId) refuse("A named place needs the Entry that earned it");
+        if (count !== 1) refuse("A named place belongs to one Entry: record one at a time");
+        const row = await activeEntry(entryId);
+        sport = row.sport;
+        event = row.event;
+      }
+      if (!sport || !event) refuse("Sport and event are required");
+      await recordQuotaPlaces(db, {
+        competitionId: target.id,
+        sport,
+        event,
+        kind,
+        how,
+        count,
+        earnedVia: field("earnedVia"),
+        entryId: kind === "named" ? entryId : null,
+        source: required("source"),
+        checkedOn: today,
+      });
+      break;
+    }
+    case "move-quota-place": {
+      const place = await quotaPlace(required("placeId"));
+      const event = field("event");
+      if (!isQuotaPlaceEvent(event)) refuse("Unknown Quota place move");
+      const source = required("source");
+      const move = quotaPlaceTransition({ state: place.state, kind: place.kind, linked: place.entryId !== null }, event);
+      if (!move.ok) refuse(move.reason);
+      await db.update(q).set({ state: move.state, source, checkedOn: today }).where(eq(q.id, place.id));
+      break;
+    }
+    case "link-quota-place": {
+      const place = await quotaPlace(required("placeId"));
+      if (quotaPlaceEnded(place.state)) refuse(`A ${QUOTA_PLACE_STATE_LABELS[place.state]} place keeps its Entry`);
+      const row = await activeEntry(required("entryId"));
+      if (row.sport.toLowerCase() !== place.sport.toLowerCase() || row.event.toLowerCase() !== place.event.toLowerCase()) {
+        refuse(`That Entry is not in ${place.sport} · ${place.event}`);
+      }
+      const entryStatus = isQualificationStatus(row.qualificationStatus) ? row.qualificationStatus : null;
+      if (!quotaPlaceLinkable(place.kind, entryStatus)) refuse("An NOC-owned place links to an Entry only at Selection");
+      await db.update(q).set({ entryId: row.id }).where(eq(q.id, place.id));
+      break;
+    }
+    case "remove-quota-place": {
+      const place = await quotaPlace(required("placeId"));
+      await db.delete(q).where(eq(q.id, place.id));
+      break;
+    }
     default:
       refuse("Unknown action");
   }
@@ -205,7 +298,7 @@ async function notOnATeamRoster(db: Db, athleteId: string, sport: string, event:
 }
 
 export default function CurateQualification({ loaderData }: Route.ComponentProps) {
-  const { competition, entries, candidates, statuses } = loaderData;
+  const { competition, entries, quotaPlaces, candidates, statuses } = loaderData;
   const statusSelect = (value: string | null) => (
     <select name="status" defaultValue={value ?? "on-track"}>
       {statuses.map((s) => (
@@ -355,6 +448,144 @@ export default function CurateQualification({ loaderData }: Route.ComponentProps
       ) : (
         <p className="sub">No Active Athletes or Teams in this competition&apos;s sports.</p>
       )}
+
+      {quotaPlaces ? <QuotaPlaces places={quotaPlaces} entries={entries} /> : null}
     </div>
+  );
+}
+
+const MOVE_LABELS = { allocate: "Allocated", accept: "Accepted", enter: "Entered", decline: "Declined", lose: "Lost" } as const;
+
+type Loaded = Route.ComponentProps["loaderData"];
+
+/** The Games' Quota places (ticket #36): record new ones, move each along its lifecycle, link it to its Entry. */
+function QuotaPlaces({ places, entries }: { places: NonNullable<Loaded["quotaPlaces"]>; entries: Loaded["entries"] }) {
+  const sameEvent = (place: (typeof places)[number], entry: (typeof entries)[number]) =>
+    entry.sport.toLowerCase() === place.sport.toLowerCase() && entry.event.toLowerCase() === place.event.toLowerCase();
+  return (
+    <>
+      <h2>Quota places</h2>
+      <p className="sub">
+        Belgium&apos;s places, separate from who goes (ADR 0002). An NOC-owned place links to its Entry at Selection; a named place to the Entry
+        that earned it. Moving a place stamps it as checked today.
+      </p>
+      {places.map((place) => {
+        const moves = (Object.keys(MOVE_LABELS) as (keyof typeof MOVE_LABELS)[]).filter(
+          (event) => quotaPlaceTransition({ state: place.state, kind: place.kind, linked: place.entry !== null }, event).ok,
+        );
+        const linkable = quotaPlaceEnded(place.state)
+          ? []
+          : entries.filter((e) => sameEvent(place, e) && e.id !== place.entry?.id && quotaPlaceLinkable(place.kind, e.status));
+        const title = `${place.sport} · ${place.event}${place.of > 1 ? ` · place ${place.number} of ${place.of}` : ""}`;
+        return (
+          <section key={place.id} className="card" aria-label={title}>
+            <h3>{title}</h3>
+            <p className="meta">
+              {`${QUOTA_PLACE_KIND_LABELS[place.kind]} · ${QUOTA_PLACE_STATE_LABELS[place.state]}`}
+              {place.earnedVia ? ` · via ${place.earnedVia}` : ""}
+              {place.reallocated ? " · reallocated" : ""}
+              {` · ${place.entry ? place.entry.who.name : "no Entry yet"}`}
+            </p>
+            <p className="sub">{`Source: ${place.source} · checked ${place.checkedOn}`}</p>
+            {moves.length > 0 ? (
+              <Form method="post" className="fields">
+                <input type="hidden" name="intent" value="move-quota-place" />
+                <input type="hidden" name="placeId" value={place.id} />
+                <label>
+                  Now
+                  <select name="event">
+                    {moves.map((m) => (
+                      <option key={m} value={m}>
+                        {MOVE_LABELS[m]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Source
+                  <input name="source" required />
+                </label>
+                <button type="submit">Move</button>
+              </Form>
+            ) : null}
+            {linkable.length > 0 ? (
+              <Form method="post" className="fields">
+                <input type="hidden" name="intent" value="link-quota-place" />
+                <input type="hidden" name="placeId" value={place.id} />
+                <label>
+                  Entry
+                  <select name="entryId">
+                    {linkable.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.who.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit">Link</button>
+              </Form>
+            ) : null}
+            <Form method="post" className="fields">
+              <input type="hidden" name="intent" value="remove-quota-place" />
+              <input type="hidden" name="placeId" value={place.id} />
+              <button type="submit" className="secondary">
+                Remove (recorded by mistake)
+              </button>
+            </Form>
+          </section>
+        );
+      })}
+
+      <Form method="post" className="fields card" aria-label="Record Quota places">
+        <input type="hidden" name="intent" value="add-quota-places" />
+        <label>
+          Sport
+          <input name="sport" placeholder="Cycling road" />
+        </label>
+        <label>
+          Event
+          <input name="event" placeholder="Men's road race" />
+        </label>
+        <label>
+          Place
+          <select name="kind" defaultValue="noc">
+            <option value="noc">NOC-owned</option>
+            <option value="named">Named (to its Entry)</option>
+          </select>
+        </label>
+        <label>
+          Starts
+          <select name="how" defaultValue="hold">
+            <option value="hold">Provisional (on today&apos;s list)</option>
+            <option value="allocate">Allocated</option>
+            <option value="reallocate">Allocated through reallocation</option>
+          </select>
+        </label>
+        <label>
+          How many
+          <input name="count" type="number" min={1} max={20} defaultValue={1} />
+        </label>
+        <label>
+          Earned via
+          <input name="earnedVia" placeholder="UCI nation ranking" />
+        </label>
+        <label>
+          Named to
+          <select name="entryId" defaultValue="">
+            <option value="">— (NOC-owned)</option>
+            {entries.map((e) => (
+              <option key={e.id} value={e.id}>
+                {`${e.who.name} · ${e.event}`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Source
+          <input name="source" required />
+        </label>
+        <button type="submit">Record</button>
+      </Form>
+    </>
   );
 }
