@@ -85,27 +85,81 @@ describe("selectionDue", () => {
   });
 });
 
-describe("entryListSelection", () => {
+describe("entryListSelection: what a published IF entry list makes of a competition's Entries", () => {
+  const athlete = (id: string, athleteId: string, event: string) => ({ id, event, athleteId, teamId: null, members: [], partnership: false });
+  const team = (id: string, event: string, members: string[], partnership: boolean) => ({ id, event, athleteId: null, teamId: id, members, partnership });
+
   it.each([
     {
-      name: "on the list: Selected; a candidate left off it: Not selected",
-      entries: [
-        { id: "e1", athleteId: "a1" },
-        { id: "e2", athleteId: "a2" },
-      ],
-      listed: ["a1"],
+      name: "a list without events: the one Entry of an Athlete on it Selected, an Athlete left off it Not selected",
+      entries: [athlete("e1", "a1", "Mass Start Men"), athlete("e2", "a2", "Mass Start Women")],
+      listed: [{ athleteId: "a1", events: null }],
       expected: [
         { id: "e1", status: "selected" },
         { id: "e2", status: "not-selected" },
       ],
     },
     {
-      name: "a Team Entry is left alone: the list names Athletes",
-      entries: [{ id: "t1", athleteId: null }],
-      listed: ["a1"],
+      name: "a list without events cannot tell which of an Athlete's several Entries it means: they are left alone",
+      entries: [athlete("e1", "a1", "1500m Men"), athlete("e2", "a1", "5000m Men")],
+      listed: [{ athleteId: "a1", events: null }],
+      expected: [],
+    },
+    {
+      name: "a list naming events selects the Athlete in those events only, Not selected in the others",
+      entries: [athlete("e1", "a1", "Recurve Men"), athlete("e2", "a1", "Compound Men")],
+      listed: [{ athleteId: "a1", events: ["Recurve Men"] }],
+      expected: [
+        { id: "e1", status: "selected" },
+        { id: "e2", status: "not-selected" },
+      ],
+    },
+    {
+      name: "events match as the timetable matches them (case, Metres/m)",
+      entries: [athlete("e1", "a1", "women's 1500 metres")],
+      listed: [{ athleteId: "a1", events: ["Women's 1500m"] }],
+      expected: [{ id: "e1", status: "selected" }],
+    },
+    {
+      name: "a partnership is Selected when the list names both its members",
+      entries: [team("t1", "Women", ["a1", "a2"], true)],
+      listed: [
+        { athleteId: "a1", events: null },
+        { athleteId: "a2", events: null },
+      ],
+      expected: [{ id: "t1", status: "selected" }],
+    },
+    {
+      name: "a place passing to a new partnership: the new one Selected, the old one Not selected",
+      entries: [team("old", "Women", ["a1", "a2"], true), team("new", "Women", ["a1", "a3"], true)],
+      listed: [
+        { athleteId: "a1", events: null },
+        { athleteId: "a3", events: null },
+      ],
+      expected: [
+        { id: "old", status: "not-selected" },
+        { id: "new", status: "selected" },
+      ],
+    },
+    {
+      name: "Belgium's Team in an event is Selected when the list names a member of it in that event",
+      entries: [team("relay", "Mixed Team Relay", ["a1", "a2", "a3", "a4"], false)],
+      listed: [{ athleteId: "a2", events: ["Women", "Mixed Team Relay"] }],
+      expected: [{ id: "relay", status: "selected" }],
+    },
+    {
+      name: "a member named only in an individual event says nothing about Belgium's Team",
+      entries: [team("relay", "Mixed Team Relay", ["a1", "a2"], false)],
+      listed: [{ athleteId: "a2", events: ["Women"] }],
+      expected: [],
+    },
+    {
+      name: "a Team none of whose members the list names is left alone",
+      entries: [team("t1", "Recurve Men Team", ["a1", "a2", "a3"], false)],
+      listed: [{ athleteId: "a9", events: ["Recurve Men"] }],
       expected: [],
     },
   ])("$name", ({ entries, listed, expected }) => {
-    expect(entryListSelection(entries, new Set(listed))).toEqual(expected);
+    expect(entryListSelection(entries, listed)).toEqual(expected);
   });
 });

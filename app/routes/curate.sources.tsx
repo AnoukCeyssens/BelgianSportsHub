@@ -2,7 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { data, Form, Link, redirect } from "react-router";
 import { now } from "~/clock";
 import { dbFrom } from "~/context";
-import { schema } from "~/db/client";
+import { EXTERNAL_ID_SCHEMES, isExternalIdScheme, schema } from "~/db/client";
 import type { SourceTier } from "~/domain";
 import { SPORT_LIST_ID, SportOptions, typedSport } from "~/curate/sport-field";
 import { SOURCE_ADAPTERS } from "~/ingest/sources";
@@ -47,6 +47,9 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const sport = field("sport") ? typedSport(field("sport")) : null;
   const idScheme = field("idScheme") || null;
   if (idScheme !== null && !KEY.test(idScheme)) refuse("The ID scheme is lower-case words joined by hyphens, e.g. world-climbing");
+  if (idScheme !== null && !isExternalIdScheme(idScheme)) {
+    refuse(`The ID scheme ${idScheme} has no label: use a known one (${Object.keys(EXTERNAL_ID_SCHEMES).join(", ")}), or add it to EXTERNAL_ID_SCHEMES first`);
+  }
   const url = field("url");
   if (!/^https?:\/\/\S+$/.test(url)) refuse("The URL starts with http:// or https://");
   const notes = field("notes") || null;

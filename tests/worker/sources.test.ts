@@ -94,6 +94,7 @@ describe("Sources", () => {
     { name: "a cadence below a day", change: { cadenceDays: "0" } },
     { name: "a URL that is no web address", change: { url: "ftp://fil.example" } },
     { name: "Automatic without an adapter", change: { tier: "automatic" } },
+    { name: "an ID scheme without a label (the Athlete page could not name it)", change: { idScheme: "fil-luge-ids" } },
   ])("refuses $name", async ({ change }) => {
     const res = await post("/curate/sources/fil-luge", {
       name: "FIL luge (fil-luge.org)",

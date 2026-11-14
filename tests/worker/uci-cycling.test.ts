@@ -45,6 +45,20 @@ describe("UCI cycling source", () => {
     expect(html).toContain("14 Oct");
   });
 
+  it("keeps the name + date of birth it matched on as a derived key, never shown as a UCI ID", async () => {
+    const kopecky = await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling road", dateOfBirth: "1995-11-10" });
+
+    await runAfterTrackWorlds();
+
+    const ids = await getDb(env.DB).select({ scheme: schema.athleteExternalId.scheme, value: schema.athleteExternalId.value }).from(schema.athleteExternalId);
+    expect(ids).toEqual([{ scheme: "uci-derived", value: "KOPECKY LOTTE 1995-11-10" }]);
+    const page = await athletePage(kopecky);
+    const head = page.slice(page.indexOf("<h1>"), page.indexOf("<h2>"));
+    expect(head).not.toContain("KOPECKY");
+    expect(head).not.toContain("UCI (name + date of birth)");
+    expect(head).not.toContain("UCI ID");
+  });
+
   it("takes a WorldTour stage race's general classification, not its stages", async () => {
     const widar = await seedAthlete(env.DB, { name: "Jarno Widar", sport: "Cycling road", dateOfBirth: "2005-11-13" });
 

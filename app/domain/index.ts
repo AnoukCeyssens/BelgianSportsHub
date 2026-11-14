@@ -74,6 +74,7 @@ export {
 export { venueZoneOf } from "./venue-zone";
 export {
   dayToShow,
+  isCombinedEvent,
   liveDays,
   roundsFor,
   venueLabel,
@@ -134,6 +135,8 @@ export {
 export {
   BOIC,
   entryListSelection,
+  type EntryListEntry,
+  type ListedEntrant,
   namesFoundIn,
   SELECTION_LOOKAHEAD_WEEKS,
   selectionDue,

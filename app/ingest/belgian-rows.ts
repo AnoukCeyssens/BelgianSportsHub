@@ -30,7 +30,7 @@ import { followRanking } from "~/qualification/ranked-tracks";
 import { applyEntryList } from "~/qualification/selection";
 import { knownIdentities } from "./identities";
 import { keepRawCopy } from "./raw-copy";
-import type { BelgianRows, CompetitionInput, Person, RankingInput, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
+import type { BelgianRows, CompetitionInput, Entrant, Person, RankingInput, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
 import { addVersion, fingerprintOf, replaceSessions, versionsOf } from "./timetable-versions";
 
 type MergeQueueItem = typeof schema.mergeQueueItem.$inferSelect;
@@ -237,12 +237,17 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       changes += await followRanking(db, { source, ranking: input.ranking, who }, now);
     },
 
-    async entrants(competitionId: string, people: Person[], rawCopyId: string) {
+    async entrants(competitionId: string, people: Entrant[], rawCopyId: string) {
       const athleteIds = new Set<string>();
+      // The events the list names each Athlete in; null once a listing names none.
+      const events = new Map<string, string[] | null>();
       for (const person of people) {
         if (person.nationality !== BELGIUM) continue;
         const { athleteId } = await athleteFor(person);
-        if (athleteId) athleteIds.add(athleteId);
+        if (!athleteId) continue;
+        athleteIds.add(athleteId);
+        const seen = events.has(athleteId) ? events.get(athleteId)! : [];
+        events.set(athleteId, seen === null || !person.events ? null : [...seen, ...person.events]);
       }
       // At the Games a source's list covers its own sport only: the other sports' entrants stay.
       const gamesSport = gamesSports.get(competitionId);
@@ -265,7 +270,10 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       }
       // The IF entry list replaces the Selection (#34), also for Entries named since the list was stored.
       // A list without Belgians may simply not be published yet, so it leaves the Selection alone.
-      if (athleteIds.size > 0) changes += await applyEntryList(db, competitionId, same ? current[0]?.rawCopyId ?? rawCopyId : rawCopyId, now);
+      if (athleteIds.size > 0) {
+        const listed = [...events].map(([athleteId, named]) => ({ athleteId, events: named }));
+        changes += await applyEntryList(db, competitionId, same ? current[0]?.rawCopyId ?? rawCopyId : rawCopyId, listed, now);
+      }
     },
 
     async timetable(input: TimetableInput) {

@@ -4,7 +4,7 @@
 // Athlete; resolveMergeQueueItem() does the work.
 import { asc, eq } from "drizzle-orm";
 import { Form } from "react-router";
-import { type Db, EXTERNAL_ID_SCHEMES, schema } from "~/db/client";
+import { type Db, EXTERNAL_ID_SCHEMES, isExternalIdScheme, schema } from "~/db/client";
 import { normaliseName } from "~/domain";
 import { formatDate } from "~/format";
 import { resolveMergeQueueItem, type Resolution } from "~/ingest/merge-queue";
@@ -64,7 +64,7 @@ function describeIncoming(item: { sport: string; dateOfBirth: string | null; sch
   return [
     item.sport,
     item.dateOfBirth ? `born ${formatDate(item.dateOfBirth)}` : null,
-    `${EXTERNAL_ID_SCHEMES[item.scheme as keyof typeof EXTERNAL_ID_SCHEMES] ?? item.scheme.toUpperCase()} ${item.value}`,
+    `${isExternalIdScheme(item.scheme) ? EXTERNAL_ID_SCHEMES[item.scheme] : item.scheme.toUpperCase()} ${item.value}`,
   ]
     .filter(Boolean)
     .join(" · ");
