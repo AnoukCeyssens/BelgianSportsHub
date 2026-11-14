@@ -103,6 +103,8 @@ Set by the first Automatic source, ISU speed skating (#23). Every later Automati
 
 **Results and Upcoming.** Until Teams and Entries arrive (#27), a `result` belongs to an Athlete (or a merge-queue item) and names its event as text; team events (ISU team pursuit) are not ingested yet. An `entrant` is an Athlete named on a competition's entry list; the Athlete page lists those competitions that have not ended yet under Upcoming.
 
+**Manual results** (#26, `app/curate/manual-results.tsx`). A result is due when an Athlete is an `entrant` of a competition whose Source has tier `manual` and whose `endDate` has come (Belgian date), and they have no result there yet. The form keeps what the owner typed as a JSON raw copy whose `url` is the source URL (the PDF), then writes through the same `belgianRows(...).result()` writer, passing `athleteId` instead of `person` (no identity matching). DNS is recorded only here and never moves "Athlete since"; "Did not compete" writes no result and removes the `entrant` row.
+
 **Adding an Automatic source:** record fixtures of one realistic run (trim by hand where large, note it in `trimmedByHand`), export the ready-to-stub list from `tests/fixtures/sources/<source>/index.ts`, write the Worker test against `deliverIngestJobs([{ kind: "fetch-source", source }])`, then the adapter, its registry entry and the Source row. Before it counts as Automatic, the owner runs "Fetch now" on the deployed test copy; a refusal shows it as blocked (Assisted).
 
 ## Offline reading and curation routes
