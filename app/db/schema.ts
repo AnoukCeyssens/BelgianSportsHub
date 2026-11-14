@@ -568,3 +568,36 @@ export const qualificationTrack = sqliteTable("qualification_track", {
   checkedOn: text("checked_on").notNull(),
   changedOn: text("changed_on").notNull(),
 });
+
+/**
+ * One Quota place for Belgium in one event at one Olympic Games (GLOSSARY
+ * "Quota place", ADR 0002, ticket #36): a separate fact from any Entry's
+ * Qualification status. Championships have none. Numbered within its event
+ * ("place 2 of 3") as recorded; a nation ranking that earns n places records
+ * n rows.
+ */
+export const quotaPlace = sqliteTable("quota_place", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** The Games (a `games` competition, never a reference Games). */
+  competitionId: text("competition_id")
+    .notNull()
+    .references(() => competition.id, { onDelete: "cascade" }),
+  sport: text("sport").notNull(),
+  /** Event as the qualification system names it, matching its Entries' `event`, e.g. "Men", "Men's double sculls". */
+  event: text("event").notNull(),
+  /** 1, 2, … within the competition's sport and event, in the order recorded. */
+  number: integer("number").notNull(),
+  /** "noc" (NOC-owned) | "named" (QuotaPlaceKind). */
+  kind: text("kind").notNull(),
+  /** "provisional" | "allocated" | "accepted" | "entered" | "declined" | "lost" (QuotaPlaceState), moved only by `quotaPlaceTransition`. */
+  state: text("state").notNull(),
+  /** Gained through reallocation (it started at Allocated). */
+  reallocated: integer("reallocated", { mode: "boolean" }).notNull().default(false),
+  /** How it was earned, as written: "FIH Pro League 2026–27", "UCI nation ranking". */
+  earnedVia: text("earned_via"),
+  /** The Entry it belongs to: a named place's from when it is earned, an NOC-owned place's from Selection; null until then. */
+  entryId: text("entry_id").references(() => entry.id, { onDelete: "set null" }),
+  /** Where it was read (a URL or a short description), and the Belgian date it was last checked. */
+  source: text("source").notNull(),
+  checkedOn: text("checked_on").notNull(),
+});

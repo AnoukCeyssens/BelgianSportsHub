@@ -127,6 +127,13 @@
       "when": 1794666396697,
       "tag": "0017_qualification",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1794667145594,
+      "tag": "0018_quota_places",
+      "breakpoints": true
     }
   ]
 }

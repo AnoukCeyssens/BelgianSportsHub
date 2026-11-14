@@ -135,6 +135,10 @@ tr.if-through td a { color: #999; }
 .badge.q-qualified, .badge.q-selected { background: var(--ok); color: #fff; }
 .badge.q-on-track, .badge.q-eligible { background: var(--accent); }
 .badge.q-at-risk { background: var(--no); color: #fff; }
+.badge.qp-provisional { background: transparent; border: 1px dashed var(--ink); padding: 0 5px; }
+.badge.qp-allocated, .badge.qp-accepted { background: var(--accent); }
+.badge.qp-entered { background: var(--ok); color: #fff; }
+.badge.qp-declined, .badge.qp-lost { background: transparent; color: var(--muted); text-decoration: line-through; }
 .seg { display: flex; border: 1px solid var(--ink); margin: 8px 0; }
 .seg a { flex: 1; text-align: center; padding: 7px 4px; text-decoration: none; color: var(--ink); font-size: 12px; font-weight: 600; }
 .seg a span { display: block; font-weight: 400; }
