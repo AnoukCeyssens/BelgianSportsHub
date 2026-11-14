@@ -62,6 +62,30 @@ export const WEEKLY_RUN_SHEET: readonly RunSheetStep[] = [
   { key: "monthly-checklist", label: "Monthly checklist", estimate: "~15 min", minutesPerItem: 5, purpose: "Only the checks due this week." },
 ];
 
+/**
+ * The Live day pass (spec #20, stories 112 and 113; ticket #38): four steps
+ * run daily while any competition with Belgian Entries is Live, in 15–30
+ * minutes. Estimates are the prototype's, to revise.
+ */
+export const LIVE_DAY_PASS: readonly RunSheetStep[] = [
+  {
+    key: "today-tomorrow",
+    label: "Today & tomorrow",
+    estimate: "~10 min",
+    minutesPerItem: 2,
+    purpose: "Heat or match detail for the Belgian Entries of today and tomorrow, from the start list or draw; schedule changes go in Schedules.",
+  },
+  {
+    key: "todays-results",
+    label: "Today's results",
+    estimate: "~10 min",
+    minutesPerItem: 3,
+    purpose: "Each Belgian Entry's rounds so far: through, out or the final result; then the medal table.",
+  },
+  { key: "merge-queue", label: "Merge queue", estimate: "~2 min", minutesPerItem: 3, purpose: "Anything today's results could not match." },
+  { key: "source-health", label: "Source health", estimate: "~2 min", minutesPerItem: 2, purpose: "Problems only." },
+];
+
 export type RunSheetProgress<S> = {
   steps: (S & { done: boolean })[];
   doneCount: number;

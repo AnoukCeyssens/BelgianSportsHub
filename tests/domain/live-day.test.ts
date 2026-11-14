@@ -5,7 +5,8 @@ import { dayToShow, liveDays, roundsFor, venueLabel } from "~/domain";
 // Belgian Entry is placed in every round of its event from the round it
 // starts in (earlier rounds are byes). Later rounds are "if through" until it
 // advances (#38 moves them on from results); pool matches are "match TBD"
-// until the draw. The Live phase shows a day picker with the days that have
+// until the draw (#38: a result or start list moves them on, or drops
+// them after elimination). The Live phase shows a day picker with the days that have
 // Belgian Entries marked.
 
 const r = (round: string, date: string) => ({ round, date });
@@ -85,6 +86,101 @@ describe("roundsFor", () => {
     },
   ])("$name", ({ firstRound, rounds, expected }) => {
     expect(roundsFor({ firstRound }, rounds).map((x) => [x.round, x.state])).toEqual(expected);
+  });
+});
+
+describe("roundsFor moves on from results and start lists (#38)", () => {
+  const swim = [r("Heats", "2027-07-26"), r("Semi-finals", "2027-07-26"), r("Final", "2027-07-27")];
+  const relay = [r("Heats", "2027-07-26"), r("Heats", "2027-07-26"), r("Final", "2027-07-27")];
+  const tennis = [r("Round 1", "2028-07-20"), r("Round 2", "2028-07-21"), r("Quarter-finals", "2028-07-23"), r("Final", "2028-07-26")];
+  const pool = [r("Pool (2 Matches)", "2028-07-13"), r("Pool (2 Matches)", "2028-07-15"), r("Quarterfinal (2 Matches)", "2028-07-24"), r("Final", "2028-07-28")];
+  const p = (round: string, outcome: "advanced" | "eliminated" | null, listed = false) => ({ round, outcome, listed });
+  it.each([
+    {
+      name: "no news: later rounds stay if through",
+      rounds: swim,
+      progress: { rounds: [], result: null },
+      expected: [["Heats", "scheduled", null], ["Semi-finals", "if-through", null], ["Final", "if-through", null]],
+    },
+    {
+      name: "through the heats: the semi-final is live, the final still if through",
+      rounds: swim,
+      progress: { rounds: [p("Heats", "advanced")], result: null },
+      expected: [["Heats", "scheduled", "advanced"], ["Semi-finals", "scheduled", null], ["Final", "if-through", null]],
+    },
+    {
+      name: "out in the heats: the later rounds drop",
+      rounds: swim,
+      progress: { rounds: [p("Heats", "eliminated")], result: null },
+      expected: [["Heats", "scheduled", "eliminated"]],
+    },
+    {
+      name: "a start list naming the Entry in the final makes every round up to it live",
+      rounds: swim,
+      progress: { rounds: [p("Final", null, true)], result: null },
+      expected: [["Heats", "scheduled", null], ["Semi-finals", "scheduled", null], ["Final", "scheduled", null]],
+    },
+    {
+      name: "through then out: live up to the round lost, nothing after",
+      rounds: tennis,
+      progress: { rounds: [p("Round 1", "advanced"), p("Round 2", "eliminated")], result: null },
+      expected: [["Round 1", "scheduled", "advanced"], ["Round 2", "scheduled", "eliminated"]],
+    },
+    {
+      name: "a round spread over two Sessions advances as one",
+      rounds: relay,
+      progress: { rounds: [p("Heats", "advanced")], result: null },
+      expected: [["Heats", "scheduled", "advanced"], ["Heats", "scheduled", "advanced"], ["Final", "scheduled", null]],
+    },
+    {
+      name: "a final classification ends the event: rounds after its date drop",
+      rounds: tennis,
+      progress: { rounds: [], result: { date: "2028-07-21", status: "eliminated" } },
+      expected: [["Round 1", "scheduled", null], ["Round 2", "if-through", null]],
+    },
+    {
+      name: "a finished result means every round up to its date was reached",
+      rounds: swim,
+      progress: { rounds: [], result: { date: "2027-07-27", status: "finished" } },
+      expected: [["Heats", "scheduled", null], ["Semi-finals", "scheduled", null], ["Final", "scheduled", null]],
+    },
+    {
+      name: "a DNF in the heats drops the rounds of later days",
+      rounds: swim,
+      progress: { rounds: [], result: { date: "2027-07-26", status: "DNF" } },
+      expected: [["Heats", "scheduled", null], ["Semi-finals", "if-through", null]],
+    },
+    {
+      name: "pool matches are played whatever: through the pool, the quarter-final is live",
+      rounds: pool,
+      progress: { rounds: [p("Pool (2 Matches)", "advanced")], result: null },
+      expected: [
+        ["Pool (2 Matches)", "scheduled", "advanced"],
+        ["Pool (2 Matches)", "scheduled", "advanced"],
+        ["Quarterfinal (2 Matches)", "scheduled", null],
+        ["Final", "if-through", null],
+      ],
+    },
+    {
+      name: "a pool match with its opponent drawn is no longer TBD",
+      rounds: pool,
+      progress: { rounds: [p("Pool (2 Matches)", null, true)], result: null },
+      expected: [
+        ["Pool (2 Matches)", "scheduled", null],
+        ["Pool (2 Matches)", "scheduled", null],
+        ["Quarterfinal (2 Matches)", "if-through", null],
+        ["Final", "if-through", null],
+      ],
+    },
+    {
+      name: "news about a round the Entry skipped with a bye is ignored",
+      rounds: tennis,
+      firstRound: "Round 2",
+      progress: { rounds: [p("Round 1", "eliminated")], result: null },
+      expected: [["Round 2", "scheduled", null], ["Quarter-finals", "if-through", null], ["Final", "if-through", null]],
+    },
+  ])("$name", ({ rounds, progress, expected, firstRound }) => {
+    expect(roundsFor({ firstRound: firstRound ?? null }, rounds, progress).map((x) => [x.round, x.state, x.outcome])).toEqual(expected);
   });
 });
 
