@@ -81,7 +81,7 @@ export async function actOnManualResult(env: Pick<Env, "DB" | "RAW">, intent: st
     contentType: "application/json",
     fetchedAt: now,
   });
-  await belgianRows(env.DB, competition.source, now).result({
+  await belgianRows(env, competition.source, now).result({
     competitionId: competition.id,
     athleteId: athlete.id,
     event: typed.event,

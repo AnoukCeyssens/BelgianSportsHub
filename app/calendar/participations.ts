@@ -1,8 +1,9 @@
 // Belgian Participation per competition (spec #20, stories 38, 40, 96 and
 // 109), for the Calendar, the Selections & likely step and (later) the iCal
 // feed. Gathers the facts from storage and hands them to the domain rule:
-// - named: an entry list (`entrant`) or a result names a Belgian Athlete
-//   (start lists and Selections join here when they arrive);
+// - named: an entry list (`entrant`), a Selection (a Selected `entry`, #34)
+//   or a result names a Belgian Athlete or Team (start lists join here when
+//   they arrive);
 // - previous edition: a result of a currently Active Belgian Entry at the
 //   latest earlier competition of the same series (inactive Entries drop out
 //   of likely Participation, story 25);
@@ -43,12 +44,19 @@ export async function participationsBetween(db: Db, from: string, to: string): P
   if (competitions.length === 0) return [];
   const ids = competitions.map((x) => x.id);
 
-  const [entrants, results, curations, previous, contending] = await Promise.all([
+  const [entrants, selected, results, curations, previous, contending] = await Promise.all([
     db
       .select({ competitionId: schema.entrant.competitionId, name: schema.athlete.name })
       .from(schema.entrant)
       .innerJoin(schema.athlete, eq(schema.entrant.athleteId, schema.athlete.id))
       .where(inArray(schema.entrant.competitionId, ids)),
+    // A Selection names a Belgian Entry: its Selected Athletes and Teams.
+    db
+      .select({ competitionId: schema.entry.competitionId, name: sql<string>`coalesce(${schema.athlete.name}, ${schema.team.name})` })
+      .from(schema.entry)
+      .leftJoin(schema.athlete, eq(schema.entry.athleteId, schema.athlete.id))
+      .leftJoin(schema.team, eq(schema.entry.teamId, schema.team.id))
+      .where(and(inArray(schema.entry.competitionId, ids), eq(schema.entry.qualificationStatus, "selected"))),
     // A result names a Belgian Entry: an Athlete or a Team (ADR 0001).
     db
       .select({ competitionId: schema.result.competitionId, name: sql<string>`coalesce(${schema.athlete.name}, ${schema.team.name})` })
@@ -62,7 +70,7 @@ export async function participationsBetween(db: Db, from: string, to: string): P
   ]);
 
   const named = new Map<string, Set<string>>();
-  for (const row of [...entrants, ...results]) {
+  for (const row of [...entrants, ...selected, ...results]) {
     if (!named.has(row.competitionId)) named.set(row.competitionId, new Set());
     named.get(row.competitionId)!.add(row.name);
   }

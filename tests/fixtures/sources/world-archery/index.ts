@@ -1,5 +1,30 @@
 // Recorded World Archery API runs (api.worldarchery.org/v3), ready for stubOutboundFetch().
 import type { RecordedResponse } from "../../../support/outbound-fetch";
+import timetableCompetitions from "./timetable-competitions.json?raw";
+import timetableCompetitionsMeta from "./timetable-competitions.json.meta.json";
+import medellinSchedule from "./medellin-schedule.json?raw";
+import medellinScheduleMeta from "./medellin-schedule.json.meta.json";
+import medellinScheduleBuilt from "./medellin-schedule-built.json?raw";
+import medellinScheduleBuiltMeta from "./medellin-schedule-built.json.meta.json";
+
+/**
+ * The timetable run (#39) on Saturday 14 Nov 2026 at 04:00 UTC:
+ * - the outdoor competitions of the next 400 days (trimmed): the World
+ *   Championships in Medellín (20–27 Sep 2027), the youth, para and Asian
+ *   youth Championships and the World Cup Final, which have no timetable here;
+ * - Medellín's schedule: not published yet.
+ */
+export const archeryTimetableRun: RecordedResponse[] = [
+  { ...timetableCompetitionsMeta, body: timetableCompetitions },
+  { ...medellinScheduleMeta, body: medellinSchedule },
+];
+export const ARCHERY_TIMETABLE_RUN = { now: "2026-11-14T04:00:00.000Z" };
+
+/** The same run once Medellín's schedule is out: built by hand from the API documentation's example (see its meta). */
+export const archeryPublishedTimetableRun: RecordedResponse[] = [
+  { ...timetableCompetitionsMeta, body: timetableCompetitions },
+  { ...medellinScheduleBuiltMeta, body: medellinScheduleBuilt },
+];
 import firstRunResults from "./bel-results-first-run.json?raw";
 import firstRunResultsMeta from "./bel-results-first-run.json.meta.json";
 import firstRunTeamResults from "./bel-team-results-first-run.json?raw";

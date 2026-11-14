@@ -67,6 +67,7 @@ type IsuResult = {
   sprintPoints?: number | null;
 };
 type IsuCompetitor = { skater?: IsuSkater };
+type IsuScheduledRace = { start: string; title: string };
 type IsuTeam = { country: string; members: { member: { skater?: IsuSkater } }[] };
 
 /** ISU result status codes; DNS (4) and Withdrawn (5) are not performances. */
@@ -99,6 +100,7 @@ export const isuSpeedSkating: SourceAdapter = {
         rawCopyId: event.rawCopyId,
       });
 
+      if (kind === "championship" && event.end >= today) await timetable(run, event, competitionId);
       if (event.start <= today) {
         const urls = await results(run, event, competitionId);
         const season = seasonOf(event.start);
@@ -154,6 +156,40 @@ async function events(run: SourceRun, endGte: string) {
     url = body.next;
   }
   return all;
+}
+
+/**
+ * A Championship's race schedule (#39): one race per distance, each its own
+ * round ("Final"), UTC start times read on the venue's clock. Empty until the
+ * ISU publishes it, close to the event.
+ */
+async function timetable(run: SourceRun, event: IsuEvent, competitionId: string) {
+  const url = `${API}/events/${event.isuId}/schedule/`;
+  const fetched = await run.fetch(url);
+  const zone = event.track?.timeZone ?? "UTC";
+  const races = JSON.parse(fetched.text) as IsuScheduledRace[];
+  await run.rows.timetable({
+    competitionId,
+    version: null,
+    publishedOn: null,
+    sourceUrl: url,
+    venueZone: event.track?.timeZone ?? null,
+    rounds: races.map((race) => {
+      const local = wallClock(new Date(race.start), zone);
+      return { date: local.slice(0, 10), start: local.slice(11, 16), end: null, session: null, event: race.title, round: "Final" };
+    }),
+    rawCopyId: fetched.rawCopyId,
+  });
+}
+
+/** "YYYY-MM-DDTHH:mm" on a clock in this zone. */
+function wallClock(instant: Date, timeZone: string): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(instant)
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
 /** Writes the results of the event's competitions official since the last run; returns those competitions' URLs. */

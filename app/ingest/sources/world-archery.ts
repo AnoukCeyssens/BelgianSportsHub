@@ -17,20 +17,20 @@
 // Senior recurve and compound only (the Olympic and LA28 divisions); para,
 // youth and masters categories are left out. The API gives no date of birth,
 // so a Belgian not yet known by World Archery ID waits in the merge queue.
-import type { CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
+import type { CompetitionInput, CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 
-const API = "https://api.worldarchery.org/v3";
+export const API = "https://api.worldarchery.org/v3";
 const SPORT = "Archery";
 const SCHEME = "world-archery";
 const FIRST_RUN_LOOKBACK_DAYS = 365;
 /** Results appear when a competition ends; a week-long event that started before the last run still counts. */
 const RESULTS_LOOKBACK_DAYS = 14;
 const ENTRY_LIST_HORIZON_DAYS = 14;
-const OUTDOOR = 1;
+export const OUTDOOR = 1;
 
 /** Senior categories and how a result names its event. */
-const EVENT_BY_CATEGORY: Record<string, string> = {
+export const EVENT_BY_CATEGORY: Record<string, string> = {
   RM: "Recurve Men",
   RW: "Recurve Women",
   CM: "Compound Men",
@@ -38,7 +38,7 @@ const EVENT_BY_CATEGORY: Record<string, string> = {
 };
 
 /** Senior team categories (three archers; mixed teams two) and how a Team result names its event. */
-const TEAM_EVENT_BY_CATEGORY: Record<string, string> = {
+export const TEAM_EVENT_BY_CATEGORY: Record<string, string> = {
   RM: "Recurve Men Team",
   RW: "Recurve Women Team",
   CM: "Compound Men Team",
@@ -71,7 +71,7 @@ const QUALIFICATION_TOURNAMENT = /qualif/i;
  * Outdoor Championships and the European Grand Prix. Youth, para, masters and
  * other continents' events are not worth a request.
  */
-const ENTRY_LIST_SUBLEVELS = new Set([1, 4, 12, 13, 22, 32, 46]);
+export const ENTRY_LIST_SUBLEVELS = new Set([1, 4, 12, 13, 22, 32, 46]);
 
 type WaAthlete = { Id: string | number; FName: string; GName: string; WNameOrd: boolean; NOC: string };
 type Page<T> = { items: T[] };
@@ -94,7 +94,7 @@ type CountryResult = {
 type TeamCountryResult = Omit<CountryResult, "WaId" | "FName" | "GName" | "WNameOrd"> & {
   Members: { WaId: number; FName: string; GName: string; WNameOrd: boolean }[];
 };
-type WaCompetition = {
+export type WaCompetition = {
   ID: number;
   Name: string;
   Place: string;
@@ -194,26 +194,13 @@ async function teamResults(run: SourceRun, from: string, today: string) {
 }
 
 async function entryLists(run: SourceRun, today: string) {
-  const fetched = await run.fetch(
-    `${API}/COMPETITIONS/?DisciplineId=${OUTDOOR}&StartDate=${today}&EndDate=${addDays(today, ENTRY_LIST_HORIZON_DAYS)}&RBP=All`,
-  );
-  for (const c of (JSON.parse(fetched.text) as Page<WaCompetition>).items) {
+  const fetched = await competitionList(run, today, addDays(today, ENTRY_LIST_HORIZON_DAYS));
+  for (const c of fetched.competitions) {
     const kind = competitionKind(c.ComLevel, c.Name);
     if (!kind || c.IsCancelled || c.DTo < today) continue;
     if (!ENTRY_LIST_SUBLEVELS.has(c.ComSubLevel) && c.ComLevel !== OTHER_INTERNATIONAL_EVENT) continue;
-    const competitionId = await run.rows.competition({
-      name: c.Name,
-      sport: SPORT,
-      kind,
-      startDate: c.DFrom,
-      endDate: c.DTo,
-      city: c.Place || null,
-      country: c.Country || null,
-      venueZone: null,
-      sourceRef: String(c.ID),
-      rawCopyId: fetched.rawCopyId,
-    });
-    const entries = await run.fetch(`${API}/ENTRIES/?CompId=${c.ID}&Noc=BEL&RBP=All`);
+    const competitionId = await run.rows.competition(competitionInput(c, kind, fetched.rawCopyId));
+    const entries =await run.fetch(`${API}/ENTRIES/?CompId=${c.ID}&Noc=BEL&RBP=All`);
     const people = (JSON.parse(entries.text) as Page<Entry>).items
       .filter((e) => e.Athlete.NOC === "BEL" && e.CatInd.some((cat) => cat.Code in EVENT_BY_CATEGORY))
       .map((e) => person(e.Athlete));
@@ -221,7 +208,29 @@ async function entryLists(run: SourceRun, today: string) {
   }
 }
 
-function competitionKind(level: number, name: string): CompetitionKind | null {
+/** A listed competition as a competition row (shared with the timetable source, which writes as this one). */
+export function competitionInput(c: WaCompetition, kind: CompetitionKind, rawCopyId: string): CompetitionInput {
+  return {
+    name: c.Name,
+    sport: SPORT,
+    kind,
+    startDate: c.DFrom,
+    endDate: c.DTo,
+    city: c.Place || null,
+    country: c.Country || null,
+    venueZone: null,
+    sourceRef: String(c.ID),
+    rawCopyId,
+  };
+}
+
+/** The outdoor competitions held between two dates. */
+export async function competitionList(run: SourceRun, from: string, to: string) {
+  const fetched = await run.fetch(`${API}/COMPETITIONS/?DisciplineId=${OUTDOOR}&StartDate=${from}&EndDate=${to}&RBP=All`);
+  return { competitions: (JSON.parse(fetched.text) as Page<WaCompetition>).items, rawCopyId: fetched.rawCopyId };
+}
+
+export function competitionKind(level: number, name: string): CompetitionKind | null {
   if (level === OTHER_INTERNATIONAL_EVENT) return QUALIFICATION_TOURNAMENT.test(name) ? "circuit" : null;
   return KIND_BY_LEVEL[level] ?? null;
 }

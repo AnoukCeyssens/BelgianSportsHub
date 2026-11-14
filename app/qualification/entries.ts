@@ -51,8 +51,12 @@ export type PotentialEntry = {
   status: QualificationStatus | null;
   source: string | null;
   checkedOn: string | null;
+  /** The Selection behind a Selected / Not selected status (#34); null while none names the Entry. */
+  selection: EntrySelection | null;
   tracks: TrackView[];
 };
+
+export type EntrySelection = { selector: string | null; source: string | null; kind: "press-release" | "entry-list"; on: string | null };
 
 type Who = { athleteId: string } | { teamId: string };
 
@@ -100,6 +104,10 @@ export async function potentialEntries(db: Db, competitionIds: readonly string[]
       status: isQualificationStatus(entry.qualificationStatus) ? entry.qualificationStatus : null,
       source: entry.qualificationSource,
       checkedOn: entry.qualificationCheckedOn,
+      selection:
+        entry.selectionKind === "press-release" || entry.selectionKind === "entry-list"
+          ? { selector: entry.selector, source: entry.selectionSource, kind: entry.selectionKind as EntrySelection["kind"], on: entry.selectedOn }
+          : null,
       tracks: tracks
         .filter((x) => x.entryId === entry.id)
         .map((x) => {

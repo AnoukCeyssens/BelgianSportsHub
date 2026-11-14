@@ -7,6 +7,7 @@ import { MonthlyChecklistStep, actOnChecklist, loadMonthlyChecklist } from "~/cu
 import { SchedulesStep, actOnSchedules, loadSchedules } from "~/curate/schedules";
 import { actOnTimetable, loadTimetableReview } from "~/curate/timetables";
 import { SelectionsLikelyStep, actOnLikely, loadSelectionsLikely } from "~/curate/selections-likely";
+import { actOnSelection, loadSelectionReview } from "~/curate/selections";
 import { currentSession, finishSession, logAction } from "~/curate/session";
 import { SourceHealthStep, actOnSource, loadSourceHealth } from "~/curate/source-health";
 import { liveCompetitions } from "~/competition/placed-rounds";
@@ -93,6 +94,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     mergeQueue: params.step === "merge-queue" ? mergeQueue : null,
     qualificationReview: params.step === "qualification-review" ? qualificationReview : null,
     selectionsLikely: params.step === "selections-likely" ? selectionsLikely : null,
+    selectionReview:
+      params.step === "selections-likely" ? await loadSelectionReview(context.get(cloudflareContext).env, db, new URL(request.url).searchParams, at) : null,
     schedules: params.step === "schedules" ? schedules : null,
     timetableReview:
       params.step === "schedules" ? await loadTimetableReview(context.get(cloudflareContext).env, db, new URL(request.url).searchParams) : null,
@@ -127,6 +130,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   else if (step.key === "manual-results") message = await actOnManualResult(env, intent, form, at);
   else if (step.key === "merge-queue") message = await actOnMergeQueueItem(env.DB, db, intent, form);
   else if (step.key === "qualification-review") message = await actOnQualificationReview(db, intent, form, at);
+  else if (step.key === "selections-likely" && intent.endsWith("-selection")) ({ message, to } = await actOnSelection(env, intent, form, at));
   else if (step.key === "selections-likely") message = await actOnLikely(db, intent, form, at);
   else if (step.key === "schedules" && intent.endsWith("-timetable")) ({ message, to } = await actOnTimetable(env, intent, form, at));
   else if (step.key === "schedules") message = await actOnSchedules(env, intent, form, at);
@@ -150,6 +154,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
     mergeQueue,
     qualificationReview,
     selectionsLikely,
+    selectionReview,
     schedules,
     timetableReview,
     monthlyChecklist,
@@ -193,7 +198,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
         {manualResults ? <ManualResultsStep data={manualResults} /> : null}
         {mergeQueue ? <MergeQueueStep data={mergeQueue} /> : null}
         {qualificationReview ? <QualificationReviewStep data={qualificationReview} /> : null}
-        {selectionsLikely ? <SelectionsLikelyStep data={selectionsLikely} /> : null}
+        {selectionsLikely ? <SelectionsLikelyStep data={selectionsLikely} review={selectionReview} /> : null}
         {schedules ? <SchedulesStep data={schedules} review={timetableReview} /> : null}
         {monthlyChecklist ? <MonthlyChecklistStep data={monthlyChecklist} /> : null}
         {step.open === 0 ? <p className="donebox">✓ Nothing left in this step.</p> : null}

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "be2f64ff-822e-4712-9695-fdd25dc83055",
+  "id": "96fa090a-0c0c-4539-9bba-273d6a1b3234",
   "prevId": "4abb2510-55cd-4075-b28f-16f5c48a36ba",
   "tables": {
     "active_fact": {
@@ -1279,27 +1279,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "ranking_source": {
-          "name": "ranking_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "ranking": {
-          "name": "ranking",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "previous_has": {
-          "name": "previous_has",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {},
@@ -1437,154 +1416,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "ranking_snapshot": {
-      "name": "ranking_snapshot",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "ranking": {
-          "name": "ranking",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sport": {
-          "name": "sport",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "athlete_id": {
-          "name": "athlete_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "team_id": {
-          "name": "team_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "points": {
-          "name": "points",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "as_of": {
-          "name": "as_of",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "raw_copy_id": {
-          "name": "raw_copy_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "recorded_at": {
-          "name": "recorded_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "ranking_snapshot_athlete": {
-          "name": "ranking_snapshot_athlete",
-          "columns": [
-            "source",
-            "ranking",
-            "athlete_id",
-            "as_of"
-          ],
-          "isUnique": true
-        },
-        "ranking_snapshot_team": {
-          "name": "ranking_snapshot_team",
-          "columns": [
-            "source",
-            "ranking",
-            "team_id",
-            "as_of"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "ranking_snapshot_athlete_id_athlete_id_fk": {
-          "name": "ranking_snapshot_athlete_id_athlete_id_fk",
-          "tableFrom": "ranking_snapshot",
-          "tableTo": "athlete",
-          "columnsFrom": [
-            "athlete_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ranking_snapshot_team_id_team_id_fk": {
-          "name": "ranking_snapshot_team_id_team_id_fk",
-          "tableFrom": "ranking_snapshot",
-          "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "ranking_snapshot_raw_copy_id_raw_copy_id_fk": {
-          "name": "ranking_snapshot_raw_copy_id_raw_copy_id_fk",
-          "tableFrom": "ranking_snapshot",
-          "tableTo": "raw_copy",
-          "columnsFrom": [
-            "raw_copy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -2502,6 +2333,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },

@@ -1,5 +1,26 @@
 // Recorded World Aquatics API runs (api.worldaquatics.com/fina), ready for stubOutboundFetch().
 import type { RecordedResponse } from "../../../support/outbound-fetch";
+import timetableCompetitions from "./timetable-competitions.json?raw";
+import timetableCompetitionsMeta from "./timetable-competitions.json.meta.json";
+import beijing25mSchedule from "./beijing-25m-schedule.json?raw";
+import beijing25mScheduleMeta from "./beijing-25m-schedule.json.meta.json";
+import budapestSchedule from "./budapest-schedule.json?raw";
+import budapestScheduleMeta from "./budapest-schedule.json.meta.json";
+
+/**
+ * The timetable run (#39) on Saturday 14 Nov 2026 at 04:00 UTC:
+ * - the World Aquatics competitions of the next 400 days (trimmed): the short
+ *   course Worlds in Beijing (1–6 Dec 2026), the Worlds in Budapest (from
+ *   26 Jun 2027), and a World Cup, masters and U20 events that have no timetable here;
+ * - the Beijing schedule (trimmed to four events; venue-local dates and times)
+ *   and the Budapest one (not published yet).
+ */
+export const aquaticsTimetableRun: RecordedResponse[] = [
+  { ...timetableCompetitionsMeta, body: timetableCompetitions },
+  { ...beijing25mScheduleMeta, body: beijing25mSchedule },
+  { ...budapestScheduleMeta, body: budapestSchedule },
+];
+export const AQUATICS_TIMETABLE_RUN = { now: "2026-11-14T04:00:00.000Z" };
 import events from "./astana-events.json?raw";
 import eventsMeta from "./astana-events.json.meta.json";
 import m50free from "./astana-m50free.json?raw";

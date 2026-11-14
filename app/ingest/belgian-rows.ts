@@ -4,18 +4,24 @@
 // can stamp the source's "last data change".
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "~/db/client";
-import { identityMatch, teamIdentity, type KnownIdentity } from "~/domain";
+import { belgianDate, identityMatch, teamIdentity, TIMETABLE_TEXT_HEAD, timetableText, type KnownIdentity, type TimetableRound } from "~/domain";
 import { followRanking } from "~/qualification/ranked-tracks";
+import { applyEntryList } from "~/qualification/selection";
 import { knownIdentities } from "./identities";
-import type { BelgianRows, CompetitionInput, Person, RankingInput, ResultInput, TeamInput, TeamResultInput } from "./source-adapter";
+import { keepRawCopy } from "./raw-copy";
+import type { BelgianRows, CompetitionInput, Person, RankingInput, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
+import { addVersion, fingerprintOf, replaceSessions, versionsOf } from "./timetable-versions";
 
 type MergeQueueItem = typeof schema.mergeQueueItem.$inferSelect;
 
 const BELGIUM = "BEL";
+/** Raw copies of timetables, pasted or fetched: the Schedules step reads them back by this source. */
+export const TIMETABLE_RAW_SOURCE = "timetable";
 
 export type BelgianRowWriter = BelgianRows & { changes(): number };
 
-export function belgianRows(d1: D1Database, source: string, now: Date): BelgianRowWriter {
+export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: Date): BelgianRowWriter {
+  const d1 = env.DB;
   const db = getDb(d1);
   let changes = 0;
   let roster: KnownIdentity[] | null = null;
@@ -53,10 +59,11 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
 
     async competition(input: CompetitionInput) {
       const { rawCopyId, ...rest } = input;
-      const values = { ...rest, series: rest.series ?? null };
       const existing = await db.query.competition.findFirst({
         where: and(eq(schema.competition.source, source), eq(schema.competition.sourceRef, input.sourceRef)),
       });
+      // A source that does not know the venue's zone keeps the one a timetable (or the owner) gave.
+      const values = { ...rest, series: rest.series ?? null, venueZone: rest.venueZone ?? existing?.venueZone ?? null };
       if (!existing) {
         const [row] = await db
           .insert(schema.competition)
@@ -168,11 +175,59 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
       }
       const current = await db.select().from(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
       const same = current.length === athleteIds.size && current.every((e) => athleteIds.has(e.athleteId));
-      if (same) return;
-      await db.delete(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
-      if (athleteIds.size > 0) {
-        await db.insert(schema.entrant).values([...athleteIds].map((athleteId) => ({ competitionId, athleteId, rawCopyId })));
+      if (!same) {
+        await db.delete(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
+        if (athleteIds.size > 0) {
+          await db.insert(schema.entrant).values([...athleteIds].map((athleteId) => ({ competitionId, athleteId, rawCopyId })));
+        }
+        changes++;
       }
+      // The IF entry list replaces the Selection (#34), also for Entries named since the list was stored.
+      // A list without Belgians may simply not be published yet, so it leaves the Selection alone.
+      if (athleteIds.size > 0) changes += await applyEntryList(db, competitionId, same ? current[0]?.rawCopyId ?? rawCopyId : rawCopyId, now);
+    },
+
+    async timetable(input: TimetableInput) {
+      const competition = await db.query.competition.findFirst({ where: eq(schema.competition.id, input.competitionId) });
+      if (!competition) throw new Error(`No competition ${input.competitionId}`);
+      const venueZone = input.venueZone ?? competition.venueZone;
+      if (!venueZone || input.rounds.length === 0) return;
+      const rounds: TimetableRound[] = input.rounds.map((r, index) => ({ ...r, index, sport: competition.sport }));
+      const text = timetableText(rounds);
+      const fingerprint = await fingerprintOf(text);
+
+      const versions = await versionsOf(db, competition.id);
+      const [latest] = versions;
+      if (latest?.fingerprint === fingerprint) {
+        // The same timetable: no new version, but Entries named since place their rounds.
+        const { changed } = await replaceSessions(db, competition.id, latest.id, rounds, venueZone);
+        if (changed) changes++;
+        return;
+      }
+      // Seen before, and a later version (the owner's paste) replaced it: that one stands until the source changes.
+      if (versions.some((v) => v.fingerprint === fingerprint)) return;
+
+      const rawCopyId = await keepRawCopy(env, {
+        source: TIMETABLE_RAW_SOURCE,
+        url: input.sourceUrl,
+        body: text,
+        contentType: "text/tab-separated-values; charset=utf-8",
+        fetchedAt: now,
+        derivedFrom: input.rawCopyId,
+      });
+      const versionId = await addVersion(db, {
+        competitionId: competition.id,
+        version: input.version ?? `fetched ${belgianDate(now)}`,
+        publishedOn: input.publishedOn,
+        sourceUrl: input.sourceUrl,
+        // Each column of the kept table is its own timetable role.
+        columnMapping: Object.fromEntries(TIMETABLE_TEXT_HEAD.map((h) => [h.toLowerCase(), h.toLowerCase()])),
+        rawCopyId,
+        fingerprint,
+        storedAt: now,
+      });
+      if (!competition.venueZone) await db.update(schema.competition).set({ venueZone }).where(eq(schema.competition.id, competition.id));
+      await replaceSessions(db, competition.id, versionId, rounds, venueZone);
       changes++;
     },
   };
