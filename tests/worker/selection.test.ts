@@ -156,7 +156,7 @@ describe("Selection", () => {
     expect(panel(html)?.phase).toBe("Selection");
     expect(panel(html)?.text).toContain("Selected by Belgian Swimming Federation · 12 Nov 2026 · press release");
     expect(html).toContain(`href="${PRESS_URL}"`);
-    expect(rows(html, "Selected Entries")).toEqual(["Kobe Ndoumbe Men's 100 m butterfly", "Lucas Verbeke Men's 1500 m freestyle"]);
+    expect(rows(html, "Selected Entries")).toEqual(["Kobe Ndoumbe Men's 100 m butterfly – –", "Lucas Verbeke Men's 1500 m freestyle – –"]);
     expect(rows(html, "Not selected Entries")).toEqual(["Roos Vanhoutte Women's 200 m backstroke"]);
 
     // The owner's Qualification page shows the statuses with the press release as source.
@@ -239,7 +239,7 @@ describe("Selection", () => {
     ]);
 
     const html = await page(`/championship/${worlds}`);
-    expect(rows(html, "Selected Entries")).toEqual(["Tim Brys / Niels Van Zandweghe Men's double sculls"]);
+    expect(rows(html, "Selected Entries")).toEqual(["Tim Brys / Niels Van Zandweghe Men's double sculls – –"]);
     expect(rows(html, "Not selected Entries")).toEqual(["Tim Brys / Pieter Van Damme Men's double sculls"]);
   });
 
@@ -288,7 +288,7 @@ describe("Selection", () => {
     const whole = await page(`/games/${la}`);
     expect(panel(whole)?.phase).toBe("Selection");
     expect(panel(whole)?.text).toContain("Selected by Belgian Olympic Committee · 28 Mar 2028");
-    expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon"]);
+    expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon – –"]);
     expect(panel(await page(`/games/${la}?sport=Athletics`))?.phase).toBe("Selection");
     expect(panel(await page(`/games/${la}?sport=Swimming`))?.phase).toBe("Qualification");
     // Belgium's NOC-owned place in the event links to the Selected Entry.

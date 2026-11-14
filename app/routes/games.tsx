@@ -166,6 +166,11 @@ export default function Games({ loaderData }: Route.ComponentProps) {
           <Link to={`/curate/games/${games.id}/qualification`}>Edit qualification</Link>
         </p>
       ) : null}
+      {owner && shown === "selection" ? (
+        <p className="sub">
+          <Link to={`/curate/games/${games.id}/expectations`}>Seeds and picks</Link>
+        </p>
+      ) : null}
       <References games={references} />
     </>
   );

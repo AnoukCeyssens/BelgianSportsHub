@@ -62,6 +62,11 @@ export default function ChampionshipPage({ loaderData }: Route.ComponentProps) {
           <Link to={`/curate/championships/${id}/qualification`}>Edit qualification</Link>
         </p>
       ) : null}
+      {owner && shown === "selection" ? (
+        <p className="sub">
+          <Link to={`/curate/championships/${id}/expectations`}>Seeds and picks</Link>
+        </p>
+      ) : null}
     </>
   );
 }
