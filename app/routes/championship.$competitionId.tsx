@@ -31,7 +31,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const at = now();
   const inputs = (await phaseInputsFor(db, [competition])).get(competition.id)!;
   const current = currentPhase(inputs, at);
-  const shown = phaseToShow(new URL(request.url).searchParams.get("phase"), current);
+  const search = new URL(request.url).searchParams;
+  const shown = phaseToShow(search.get("phase"), current);
   return {
     id: competition.id,
     name: competition.name,
@@ -41,7 +42,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     endDate: competition.endDate,
     current,
     shown,
-    panel: await loadPhasePanel(db, competition, shown, at),
+    panel: await loadPhasePanel(db, competition, shown, at, undefined, search.get("day")),
     owner: isOwner(request, context.get(cloudflareContext).env),
   };
 }
@@ -53,7 +54,7 @@ export default function ChampionshipPage({ loaderData }: Route.ComponentProps) {
       <h1>{name}</h1>
       <p className="meta">{[sport, city, `${formatDayRange(startDate, endDate)} ${endDate.slice(0, 4)}`].filter(Boolean).join(" · ")}</p>
       <PhaseBar current={current} shown={shown} href={(phase) => (phase === current ? `/championship/${id}` : `/championship/${id}?phase=${phase}`)} />
-      <PhasePanel data={panel} />
+      <PhasePanel data={panel} dayHref={(day) => `/championship/${id}?${shown === current ? "" : `phase=${shown}&`}day=${day}`} />
       {owner && (shown === "standards" || shown === "qualification") ? (
         <p className="sub">
           <Link to={`/curate/championships/${id}/standards`}>Record standards</Link>

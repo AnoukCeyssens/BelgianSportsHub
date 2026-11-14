@@ -45,10 +45,11 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const shown = phaseToShow(search.get("phase"), current);
 
   const base = `/games/${games.id}`;
-  const withQuery = (sport: string | null, phase: Phase | null) => {
+  const withQuery = (sport: string | null, phase: Phase | null, day: string | null = null) => {
     const query = new URLSearchParams();
     if (sport) query.set("sport", sport);
     if (phase) query.set("phase", phase);
+    if (day) query.set("day", day);
     return query.size > 0 ? `${base}?${query}` : base;
   };
   const chosenQuery = chosen.length > 0 ? chosen.join(",") : null;
@@ -63,6 +64,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     others,
     current,
     shown,
+    // A Live day's link: `{day}` stands for its date.
+    dayHref: withQuery(chosenQuery, shown === current ? null : shown, "{day}"),
     phaseHrefs: Object.fromEntries(PHASES.map((p) => [p, withQuery(chosenQuery, p === current ? null : p)])) as Record<Phase, string>,
     chips: [
       { sport: "All sports", on: chosen.length === 0, href: base, colour: null },
@@ -79,7 +82,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       phase: PHASE_LABELS[currentPhase(s.inputs, at)],
       colour: sportColour(s.sport),
     })),
-    panel: await loadPhasePanel(db, games, shown, at, { sports: names, chosen }),
+    panel: await loadPhasePanel(db, games, shown, at, { sports: names, chosen }, search.get("day")),
     owner: isOwner(request, context.get(cloudflareContext).env),
   };
 }
@@ -94,7 +97,7 @@ export default function Games({ loaderData }: Route.ComponentProps) {
       </>
     );
   }
-  const { games, others, current, shown, phaseHrefs, chips, sports, panel, owner } = loaderData;
+  const { games, others, current, shown, phaseHrefs, dayHref, chips, sports, panel, owner } = loaderData;
   return (
     <>
       <h1>{games.name}</h1>
@@ -137,7 +140,7 @@ export default function Games({ loaderData }: Route.ComponentProps) {
           </tbody>
         </table>
       ) : null}
-      <PhasePanel data={panel} />
+      <PhasePanel data={panel} dayHref={(day) => dayHref.replace(encodeURIComponent("{day}"), day)} />
       {owner && (shown === "standards" || shown === "qualification") ? (
         <p className="sub">
           <Link to={`/curate/games/${games.id}/standards`}>Record standards</Link>

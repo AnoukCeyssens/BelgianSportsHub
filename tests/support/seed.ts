@@ -139,6 +139,10 @@ export async function seedParticipationCuration(
 export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const db = getDb(env.DB);
   for (const table of [
+    schema.sessionRound,
+    schema.session,
+    schema.timetableVersion,
+    schema.entry,
     schema.participationCuration,
     schema.gamesSportWindow,
     schema.entrant,

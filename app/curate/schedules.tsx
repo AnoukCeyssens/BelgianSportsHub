@@ -3,8 +3,8 @@
 // competition day by hand until the full session schedule is imported (about
 // six months out). The Games dates put the Games on the Calendar; the sport
 // days put each sport in its own Phase. A Games whose dates are not recorded
-// yet is an open item. (Championship timetable versions join this step with
-// the Sessions, #37.)
+// yet is an open item. Timetable versions (#37) are the step's second part,
+// in ./timetables.tsx.
 import { and, asc, eq } from "drizzle-orm";
 import { Form } from "react-router";
 import { sportColour } from "~/calendar/sport-colours";
@@ -12,6 +12,7 @@ import { type Db, getDb, schema } from "~/db/client";
 import { belgianDate, GAMES_SOURCE, TRACKED_GAMES, type TrackedGames } from "~/domain";
 import { formatDate, formatDayRange } from "~/format";
 import { keepRawCopy } from "~/ingest/raw-copy";
+import { loadTimetables, TimetablesPart, type TimetableReviewData } from "./timetables";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -20,15 +21,16 @@ function recordedGames(db: Db, key: string) {
   return db.query.competition.findFirst({ where: and(eq(c.source, GAMES_SOURCE), eq(c.sourceRef, key)) });
 }
 
-export async function loadSchedules(db: Db, _now: Date) {
+export async function loadSchedules(db: Db, now: Date) {
   const { competition, rawCopy, gamesSportWindow: w } = schema;
-  const [rows, windows] = await Promise.all([
+  const [rows, windows, timetables] = await Promise.all([
     db
       .select({ id: competition.id, key: competition.sourceRef, startDate: competition.startDate, endDate: competition.endDate, sourceUrl: rawCopy.url })
       .from(competition)
       .innerJoin(rawCopy, eq(competition.rawCopyId, rawCopy.id))
       .where(eq(competition.source, GAMES_SOURCE)),
     db.select().from(w).orderBy(asc(w.sport)),
+    loadTimetables(db, now),
   ]);
   const games = TRACKED_GAMES.map((g) => {
     const row = rows.find((r) => r.key === g.key) ?? null;
@@ -40,7 +42,7 @@ export async function loadSchedules(db: Db, _now: Date) {
       sports: row ? windows.filter((s) => s.competitionId === row.id) : [],
     };
   });
-  return { games, open: games.filter((g) => g.recorded === null).length };
+  return { games, timetables, open: games.filter((g) => g.recorded === null).length };
 }
 
 export type SchedulesData = Awaited<ReturnType<typeof loadSchedules>>;
@@ -137,7 +139,7 @@ async function saveGamesDates(
   });
 }
 
-export function SchedulesStep({ data }: { data: SchedulesData }) {
+export function SchedulesStep({ data, review }: { data: SchedulesData; review: TimetableReviewData | null }) {
   return (
     <>
       <h2>Games dates</h2>
@@ -170,6 +172,7 @@ export function SchedulesStep({ data }: { data: SchedulesData }) {
           {g.recorded ? <SportDays games={g.key} sports={g.sports} /> : null}
         </div>
       ))}
+      <TimetablesPart data={data.timetables} review={review} />
     </>
   );
 }
