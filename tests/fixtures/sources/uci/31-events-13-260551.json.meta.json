@@ -1,0 +1,7 @@
+{
+  "url": "https://dataride.uci.ch/iframe/Events/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:27:02.262Z",
+  "requestBody": "disciplineId=13&raceId=260551"
+}

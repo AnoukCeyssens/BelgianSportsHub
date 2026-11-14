@@ -1,8 +1,8 @@
 {
+  "id": "76e29a6f-c529-4681-8817-e75ca7727d86",
+  "prevId": "f611e3c5-4bff-4746-bf34-29bb755d2eab",
   "version": "6",
   "dialect": "sqlite",
-  "id": "bbc49c7a-bd33-4a35-a3c2-aa6ae64451fd",
-  "prevId": "f611e3c5-4bff-4746-bf34-29bb755d2eab",
   "tables": {
     "athlete": {
       "name": "athlete",
@@ -69,15 +69,15 @@
         "athlete_raw_copy_id_raw_copy_id_fk": {
           "name": "athlete_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "athlete",
-          "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
           ],
+          "tableTo": "raw_copy",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -121,28 +121,28 @@
         "athlete_external_id_athlete_id_athlete_id_fk": {
           "name": "athlete_external_id_athlete_id_athlete_id_fk",
           "tableFrom": "athlete_external_id",
-          "tableTo": "athlete",
           "columnsFrom": [
             "athlete_id"
           ],
+          "tableTo": "athlete",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "athlete_external_id_raw_copy_id_raw_copy_id_fk": {
           "name": "athlete_external_id_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "athlete_external_id",
-          "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
           ],
+          "tableTo": "raw_copy",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -368,15 +368,15 @@
         "competition_raw_copy_id_raw_copy_id_fk": {
           "name": "competition_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "competition",
-          "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
           ],
+          "tableTo": "raw_copy",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -413,41 +413,41 @@
         "entrant_competition_id_competition_id_fk": {
           "name": "entrant_competition_id_competition_id_fk",
           "tableFrom": "entrant",
-          "tableTo": "competition",
           "columnsFrom": [
             "competition_id"
           ],
+          "tableTo": "competition",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "entrant_athlete_id_athlete_id_fk": {
           "name": "entrant_athlete_id_athlete_id_fk",
           "tableFrom": "entrant",
-          "tableTo": "athlete",
           "columnsFrom": [
             "athlete_id"
           ],
+          "tableTo": "athlete",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "entrant_raw_copy_id_raw_copy_id_fk": {
           "name": "entrant_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "entrant",
-          "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
           ],
+          "tableTo": "raw_copy",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -457,80 +457,6 @@
             "athlete_id"
           ],
           "name": "entrant_competition_id_athlete_id_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "games_sport_window": {
-      "name": "games_sport_window",
-      "columns": {
-        "competition_id": {
-          "name": "competition_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sport": {
-          "name": "sport",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "first_day": {
-          "name": "first_day",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_day": {
-          "name": "last_day",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "source_url": {
-          "name": "source_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "checked_on": {
-          "name": "checked_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "games_sport_window_competition_id_competition_id_fk": {
-          "name": "games_sport_window_competition_id_competition_id_fk",
-          "tableFrom": "games_sport_window",
-          "tableTo": "competition",
-          "columnsFrom": [
-            "competition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "games_sport_window_competition_id_sport_pk": {
-          "columns": [
-            "competition_id",
-            "sport"
-          ],
-          "name": "games_sport_window_competition_id_sport_pk"
         }
       },
       "uniqueConstraints": {},
@@ -639,28 +565,28 @@
         "merge_queue_item_raw_copy_id_raw_copy_id_fk": {
           "name": "merge_queue_item_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "merge_queue_item",
-          "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
           ],
+          "tableTo": "raw_copy",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "merge_queue_item_athlete_id_athlete_id_fk": {
           "name": "merge_queue_item_athlete_id_athlete_id_fk",
           "tableFrom": "merge_queue_item",
-          "tableTo": "athlete",
           "columnsFrom": [
             "athlete_id"
           ],
+          "tableTo": "athlete",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -711,15 +637,15 @@
         "participation_curation_competition_id_competition_id_fk": {
           "name": "participation_curation_competition_id_competition_id_fk",
           "tableFrom": "participation_curation",
-          "tableTo": "competition",
           "columnsFrom": [
             "competition_id"
           ],
+          "tableTo": "competition",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -888,54 +814,54 @@
         "result_competition_id_competition_id_fk": {
           "name": "result_competition_id_competition_id_fk",
           "tableFrom": "result",
-          "tableTo": "competition",
           "columnsFrom": [
             "competition_id"
           ],
+          "tableTo": "competition",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "result_athlete_id_athlete_id_fk": {
           "name": "result_athlete_id_athlete_id_fk",
           "tableFrom": "result",
-          "tableTo": "athlete",
           "columnsFrom": [
             "athlete_id"
           ],
+          "tableTo": "athlete",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "result_merge_queue_item_id_merge_queue_item_id_fk": {
           "name": "result_merge_queue_item_id_merge_queue_item_id_fk",
           "tableFrom": "result",
-          "tableTo": "merge_queue_item",
           "columnsFrom": [
             "merge_queue_item_id"
           ],
+          "tableTo": "merge_queue_item",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "result_raw_copy_id_raw_copy_id_fk": {
           "name": "result_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "result",
-          "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
           ],
+          "tableTo": "raw_copy",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -993,15 +919,15 @@
         "run_sheet_log_session_id_run_sheet_session_id_fk": {
           "name": "run_sheet_log_session_id_run_sheet_session_id_fk",
           "tableFrom": "run_sheet_log",
-          "tableTo": "run_sheet_session",
           "columnsFrom": [
             "session_id"
           ],
+          "tableTo": "run_sheet_session",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1179,9 +1105,9 @@
   "views": {},
   "enums": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
+    "tables": {}
   },
   "internal": {
     "indexes": {}

@@ -1,0 +1,7 @@
+{
+  "url": "https://world-rowing-api.soticcloud.net/stats/api/race/?include=racePhase,event.boatClass,raceBoats.raceBoatAthletes.person,raceBoats.country&filter[event.competitionId]=1e3bc756-dece-410f-a3ca-2ac64ff97b02&sort[eventNum]=asc",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T11:56:42.929Z",
+  "trimmedByHand": "Kept the races with a Belgian boat, the medal races of the men's and women's solo, and the first race of the mixed double."
+}
