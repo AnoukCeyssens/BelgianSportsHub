@@ -183,6 +183,7 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
     schema.session,
     schema.timetableVersion,
     schema.qualificationTrack,
+    schema.rankingSnapshot,
     schema.quotaPlace,
     schema.expectationSnapshot,
     schema.personalPick,
@@ -250,4 +251,11 @@ type ChecklistItemSeed ={ topic: string; name: string; dueOn: string; url?: stri
 export async function seedChecklistItem(d1: D1Database, item: ChecklistItemSeed): Promise<string> {
   const [row] = await getDb(d1).insert(schema.checklistItem).values(item).returning({ id: schema.checklistItem.id });
   return row.id;
+}
+
+/** Where an Athlete stood on a ranking list on a day, as a ranking import would store it. */
+export async function seedRankingSnapshot(d1: D1Database, r: { source: string; ranking: string; sport: string; athleteId: string; position: number; asOf: string }) {
+  await getDb(d1)
+    .insert(schema.rankingSnapshot)
+    .values({ ...r, points: null, rawCopyId: await seedRawCopy(d1, r.source), recordedAt: `${r.asOf}T04:00:00.000Z` });
 }

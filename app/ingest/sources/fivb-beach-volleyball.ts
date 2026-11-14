@@ -9,7 +9,7 @@
 //    Belgian players are its entry list behind Upcoming until it ends; once it
 //    has ended, each ranked Belgian pair's final rank is a result of that
 //    pair's Team (ADR 0001: every standing partnership is its own Team).
-// Rankings wait for rankings ingest (#33).
+// Rankings are not ingested yet (#33: VIS ranking requests still to work out; see conventions.md "Rankings").
 import type { CompetitionKind, Person, SourceAdapter } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 import { elements, visPerson, visUrl } from "./fivb-vis";

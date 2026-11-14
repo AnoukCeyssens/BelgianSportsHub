@@ -7,6 +7,7 @@ import { fivbBeachVolleyball } from "./fivb-beach-volleyball";
 import { fivbVolleyball } from "./fivb-volleyball";
 import { ijfJudo } from "./ijf-judo";
 import { isuSpeedSkating } from "./isu-speed-skating";
+import { owgrGolf } from "./owgr-golf";
 import { uciCycling } from "./uci-cycling";
 import { worldAquatics } from "./world-aquatics";
 import { worldAquaticsTimetables } from "./world-aquatics-timetables";
@@ -36,4 +37,5 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   "fie-fencing": fieFencing,
   "world-rowing": worldRowing,
   "uci-cycling": uciCycling,
+  "owgr-golf": owgrGolf,
 };

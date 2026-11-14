@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fixClock } from "../support/clock";
-import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedTimetable } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedCompetition, seedRankingSnapshot, seedResult, seedTimetable } from "../support/seed";
 import { get, post, signedInAs } from "../support/worker";
 
 // Spec #20, stories 46, 64 and 67–70, 116; ticket #40 (decided in #12 and
@@ -73,7 +73,7 @@ async function lublin() {
   await seedTimetable(env.DB, id, "Europe/Warsaw", [{ sport: "Swimming", date: "2026-12-02", start: "09:30", rounds: [["Men's 1500 m freestyle", "Heats"]] }]);
   const html = await page(expectations(id));
   const entryOf = (name: string) => html.match(new RegExp(`data-entry="([^"]+)" data-name="${name}"`))![1];
-  return { id, verbeke: entryOf("Lucas Verbeke"), vanhoutte: entryOf("Roos Vanhoutte") };
+  return { id, verbeke: entryOf("Lucas Verbeke"), vanhoutte: entryOf("Roos Vanhoutte"), verbekeAthlete: verbeke };
 }
 
 const selectedRows = async (id: string) => rows(await page(`/championship/${id}`), "Selected Entries");
@@ -197,6 +197,45 @@ describe("Seeds and personal picks", () => {
     // Refused: an unknown method, a place that is no place.
     expect((await seed({ place: "3", method: "vibes", asOf: "2026-11-28" })).status).toBe(400);
     expect((await seed({ place: "medal", method: "ranking", asOf: "2026-11-28" })).status).toBe(400);
+  });
+
+  it("takes the monthly world-rank Seed from the ranking the Entry's track follows, until the final Seed", async () => {
+    const { id, verbeke, verbekeAthlete } = await lublin();
+    const ranking = { source: "world-aquatics", ranking: "World Aquatics world ranking · 1500 m freestyle Men", sport: "Swimming", athleteId: verbekeAthlete };
+    const follow = () =>
+      post(qualification(id, "championships"), {
+        intent: "save-track",
+        entryId: verbeke,
+        name: "World ranking",
+        needed: "Top 16",
+        has: "–",
+        state: "pending",
+        better: "",
+        source: "",
+        ranking: `${ranking.source}|${ranking.ranking}`,
+      });
+
+    await seedRankingSnapshot(env.DB, { ...ranking, position: 9, asOf: "2026-10-06" });
+    expect((await follow()).status).toBe(303);
+    // A second list in the same month is no new Seed; a list in the next month is.
+    await seedRankingSnapshot(env.DB, { ...ranking, position: 8, asOf: "2026-10-27" });
+    await follow();
+    await seedRankingSnapshot(env.DB, { ...ranking, position: 6, asOf: "2026-11-10" });
+    await follow();
+    let row = rows(await page(expectations(id)), "Seeds").find((r) => r.startsWith("Lucas Verbeke"));
+    expect(row).toContain("9th · world ranking · 6 Oct");
+    expect(row).not.toContain("8th");
+    expect(row).toContain("6th · world ranking · 10 Nov");
+    expect(row).not.toContain("World-rank snapshot due");
+
+    // Once the final Seed exists, rankings no longer add snapshots.
+    await post(expectations(id), { intent: "record-seed", entryId: verbeke, place: "5", method: "ranking", asOf: "2026-11-12", sourceUrl: "" });
+    fixClock("2026-12-01T10:00:00.000Z");
+    await seedRankingSnapshot(env.DB, { ...ranking, position: 4, asOf: "2026-12-01" });
+    await follow();
+    row = rows(await page(expectations(id)), "Seeds").find((r) => r.startsWith("Lucas Verbeke"));
+    expect(row).not.toContain("4th");
+    expect(await selectedRows(id)).toEqual(["Lucas Verbeke Men's 1500 m freestyle 5th entry list by ranking · 12 Nov world ranking 9th → 6th –"]);
   });
 
   it("lets only the owner write picks and Seeds", async () => {

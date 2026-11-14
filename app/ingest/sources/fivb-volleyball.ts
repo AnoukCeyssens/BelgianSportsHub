@@ -12,7 +12,7 @@
 // 3. for each such tournament that has ended, its final ranking: Belgium's
 //    place is a result of Belgium's national Team for the event (ADR 0001),
 //    with the registered Belgians (the squad list) as its roster.
-// Rankings wait for rankings ingest (#33).
+// Rankings are not ingested yet (#33: VIS ranking requests still to work out; see conventions.md "Rankings").
 import type { CompetitionKind, SourceAdapter } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 import { elements, visPerson, visUrl } from "./fivb-vis";

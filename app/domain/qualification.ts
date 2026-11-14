@@ -160,6 +160,107 @@ export function qualificationTargets<C extends TargetCompetition>(
   return { olympics, championship };
 }
 
+/** The number of ranking places a track's needed text names ("Top 24", "top-16 SOQC"); null when it names none. */
+export function rankingPlaces(needed: string): number | null {
+  const top = needed.match(/\btop[\s-]*(\d+)/i);
+  return top ? Number(top[1]) : null;
+}
+
+export type RankingSnapshotFigures = { position: number; points: string | null };
+
+/**
+ * A ranking-linked track after a new ranking snapshot (ticket #33): it has
+ * the snapshot's position (and points). While the window is open a position
+ * is only where the Entry stands today, so the state is decided only once
+ * the window has closed (inside the places → met, outside → not met), and
+ * only when what is needed names a number of places; otherwise it stays.
+ */
+export function rankedTrack(
+  track: { needed: string; state: TrackState },
+  snapshot: RankingSnapshotFigures,
+  windowClosed: boolean,
+): { has: string; state: TrackState } {
+  const has = snapshot.points ? `#${snapshot.position} · ${snapshot.points} pts` : `#${snapshot.position}`;
+  const places = rankingPlaces(track.needed);
+  if (places === null) return { has, state: track.state };
+  if (!windowClosed) return { has, state: "pending" };
+  return { has, state: snapshot.position <= places ? "met" : "not-met" };
+}
+
+/** A Quota place as the suggestion sees it (GLOSSARY "Quota place"; stored by #36). */
+export type SuggestionQuotaPlace = {
+  kind: "noc-owned" | "named";
+  /** "provisional" | "allocated" | "accepted" | "entered" | "declined" | "lost". */
+  state: string;
+  /** The Entry a named place is linked to (an NOC-owned place links at Selection). */
+  entryId: string | null;
+};
+
+export type SuggestionEntry = {
+  id: string;
+  status: QualificationStatus | null;
+  /** The kind of target: the Games have Quota places, Championships only entry caps. */
+  target: "games" | "championship";
+  /** Whether the qualification window has closed (Belgian date past `qualification_closes_on`). */
+  windowClosed: boolean;
+  /** Belgian Entries in the same event that meet the criteria (`meetsCriteria`), this one included. */
+  belgianCandidates: number;
+};
+
+/** The Entry's position on the ranking its tracks follow, and the places that ranking gives (null when not named). */
+export type SuggestionRanking = { position: number; places: number | null };
+
+/** An Entry meets the federation's criteria once one of its tracks (routes) is met. */
+export function meetsCriteria(tracks: readonly { state: TrackState }[]): boolean {
+  return tracks.some((t) => t.state === "met");
+}
+
+const OUTCOMES: readonly QualificationStatus[] = ["selected", "not-selected", "withdrawn"];
+const FIRM_PLACE = ["allocated", "accepted", "entered"];
+
+/**
+ * The Qualification status trackers and rankings suggest for one Entry
+ * (spec #20, stories 83 and 87; GLOSSARY "Qualification status"). Only ever
+ * a suggestion: the owner applies, keeps or overrides it. Null when the
+ * facts say nothing (only pending tracks, no ranking places).
+ * - Selected, Not selected and Withdrawn are the selector's or the Entry's
+ *   word: kept as they are.
+ * - A named place linked to the Entry: Qualified once Allocated (or later),
+ *   On track while Provisional.
+ * - Meeting the criteria (a track met): Qualified at a Championship (no quota
+ *   places). At the Games it depends on the NOC-owned places: as many places
+ *   as Belgian candidates or more → Qualified (On track while the places are
+ *   only Provisional), fewer → Eligible (three Belgians, two places: all
+ *   Eligible); no place recorded yet → On track.
+ * - Otherwise the ranking: inside its places → On track, outside → At risk.
+ * - Every track missed → At risk. Once the window has closed, At risk
+ *   becomes Not in contention.
+ */
+export function suggestStatus(
+  entry: SuggestionEntry,
+  tracks: readonly { state: TrackState }[],
+  ranking: SuggestionRanking | null,
+  quotaPlaces: readonly SuggestionQuotaPlace[],
+): QualificationStatus | null {
+  if (entry.status && OUTCOMES.includes(entry.status)) return entry.status;
+  const live = quotaPlaces.filter((p) => p.state !== "declined" && p.state !== "lost");
+  const named = live.find((p) => p.kind === "named" && p.entryId === entry.id);
+  if (named) return FIRM_PLACE.includes(named.state) ? "qualified" : "on-track";
+
+  if (meetsCriteria(tracks)) {
+    if (entry.target === "championship") return "qualified";
+    const noc = live.filter((p) => p.kind === "noc-owned");
+    if (noc.length === 0) return "on-track";
+    if (entry.belgianCandidates > noc.length) return "eligible";
+    return noc.every((p) => FIRM_PLACE.includes(p.state)) ? "qualified" : "on-track";
+  }
+
+  const outside = entry.windowClosed ? "not-in-contention" : "at-risk";
+  if (ranking && ranking.places !== null) return ranking.position <= ranking.places ? "on-track" : outside;
+  if (tracks.length > 0 && tracks.every((t) => t.state === "not-met")) return outside;
+  return null;
+}
+
 /** Days from today (Belgian date) until the qualification window closes: 0 on the day, negative once closed; null when not recorded. */
 export function windowCountdown(closesOn: string | null, now: Date): number | null {
   if (!closesOn) return null;

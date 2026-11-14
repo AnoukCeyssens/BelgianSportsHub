@@ -40,7 +40,7 @@ describe("World Rowing source", () => {
     // His last race: the second time trial.
     expect(results).toContain("03:49.64");
     expect(results).toContain("19 Oct");
-    expect(html).toContain("world-rowing");
+    expect(html).toContain("World Rowing 5f71494c");
   });
 
   it("writes one row per Belgian sculler and event", async () => {
