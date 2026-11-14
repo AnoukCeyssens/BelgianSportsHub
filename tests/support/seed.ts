@@ -104,3 +104,11 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const keys = (await env.RAW.list({ prefix: "raw/" })).objects.map((o) => o.key);
   if (keys.length > 0) await env.RAW.delete(keys);
 }
+
+type ChecklistItemSeed = { topic: string; name: string; dueOn: string; url?: string; everyMonths?: number };
+
+/** Adds a Monthly checklist item, as the owner would. */
+export async function seedChecklistItem(d1: D1Database, item: ChecklistItemSeed): Promise<string> {
+  const [row] = await getDb(d1).insert(schema.checklistItem).values(item).returning({ id: schema.checklistItem.id });
+  return row.id;
+}

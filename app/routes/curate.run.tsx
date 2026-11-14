@@ -1,6 +1,7 @@
 import { Form, Link, redirect } from "react-router";
 import { ManualResultsStep, actOnManualResult, loadManualResults } from "~/curate/manual-results";
 import { MergeQueueStep, actOnMergeQueueItem, loadMergeQueue } from "~/curate/merge-queue";
+import { MonthlyChecklistStep, actOnChecklist, loadMonthlyChecklist } from "~/curate/monthly-checklist";
 import { currentSession, finishSession, logAction } from "~/curate/session";
 import { SourceHealthStep, actOnSource, loadSourceHealth } from "~/curate/source-health";
 import { now } from "~/clock";
@@ -31,13 +32,19 @@ function stepIndex(key: string) {
 
 /** Each built step's items; the others have none yet. */
 async function loadSteps(db: Db, at: Date) {
-  const [sourceHealth, manualResults, mergeQueue] = await Promise.all([loadSourceHealth(db, at), loadManualResults(db, at), loadMergeQueue(db)]);
+  const [sourceHealth, manualResults, mergeQueue, monthlyChecklist] = await Promise.all([
+    loadSourceHealth(db, at),
+    loadManualResults(db, at),
+    loadMergeQueue(db),
+    loadMonthlyChecklist(db, at),
+  ]);
   const open: Record<string, number> = {
     "source-health": sourceHealth.open,
     "manual-results": manualResults.open,
     "merge-queue": mergeQueue.open,
+    "monthly-checklist": monthlyChecklist.open,
   };
-  return { sourceHealth, manualResults, mergeQueue, withOpenCounts: WEEKLY_RUN_SHEET.map((s) => ({ ...s, open: open[s.key] ?? 0 })) };
+  return { sourceHealth, manualResults, mergeQueue, monthlyChecklist, withOpenCounts: WEEKLY_RUN_SHEET.map((s) => ({ ...s, open: open[s.key] ?? 0 })) };
 }
 
 export async function loader({ context, params }: Route.LoaderArgs) {
@@ -45,7 +52,7 @@ export async function loader({ context, params }: Route.LoaderArgs) {
   const db = dbFrom(context);
   const at = now();
   const [steps, session] = await Promise.all([loadSteps(db, at), currentSession(db, SHEET)]);
-  const { sourceHealth, manualResults, mergeQueue } = steps;
+  const { sourceHealth, manualResults, mergeQueue, monthlyChecklist } = steps;
   const progress = runSheetProgress(steps.withOpenCounts, session.passed);
   return {
     index,
@@ -55,6 +62,7 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     sourceHealth: params.step === "source-health" ? sourceHealth : null,
     manualResults: params.step === "manual-results" ? manualResults : null,
     mergeQueue: params.step === "merge-queue" ? mergeQueue : null,
+    monthlyChecklist: params.step === "monthly-checklist" ? monthlyChecklist : null,
   };
 }
 
@@ -82,13 +90,14 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   if (step.key === "source-health") message = await actOnSource(db, env.INGEST, intent, String(form.get("source")), at);
   else if (step.key === "manual-results") message = await actOnManualResult(env, intent, form, at);
   else if (step.key === "merge-queue") message = await actOnMergeQueueItem(env.DB, db, intent, form);
+  else if (step.key === "monthly-checklist") message = await actOnChecklist(db, intent, form, at);
   else throw new Response(`Unknown action ${intent}`, { status: 400 });
   await logAction(db, SHEET, { step: step.key, action: intent, message }, at);
   return redirect(runPath(step.key), 303);
 }
 
 export default function RunSheet({ loaderData }: Route.ComponentProps) {
-  const { index, step, progress, log, sourceHealth, manualResults, mergeQueue } = loaderData;
+  const { index, step, progress, log, sourceHealth, manualResults, mergeQueue, monthlyChecklist } = loaderData;
   const total = progress.steps.length;
   const last = index === total - 1;
   return (
@@ -120,6 +129,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
         {sourceHealth ? <SourceHealthStep data={sourceHealth} /> : null}
         {manualResults ? <ManualResultsStep data={manualResults} /> : null}
         {mergeQueue ? <MergeQueueStep data={mergeQueue} /> : null}
+        {monthlyChecklist ? <MonthlyChecklistStep data={monthlyChecklist} /> : null}
         {step.open === 0 ? <p className="donebox">✓ Nothing left in this step.</p> : null}
         <Form method="post" className="foot">
           {index > 0 ? (

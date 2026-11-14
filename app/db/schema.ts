@@ -130,6 +130,28 @@ export const runSheetLog = sqliteTable("run_sheet_log", {
   message: text("message").notNull(),
 });
 
+/**
+ * One Monthly checklist item (spec #20, story 111): a slow-moving source the
+ * owner looks at by hand, grouped under a topic (e.g. "2030 IF qualification
+ * systems" → "FIS"). Due in the weekly Run sheet from `dueOn`; ticking it
+ * moves `dueOn` `everyMonths` months past the tick.
+ */
+export const checklistItem = sqliteTable("checklist_item", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  topic: text("topic").notNull(),
+  name: text("name").notNull(),
+  url: text("url"),
+  everyMonths: integer("every_months").notNull().default(1),
+  /** YYYY-MM-DD (Belgian date). */
+  dueOn: text("due_on").notNull(),
+  /** ISO instant of the last tick. */
+  lastCheckedAt: text("last_checked_at"),
+  /** "no change" | "changed" at the last tick. */
+  lastOutcome: text("last_outcome"),
+  /** What changed, when the owner said so. */
+  lastNote: text("last_note"),
+});
+
 /** A competition as a source publishes it: a Championship, the Games, or a circuit event. */
 export const competition = sqliteTable(
   "competition",

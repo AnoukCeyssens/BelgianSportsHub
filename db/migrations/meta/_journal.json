@@ -43,6 +43,13 @@
       "when": 1794657940363,
       "tag": "0005_fis_points_list_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794658316047,
+      "tag": "0006_monthly_checklist",
+      "breakpoints": true
     }
   ]
 }
