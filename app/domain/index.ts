@@ -6,6 +6,7 @@ export { identityMatch, normaliseName, type ExternalId, type IdentityMatch, type
 export { matchesNameSearch } from "./name-search";
 export { CURATION_PATH, isCurationPath, offlineReading, type OfflineReading } from "./offline-reading";
 export {
+  pasteImportDue,
   sourceAttention,
   sourceHealth,
   type SourceAttentionState,
@@ -26,4 +27,16 @@ export {
   type ParticipationReason,
   type ParticipationStatus,
 } from "./participation";
+export {
+  belgianPastedRows,
+  columnMapping,
+  mappingToSave,
+  PASTE_COLUMN_ROLES,
+  readHtmlTable,
+  readPastedTable,
+  type PasteColumnRole,
+  type PastedResultRow,
+  type PastedTable,
+  type SavedColumnMapping,
+} from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";

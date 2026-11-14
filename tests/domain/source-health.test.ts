@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sourceHealth, type SourceState } from "~/domain";
+import { pasteImportDue, sourceHealth, type SourceState } from "~/domain";
 
 // Spec #20, stories 89, 90, 94 and 97: cadence is data on the Source; the daily
 // cron queues each Automatic source whose cadence is due; a source is stale
@@ -83,5 +83,36 @@ describe("sourceHealth", () => {
     },
   ] satisfies { name: string; source: SourceState; now: string; expected: unknown }[])("$name", ({ source, now, expected }) => {
     expect(sourceHealth(source, new Date(now))).toEqual(expected);
+  });
+});
+
+// Ticket #25: the Paste imports step lists the Assisted sources (configured
+// Assisted, or blocked) whose cadence has come round since their last paste.
+describe("pasteImportDue", () => {
+  const assisted = { ...weekly, tier: "assisted" as const, lastSuccessAt: null, lastPastedAt: null };
+  it.each([
+    { name: "an Assisted source never pasted", source: assisted, now: "2026-11-14T10:00:00.000Z", due: true },
+    {
+      name: "weekly source pasted in last Saturday's session, later in the day",
+      source: { ...assisted, lastPastedAt: "2026-11-07T15:00:00.000Z" },
+      now: "2026-11-14T10:00:00.000Z",
+      due: true,
+    },
+    {
+      name: "weekly source pasted on Wednesday",
+      source: { ...assisted, lastPastedAt: "2026-11-11T15:00:00.000Z" },
+      now: "2026-11-14T10:00:00.000Z",
+      due: false,
+    },
+    { name: "a healthy Automatic source", source: { ...daily, lastPastedAt: null }, now: "2026-11-14T10:00:00.000Z", due: false },
+    {
+      name: "a blocked Automatic source drops to Assisted",
+      source: { ...daily, blockedAt: "2026-11-13T04:00:00.000Z", lastPastedAt: null },
+      now: "2026-11-14T10:00:00.000Z",
+      due: true,
+    },
+    { name: "a Manual source has no pastes", source: { ...assisted, tier: "manual" as const }, now: "2026-11-14T10:00:00.000Z", due: false },
+  ])("$name", ({ source, now, due }) => {
+    expect(pasteImportDue(source, new Date(now))).toBe(due);
   });
 });

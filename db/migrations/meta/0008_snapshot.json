@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "61e0a8c7-365f-4a22-b932-4d8eba07f89b",
+  "id": "908bfaf0-eb0a-4557-9300-587f0cbba958",
   "prevId": "63f98a20-72fc-4340-8936-ed8a1e15ebd1",
   "tables": {
     "athlete": {
@@ -297,13 +297,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "series": {
-          "name": "series",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "source": {
           "name": "source",
           "type": "text",
@@ -553,65 +546,6 @@
           "tableTo": "athlete",
           "columnsFrom": [
             "athlete_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "participation_curation": {
-      "name": "participation_curation",
-      "columns": {
-        "competition_id": {
-          "name": "competition_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "added_at": {
-          "name": "added_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "decision": {
-          "name": "decision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "source_url": {
-          "name": "source_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "checked_at": {
-          "name": "checked_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "participation_curation_competition_id_competition_id_fk": {
-          "name": "participation_curation_competition_id_competition_id_fk",
-          "tableFrom": "participation_curation",
-          "tableTo": "competition",
-          "columnsFrom": [
-            "competition_id"
           ],
           "columnsTo": [
             "id"
@@ -1033,6 +967,34 @@
         },
         "acknowledged_at": {
           "name": "acknowledged_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sport": {
+          "name": "sport",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_scheme": {
+          "name": "id_scheme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "column_mapping": {
+          "name": "column_mapping",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_pasted_at": {
+          "name": "last_pasted_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
