@@ -70,6 +70,8 @@ export type PhasePanelData =
       expectations: Record<string, SelectedExpectations>;
       /** When personal picks lock (ISO instant): the first Session (the Games: in any sport). */
       picksLockAt: string;
+      /** The owner's pick forms (owner only, before the lock): they post to the owner's expectations action and come back to `returnTo`. */
+      picks: { action: string; returnTo: string } | null;
     }
   | { phase: "live"; day: LiveDayView | null; medals: MedalTableView }
   | {
@@ -79,15 +81,22 @@ export type PhasePanelData =
       medals: MedalTableView;
     };
 
-/** Shown next to a Selected Entry: the latest Seed, how the monthly world rank moved before a final Seed, and the pick. */
-export type SelectedExpectations = { seed: SnapshotView | null; worldRanks: SnapshotView[]; pick: PickView | null };
+/** Shown next to a Selected Entry: the latest Seed, how the monthly world rank moved before a final Seed, the latest Gracenote pick (the Games) and the pick. */
+export type SelectedExpectations = { seed: SnapshotView | null; worldRanks: SnapshotView[]; gracenote: SnapshotView | null; pick: PickView | null };
+
+/** The viewer when it is the owner: the reader page's path to come back to after a pick. Null for everyone else. */
+export type OwnerView = { returnTo: string } | null;
 
 /** A Games' sports and the chosen chips; none chosen means All sports. A Championship has none. */
 export type SportChips = { sports: readonly string[]; chosen: readonly string[] };
 
 const NO_CHIPS: SportChips = { sports: [], chosen: [] };
 
-/** `day` is the Live day asked for (`?day=`), venue-local YYYY-MM-DD. */
+/**
+ * `day` is the Live day asked for (`?day=`), venue-local YYYY-MM-DD. `owner`
+ * is set only when the owner is viewing (decided server-side): it adds the
+ * pick forms to the Selection phase, so nobody else's HTML has them.
+ */
 export async function loadPhasePanel(
   db: Db,
   competition: CompetitionRow,
@@ -95,6 +104,7 @@ export async function loadPhasePanel(
   now: Date,
   chips: SportChips = NO_CHIPS,
   day: string | null = null,
+  owner: OwnerView = null,
 ): Promise<PhasePanelData> {
   switch (phase) {
     case "standards":
@@ -131,10 +141,20 @@ export async function loadPhasePanel(
         expectations: Object.fromEntries(
           [...expectations].map(([id, x]) => [
             id,
-            { seed: x.seed, worldRanks: x.seed?.method === "world-rank" ? [] : x.seeds.filter((s) => s.method === "world-rank"), pick: x.pick },
+            {
+              seed: x.seed,
+              worldRanks: x.seed?.method === "world-rank" ? [] : x.seeds.filter((s) => s.method === "world-rank"),
+              gracenote: competition.kind === "games" ? (x.gracenote.at(-1) ?? null) : null,
+              pick: x.pick,
+            },
           ]),
         ),
         picksLockAt: lockAt.toISOString(),
+        // Picks open while the Entry is Selected and the lock has not come (canPick); the forms post to /curate, never cached.
+        picks:
+          owner && now < lockAt
+            ? { action: `/curate/${competition.kind === "games" ? "games" : "championships"}/${competition.id}/expectations`, returnTo: owner.returnTo }
+            : null,
         notSelected: entries.filter((e) => e.status === "not-selected"),
         stillQualifying: entries.filter((e) => e.status !== "selected" && e.status !== "not-selected" && e.status !== "withdrawn"),
         games: competition.kind === "games",
@@ -363,6 +383,7 @@ function SelectedTable({ data }: { data: Extract<PhasePanelData, { phase: "selec
           <th>Entry</th>
           <th>Event</th>
           <th className="n">Seed</th>
+          {data.games ? <th className="n">Gracenote</th> : null}
           <th className="n">Pick</th>
         </tr>
       </thead>
@@ -383,6 +404,22 @@ function SelectedTable({ data }: { data: Extract<PhasePanelData, { phase: "selec
                   "–"
                 )}
               </td>
+              {data.games ? (
+                <td className="n">
+                  {x?.gracenote ? (
+                    <>
+                      {placeRangeLabel(x.gracenote)}
+                      <div className="sub">
+                        {"Gracenote via "}
+                        {x.gracenote.sourceUrl ? <a href={x.gracenote.sourceUrl}>{hostOf(x.gracenote.sourceUrl)}</a> : "Gracenote"}
+                        {` · ${formatDay(x.gracenote.asOf)}`}
+                      </div>
+                    </>
+                  ) : (
+                    "–"
+                  )}
+                </td>
+              ) : null}
               <td className="n">
                 {x?.pick ? (
                   <>
@@ -401,6 +438,45 @@ function SelectedTable({ data }: { data: Extract<PhasePanelData, { phase: "selec
   );
 }
 
+/**
+ * The owner's pick per Selected Entry, right on the reader page (spec stories
+ * 67–70): plain forms posting to the owner's expectations action under
+ * /curate (owner-only, never cached offline), which comes back here.
+ */
+function MyPicks({ data, picks }: { data: Extract<PhasePanelData, { phase: "selection" }>; picks: NonNullable<Extract<PhasePanelData, { phase: "selection" }>["picks"]> }) {
+  return (
+    <section aria-label="My picks">
+      <h3>My picks</h3>
+      <p className="sub">Gold, Silver, Bronze, Medal, Top 8, a round exit (QF exit), a place (5) or a range (5-8).</p>
+      {data.selected.map((e) => {
+        const pick = data.expectations[e.id]?.pick ?? null;
+        return (
+          <div key={e.id}>
+            <form method="post" action={picks.action} aria-label={`Pick for ${e.who.name} · ${e.event}`}>
+              <input type="hidden" name="intent" value="pick" />
+              <input type="hidden" name="entryId" value={e.id} />
+              <input type="hidden" name="return" value={picks.returnTo} />
+              <label>
+                {`${e.who.name} · ${e.event} `}
+                <input name="pick" defaultValue={pick?.shortcut ?? ""} required size={8} />
+              </label>{" "}
+              <button type="submit">Save pick</button>
+            </form>
+            {pick ? (
+              <form method="post" action={picks.action} aria-label={`Clear the pick for ${e.who.name} · ${e.event}`}>
+                <input type="hidden" name="intent" value="clear-pick" />
+                <input type="hidden" name="entryId" value={e.id} />
+                <input type="hidden" name="return" value={picks.returnTo} />
+                <button type="submit">Clear</button>
+              </form>
+            ) : null}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 /** Spec story 46: the selector's final list, the non-selected Entries underneath; others may still be qualifying. */
 function Selection({ data }: { data: Extract<PhasePanelData, { phase: "selection" }> }) {
   return (
@@ -416,6 +492,7 @@ function Selection({ data }: { data: Extract<PhasePanelData, { phase: "selection
         <>
           <SelectedTable data={data} />
           <p className="sub">{`Personal picks lock ${formatDate(belgianDate(new Date(data.picksLockAt)))}, ${formatBelgianClock(data.picksLockAt)} (Belgian time).`}</p>
+          {data.picks ? <MyPicks data={data} picks={data.picks} /> : null}
         </>
       ) : (
         <p className="sub">No Entry Selected in these sports yet.</p>

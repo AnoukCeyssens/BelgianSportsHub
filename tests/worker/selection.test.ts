@@ -288,7 +288,7 @@ describe("Selection", () => {
     const whole = await page(`/games/${la}`);
     expect(panel(whole)?.phase).toBe("Selection");
     expect(panel(whole)?.text).toContain("Selected by Belgian Olympic Committee · 28 Mar 2028");
-    expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon – –"]);
+    expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon – – –"]);
     expect(panel(await page(`/games/${la}?sport=Athletics`))?.phase).toBe("Selection");
     expect(panel(await page(`/games/${la}?sport=Swimming`))?.phase).toBe("Qualification");
     // Belgium's NOC-owned place in the event links to the Selected Entry.

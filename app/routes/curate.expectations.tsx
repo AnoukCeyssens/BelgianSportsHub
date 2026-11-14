@@ -108,7 +108,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const db = dbFrom(context);
-  const { row, here } = await targetOf(db, params.competitionId, request);
+  const { row, page, here } = await targetOf(db, params.competitionId, request);
   const form = await request.formData();
   const field = (name: string) => String(form.get(name) ?? "").trim();
   const at = now();
@@ -155,7 +155,9 @@ export async function action({ context, params, request }: Route.ActionArgs) {
     default:
       throw data("Unknown action", { status: 400 });
   }
-  return redirect(here, 303);
+  // A pick made on the reader page goes back there; any other path (or another site) is not followed.
+  const back = field("return");
+  return redirect(back === page || back.startsWith(`${page}?`) ? back : here, 303);
 }
 
 export default function SeedsAndPicks({ loaderData }: Route.ComponentProps) {

@@ -69,6 +69,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     return query.size > 0 ? `${base}?${query}` : base;
   };
   const chosenQuery = chosen.length > 0 ? chosen.join(",") : null;
+  const owner = await isOwner(request, context.get(cloudflareContext).env);
   return {
     games: {
       id: games.id,
@@ -99,8 +100,17 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       phase: PHASE_LABELS[currentPhase(s.inputs, at)],
       colour: sportColour(s.sport),
     })),
-    panel: await loadPhasePanel(db, games, shown, at, { sports: names, chosen }, search.get("day")),
-    owner: await isOwner(request, context.get(cloudflareContext).env),
+    panel: await loadPhasePanel(
+      db,
+      games,
+      shown,
+      at,
+      { sports: names, chosen },
+      search.get("day"),
+      // Decided server-side: only the owner's HTML carries the pick forms.
+      owner ? { returnTo: `/games/${games.id}${search.size > 0 ? `?${search}` : ""}` } : null,
+    ),
+    owner,
   };
 }
 
