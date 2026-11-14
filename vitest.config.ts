@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { reactRouter } from "@react-router/dev/vite";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 // Every test runs inside workerd (the Cloudflare Workers runtime), with the
@@ -11,6 +13,7 @@ export default defineConfig(async () => {
   const migrations = await readD1Migrations(fileURLToPath(new URL("./db/migrations", import.meta.url)));
   return {
     plugins: [
+      bytesFixtures(),
       // Provides `virtual:react-router/server-build` to the Worker entry under test.
       reactRouter(),
       cloudflareTest({
@@ -28,3 +31,20 @@ export default defineConfig(async () => {
     },
   };
 });
+
+/**
+ * `import zip from "./list.zip?bytes"` yields the file as a Uint8Array, byte
+ * for byte: the loader for binary source fixtures (FIS points-list ZIPs).
+ */
+function bytesFixtures(): Plugin {
+  return {
+    name: "bytes-fixtures",
+    enforce: "pre",
+    load(id) {
+      const [path, query] = id.split("?");
+      if (query !== "bytes") return null;
+      const base64 = readFileSync(path).toString("base64");
+      return `export default Uint8Array.from(atob(${JSON.stringify(base64)}), (c) => c.charCodeAt(0));`;
+    },
+  };
+}
