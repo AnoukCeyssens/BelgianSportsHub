@@ -184,6 +184,61 @@ describe("Rankings ingest (ISU World Cup standings)", () => {
     expect(results).toHaveLength(1);
   });
 
+  it("holds the Quota places a nation ranking earns at the next Games, adjusting to the count rather than adding", async () => {
+    await setSource(env.DB, ISU, { lastSuccessAt: ISU_TEAM_PURSUIT_RUN.lastSuccessAt });
+    fixClock(ISU_TEAM_PURSUIT_RUN.now);
+    stubOutboundFetch(isuTeamPursuitRun);
+    await deliverIngestJobs([job]);
+    const db = getDb(env.DB);
+    const alps = await seedCompetition(env.DB, {
+      name: "French Alps 2030",
+      sport: "Olympic Winter Games",
+      kind: "games",
+      source: "owner",
+      sourceRef: "french-alps-2030",
+      series: "olympic-winter-games",
+      startDate: "2030-02-01",
+      endDate: "2030-02-17",
+      venueZone: "Europe/Paris",
+    });
+    const women = (await db.query.team.findFirst({ where: eq(schema.team.event, "Team Pursuit Women") }))!;
+    const qualification = `/curate/games/${alps}/qualification`;
+    await post(qualification, { intent: "add-entry", who: `team:${women.id}`, event: "Team Pursuit Women", status: "on-track", source: "ISU Communication 2711" });
+    const entryId = (await db.query.entry.findFirst({ where: eq(schema.entry.teamId, women.id) }))!.id;
+    const track = async (needed: string) => {
+      const saved = await db.query.qualificationTrack.findFirst({ where: eq(schema.qualificationTrack.entryId, entryId) });
+      return post(qualification, {
+        intent: "save-track",
+        entryId,
+        trackId: saved?.id ?? "",
+        name: "SOQC nation ranking",
+        needed,
+        has: "–",
+        state: "pending",
+        better: "",
+        source: "",
+        ranking: `${ISU}|ISU World Cup Team Pursuit Women`,
+      });
+    };
+    const places = async () =>
+      (await db.select().from(schema.quotaPlace)).map((p) => ({ event: p.event, kind: p.kind, state: p.state, earnedVia: p.earnedVia, source: p.source }));
+
+    // 9th, inside the Top 12: one NOC-owned place, Provisional, from the ranking.
+    await track("Top 12 nations");
+    const held = { event: "Team Pursuit Women", kind: "noc", state: "provisional", earnedVia: "ISU World Cup Team Pursuit Women", source: "ISU World Cup Team Pursuit Women · 17 Nov 2025" };
+    expect(await places()).toEqual([held]);
+
+    // The same standings again: still one place.
+    await setSource(env.DB, ISU, { lastSuccessAt: ISU_TEAM_PURSUIT_RUN.lastSuccessAt });
+    stubOutboundFetch(isuTeamPursuitRun);
+    await deliverIngestJobs([job]);
+    expect(await places()).toEqual([held]);
+
+    // Outside the places the track now names: the Provisional place goes.
+    await track("Top 8 nations");
+    expect(await places()).toEqual([]);
+  });
+
   it("moves a ranking-linked track to the new position, stamping a change only when there is one", async () => {
     await clearIngestedData(env);
     const { euros, entryId } = await vanhoutteAtTheEuros();

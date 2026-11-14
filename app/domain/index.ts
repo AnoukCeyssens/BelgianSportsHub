@@ -112,10 +112,12 @@ export {
   isQuotaPlaceEvent,
   isQuotaPlaceState,
   NEW_QUOTA_PLACE_EVENTS,
+  placesEarned,
   QUOTA_PLACE_EVENTS,
   QUOTA_PLACE_KIND_LABELS,
   QUOTA_PLACE_STATE_LABELS,
   QUOTA_PLACE_STATES,
+  quotaPlaceAdjustment,
   quotaPlaceEnded,
   quotaPlaceLinkable,
   quotaPlaceTransition,
@@ -124,6 +126,7 @@ export {
   type QuotaPlaceMove,
   type QuotaPlaceNow,
   type QuotaPlaceState,
+  type RankedQuotaPlace,
 } from "./quota-places";
 export {
   BOIC,
