@@ -83,12 +83,12 @@ export type Person = {
   ifId: { scheme: string; value: string };
 };
 
-export type ResultStatus = "finished" | "eliminated" | "DNF" | "DSQ";
+/** DNS is never a performance: adapters leave it out; only the Manual results form records one. */
+export type ResultStatus = "finished" | "eliminated" | "DNF" | "DSQ" | "DNS";
 
 export type ResultInput = {
   /** From BelgianRows.competition(). */
   competitionId: string;
-  person: Person;
   /** As the source titles it, e.g. "1000m Women". */
   event: string;
   /** YYYY-MM-DD, venue-local. */
@@ -100,7 +100,11 @@ export type ResultInput = {
   /** The source's own ID for this result; a re-fetch updates the same row. */
   sourceRef: string;
   rawCopyId: string;
-};
+} & (
+  | { person: Person }
+  /** An Athlete the owner already named (the Manual results form): no identity matching. */
+  | { athleteId: string }
+);
 
 /**
  * Where an adapter puts what it parsed. Only performances count as results:
@@ -110,7 +114,7 @@ export type ResultInput = {
 export type BelgianRows = {
   /** Creates or updates a competition; returns its id. Only qualification-relevant senior competitions belong here. */
   competition(input: CompetitionInput): Promise<string>;
-  /** Writes one result for a Belgian: to the matched Athlete, or to a merge-queue item. */
+  /** Writes one result for a Belgian: to the matched (or named) Athlete, or to a merge-queue item. */
   result(input: ResultInput): Promise<void>;
   /** Replaces a competition's entry list: the Belgians it names who are already Athletes. */
   entrants(competitionId: string, people: Person[], rawCopyId: string): Promise<void>;
