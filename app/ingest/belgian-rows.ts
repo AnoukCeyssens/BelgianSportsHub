@@ -49,7 +49,8 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
     changes: () => changes,
 
     async competition(input: CompetitionInput) {
-      const { rawCopyId, ...values } = input;
+      const { rawCopyId, ...rest } = input;
+      const values = { ...rest, series: rest.series ?? null };
       const existing = await db.query.competition.findFirst({
         where: and(eq(schema.competition.source, source), eq(schema.competition.sourceRef, input.sourceRef)),
       });

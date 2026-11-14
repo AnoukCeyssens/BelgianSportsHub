@@ -17,6 +17,17 @@ export {
 } from "./source-health";
 export { runSheetProgress, WEEKLY_RUN_SHEET, type RunSheetProgress, type RunSheetStep } from "./run-sheet";
 export {
+  LIKELY_REVIEW_WEEKS,
+  needsLikelyReview,
+  onCalendar,
+  participation,
+  type OwnerParticipationDecision,
+  type Participation,
+  type ParticipationFacts,
+  type ParticipationReason,
+  type ParticipationStatus,
+} from "./participation";
+export {
   belgianPastedRows,
   columnMapping,
   mappingToSave,

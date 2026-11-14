@@ -69,6 +69,15 @@ export type CompetitionInput = {
   venueZone: string | null;
   /** The source's own ID for the competition. */
   sourceRef: string;
+  /**
+   * The recurring competition this is an edition of (e.g.
+   * "isu:world-championships", "isu:world-cup:calgary"): stable from one
+   * edition to the next, so a Belgian at the previous edition makes this one a
+   * likely Participation. Europeans and Worlds, indoor and outdoor, short and
+   * long course each get their own series. Leave out when the source gives no
+   * way to tell.
+   */
+  series?: string | null;
   rawCopyId: string;
 };
 

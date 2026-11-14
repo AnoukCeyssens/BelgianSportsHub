@@ -64,6 +64,13 @@
       "when": 1794658642692,
       "tag": "0008_paste_importer",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794658773104,
+      "tag": "0009_participation",
+      "breakpoints": true
     }
   ]
 }
