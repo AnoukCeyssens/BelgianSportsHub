@@ -26,10 +26,10 @@ describe("Athlete tab", () => {
     expect(html).toContain("Wikidata Q4167514");
   });
 
-  it("lists the seeded Athletes, linking to each Athlete page", async () => {
+  it("finds the seeded Athletes, linking to each Athlete page", async () => {
     const id = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling road", dateOfBirth: "2000-01-25" });
 
-    const html = await (await get("/athletes")).text();
+    const html = await (await get("/athletes?q=remco")).text();
 
     expect(html).toContain(`href="/athletes/${id}"`);
     expect(html).toContain("Remco Evenepoel");

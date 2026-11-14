@@ -65,3 +65,4 @@ export {
   type TimetableSkip,
 } from "./timetable";
 export { dayToShow, liveDays, roundsFor, venueLabel, type LiveDay, type RoundState } from "./live-day";
+export { activeStatus, isActive, type ActiveEntity, type ActiveFacts, type ActivePerformance, type ActiveReason, type ActiveStatus } from "./active";

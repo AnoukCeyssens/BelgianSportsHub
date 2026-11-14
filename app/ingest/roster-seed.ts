@@ -50,6 +50,8 @@ export async function seedAthleteProfile(env: Env, job: SeedAthleteProfileJob) {
   const senior = profile.results.filter(isSeniorInternationalPerformance).toSorted((a, b) => a.date.localeCompare(b.date));
   if (profile.olympicSports.length === 0 || senior.length === 0) return;
   const first = senior[0];
+  // Counts towards the Active rule: no senior result in the last 12 months, inactive from the start.
+  const latest = senior.at(-1)!.date;
 
   const externalIds: (ExternalId & { rawCopyId: string })[] = [
     { scheme: "team-belgium", value: profile.slug, rawCopyId: page.rawCopyId },
@@ -73,6 +75,7 @@ export async function seedAthleteProfile(env: Env, job: SeedAthleteProfileJob) {
         dateOfBirth: profile.dateOfBirth,
         athleteSince: first.date,
         athleteSinceCompetition: first.competition,
+        profileLatestPerformanceOn: latest,
         rawCopyId: page.rawCopyId,
       })
       .returning({ id: schema.athlete.id });
@@ -82,11 +85,13 @@ export async function seedAthleteProfile(env: Env, job: SeedAthleteProfileJob) {
     athleteId = match.athleteId;
     const existing = (await db.query.athlete.findFirst({ where: eq(schema.athlete.id, athleteId) }))!;
     const earlier = !existing.athleteSince || first.date < existing.athleteSince;
+    const later = !existing.profileLatestPerformanceOn || latest > existing.profileLatestPerformanceOn;
     await db
       .update(schema.athlete)
       .set({
         dateOfBirth: existing.dateOfBirth ?? profile.dateOfBirth,
         ...(earlier ? { athleteSince: first.date, athleteSinceCompetition: first.competition } : {}),
+        ...(later ? { profileLatestPerformanceOn: latest } : {}),
       })
       .where(eq(schema.athlete.id, athleteId));
   }

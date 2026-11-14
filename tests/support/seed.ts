@@ -180,6 +180,7 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
     schema.timetableVersion,
     schema.entry,
     schema.participationCuration,
+    schema.activeFact,
     schema.gamesSportWindow,
     schema.entrant,
     schema.rosterMember,

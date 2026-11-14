@@ -15,6 +15,13 @@ export const athlete = sqliteTable("athlete", {
   athleteSince: text("athlete_since"),
   /** Competition of that first performance, as the source titled it. */
   athleteSinceCompetition: text("athlete_since_competition"),
+  /**
+   * YYYY-MM-DD of the latest senior international performance on the Athlete's
+   * Team Belgium profile when the roster seed read it. Counts towards the
+   * Active rule alongside stored results, so seeded Athletes with no result in
+   * the last 12 months start inactive and recent ones start Active.
+   */
+  profileLatestPerformanceOn: text("profile_latest_performance_on"),
   /** The raw copy (e.g. a Team Belgium profile) this Athlete was created from; null when entered by hand. */
   rawCopyId: text("raw_copy_id").references(() => rawCopy.id),
 });
@@ -277,8 +284,6 @@ export const team = sqliteTable("team", {
   event: text("event").notNull(),
   /** "default" | "partnership" (TeamKind). */
   kind: text("kind").notNull(),
-  /** YYYY-MM-DD the partnership dissolved (its "retirement"); null while it stands. */
-  dissolvedOn: text("dissolved_on"),
   /** The raw copy this Team was first seen in; null when entered by hand. */
   rawCopyId: text("raw_copy_id").references(() => rawCopy.id),
 });
@@ -483,3 +488,33 @@ export const sessionRound = sqliteTable("session_round", {
   round: text("round").notNull(),
   position: integer("position").notNull(),
 });
+
+/**
+ * The owner's curated facts behind the Active rule (GLOSSARY "Active",
+ * "Hold"; spec #20, stories 20–23 and 114), at most one per kind per Entry
+ * (an Athlete or a Team):
+ * - "hold": keep Active until `date`, `note` the reason;
+ * - "retirement" (Athlete) / "dissolution" (Team): inactive from `date`
+ *   until a later performance;
+ * - "nationality-change" (Athlete): inactive from `date` until the owner
+ *   deletes the fact; `note` the new sporting nationality.
+ * Every fact carries its source and the Belgian date it was last checked.
+ */
+export const activeFact = sqliteTable(
+  "active_fact",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    athleteId: text("athlete_id").references(() => athlete.id),
+    teamId: text("team_id").references(() => team.id),
+    /** "hold" | "retirement" | "dissolution" | "nationality-change" (ActiveFactKind). */
+    kind: text("kind").notNull(),
+    /** YYYY-MM-DD: the Hold's keep-active-until date, or the day it happened. */
+    date: text("date").notNull(),
+    note: text("note"),
+    /** Where the owner read it: a URL or a short description. */
+    source: text("source").notNull(),
+    /** Belgian date of the owner's last check. */
+    checkedOn: text("checked_on").notNull(),
+  },
+  (t) => [uniqueIndex("active_fact_athlete").on(t.athleteId, t.kind), uniqueIndex("active_fact_team").on(t.teamId, t.kind)],
+);

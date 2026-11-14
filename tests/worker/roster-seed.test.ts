@@ -6,12 +6,13 @@ import { seedAthlete } from "../support/seed";
 import { get, runIngest } from "../support/worker";
 import { teamBelgiumSeedRun } from "../fixtures/sources/team-belgium";
 
-const athleteLinks = async () => {
-  const html = await (await get("/athletes")).text();
+/** The Athletes list: Active Athletes only, or everyone matching a search. */
+const athleteLinks = async (q = "") => {
+  const html = await (await get(`/athletes${q ? `?q=${encodeURIComponent(q)}` : ""}`)).text();
   return [...html.matchAll(/<a [^>]*href="(\/athletes\/[^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => ({ href: m[1], name: m[2] }));
 };
 const athletePage = async (name: string) => {
-  const link = (await athleteLinks()).find((a) => a.name === name);
+  const link = (await athleteLinks(name)).find((a) => a.name === name);
   expect(link, `${name} on the Athletes list`).toBeDefined();
   return (await get(link!.href)).text();
 };
@@ -33,7 +34,15 @@ describe("roster seed from Team Belgium and Wikidata", () => {
 
     expect(outcome.retried).toEqual([]);
     // Nafy Thiam has EYOF results only; Lieze Desmet has no results at all.
-    expect((await athleteLinks()).map((a) => a.name)).toEqual(["Fran Vanhoutte", "Hanne Desmet", "Nafissatou Thiam"]);
+    expect((await athleteLinks("thiam")).map((a) => a.name)).toEqual(["Nafissatou Thiam"]);
+    expect((await athleteLinks("desmet")).map((a) => a.name)).toEqual(["Hanne Desmet"]);
+  });
+
+  it("starts Athletes with no senior result in the last 12 months inactive (story 26)", async () => {
+    // Thiam's latest senior result on her profile is from August 2024.
+    expect((await athleteLinks()).map((a) => a.name)).toEqual(["Fran Vanhoutte", "Hanne Desmet"]);
+    expect(await athletePage("Nafissatou Thiam")).toContain("Inactive · no senior international performance in the last 12 months (latest 9 Aug 2024)");
+    expect(await athletePage("Hanne Desmet")).toContain("Active · latest senior international performance 1 Nov 2026");
   });
 
   it("shows the Athlete header: sport, date of birth, Athlete since and linked external IDs, no photo", async () => {
@@ -68,14 +77,14 @@ describe("roster seed from Team Belgium and Wikidata", () => {
   });
 
   it("can be re-run when a Games delegation is announced without creating duplicates", async () => {
-    const before = await athleteLinks();
+    const before = await athleteLinks("a");
     fixClock("2027-12-01T09:00:00.000Z");
     stubOutboundFetch(teamBelgiumSeedRun);
 
     const outcome = await runIngest([{ kind: "seed-roster" }]);
 
     expect(outcome.retried).toEqual([]);
-    expect(await athleteLinks()).toEqual(before);
+    expect(await athleteLinks("a")).toEqual(before);
     const html = await athletePage("Nafissatou Thiam");
     expect(html.match(/Team Belgium Nafissatou-Thiam-347/g)).toHaveLength(1);
   });

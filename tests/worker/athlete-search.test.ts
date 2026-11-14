@@ -22,10 +22,11 @@ describe("Athletes list search", () => {
     expect(html).toMatch(/<input[^>]*name="q"[^>]*value="thiàm"/);
   });
 
-  it("lists everyone alphabetically without a search", async () => {
+  it("says there is no Active Athlete when nobody has competed in the last 12 months", async () => {
     const html = await (await get("/athletes")).text();
 
-    expect(athleteNames(html)).toEqual(["Fran Vanhoutte", "Hanne Desmet", "Nafissatou Thiam", "Nafy Thiam"]);
+    expect(athleteNames(html)).toEqual([]);
+    expect(html).toContain("No Active Athletes.");
   });
 
   it("says so when nobody matches", async () => {

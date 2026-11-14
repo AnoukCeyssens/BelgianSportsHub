@@ -191,6 +191,9 @@ describe("Reference Games", () => {
 
   it("counts Paris 2024 as LA 2028's previous edition", async () => {
     await enterByHand({ athlete: thiam, sport: "Athletics", event: "Heptathlon Women", place: "1", date: "2024-08-09" });
+    // Only an Active Entry makes the next edition likely (#28): she competed this season.
+    const recent = await seedCompetition(env.DB, { name: "Diamond League", sport: "Athletics", startDate: "2026-07-01" });
+    await seedResult(env.DB, recent, thiam, { date: "2026-07-01" });
     await post("/curate/run/schedules", { intent: "save-games-dates", games: "la-2028", firstDay: "2028-07-12", lastDay: "2028-07-30", sourceUrl: "https://olympics.example/la-2028" });
 
     const calendar = text(await page("/calendar?month=2028-07"));

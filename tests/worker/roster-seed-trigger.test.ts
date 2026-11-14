@@ -3,9 +3,14 @@ import { stubOutboundFetch } from "../support/outbound-fetch";
 import { get, post } from "../support/worker";
 import { teamBelgiumSeedRun } from "../fixtures/sources/team-belgium";
 
+/** Everyone the seed fixtures could add, found by search (inactive included). */
 const listedNames = async () => {
-  const html = await (await get("/athletes")).text();
-  return [...html.matchAll(/<a [^>]*href="\/athletes\/[^"]+"[^>]*>([^<]+)<\/a>/g)].map((m) => m[1]);
+  const names: string[] = [];
+  for (const q of ["thiam", "desmet", "vanhoutte"]) {
+    const html = await (await get(`/athletes?q=${q}`)).text();
+    names.push(...[...html.matchAll(/<a [^>]*href="\/athletes\/[^"]+"[^>]*>([^<]+)<\/a>/g)].map((m) => m[1]));
+  }
+  return names;
 };
 
 describe("owner starts the roster seed", () => {
