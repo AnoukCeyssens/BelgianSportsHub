@@ -6,11 +6,13 @@
 // - previous edition: a result of a currently Active Belgian Entry at the
 //   latest earlier competition of the same series (inactive Entries drop out
 //   of likely Participation, story 25);
-// - in contention: not tracked yet (Qualification status, #32);
+// - in contention: an Active Belgian Entry has a Qualification status still
+//   in the race there (#32, `inContentionAt`);
 // - the owner's word: `participation_curation`.
 import { and, asc, eq, gte, inArray, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { now } from "~/clock";
 import { type Db, schema } from "~/db/client";
+import { inContentionAt } from "~/qualification/entries";
 import { activeStatuses } from "~/roster/active";
 import { participation, type OwnerParticipationDecision, type Participation, type ParticipationReason } from "~/domain";
 
@@ -41,7 +43,7 @@ export async function participationsBetween(db: Db, from: string, to: string): P
   if (competitions.length === 0) return [];
   const ids = competitions.map((x) => x.id);
 
-  const [entrants, results, curations, previous] = await Promise.all([
+  const [entrants, results, curations, previous, contending] = await Promise.all([
     db
       .select({ competitionId: schema.entrant.competitionId, name: schema.athlete.name })
       .from(schema.entrant)
@@ -56,6 +58,7 @@ export async function participationsBetween(db: Db, from: string, to: string): P
       .where(and(inArray(schema.result.competitionId, ids), or(isNotNull(schema.athlete.id), isNotNull(schema.team.id)))),
     db.select().from(schema.participationCuration).where(inArray(schema.participationCuration.competitionId, ids)),
     previousEditionsWithBelgians(db, competitions),
+    inContentionAt(db, ids, now()),
   ]);
 
   const named = new Map<string, Set<string>>();
@@ -82,7 +85,7 @@ export async function participationsBetween(db: Db, from: string, to: string): P
       participation: participation({
         namedBelgianEntry: names.length > 0,
         previousEdition: previous.has(comp.id),
-        inContention: false,
+        inContention: contending.has(comp.id),
         owner: ownerDecision(curation),
       }),
     };

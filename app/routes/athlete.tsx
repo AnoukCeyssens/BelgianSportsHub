@@ -8,13 +8,15 @@ import { athleteMedals, BELGIAN_ZONE } from "~/domain";
 import { formatDate, formatDay, medalsText, placeText } from "~/format";
 import { activeFactsOf, activeStatuses } from "~/roster/active";
 import { ActiveStatusLine, factBehind } from "~/roster/status-line";
+import { qualificationOf, type TargetKey } from "~/qualification/entries";
+import { QualificationSection } from "~/qualification/qualification-section";
 import type { Route } from "./+types/athlete";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData?.athlete.name ?? "Athlete"} · BelgianSportsHub` }];
 }
 
-export async function loader({ context, params }: Route.LoaderArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
   const db = dbFrom(context);
   const athlete = await db.query.athlete.findFirst({ where: eq(schema.athlete.id, params.athleteId) });
   if (!athlete) throw data("No such Athlete", { status: 404 });
@@ -77,7 +79,9 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     .orderBy(asc(competition.startDate));
   const status = (await activeStatuses(db, now(), { athleteIds: [athlete.id] })).athletes.get(athlete.id)!;
   const fact = factBehind(status, await activeFactsOf(db, { athleteId: athlete.id }));
-  return { athlete, externalIds: sortedExternalIds(externalIds), results, upcoming, medals: medalsText(medals), status, fact };
+  const target: TargetKey = new URL(request.url).searchParams.get("target") === "championship" ? "championship" : "olympics";
+  const qualification = await qualificationOf(db, { athleteId: athlete.id, sport: athlete.sport }, now());
+  return { athlete, externalIds: sortedExternalIds(externalIds), results, upcoming, medals: medalsText(medals), status, fact, target, qualification };
 }
 
 const SCHEME_ORDER = Object.keys(EXTERNAL_ID_SCHEMES);
@@ -104,7 +108,7 @@ function athleteSince(isoDate: string, competition: string | null) {
 }
 
 export default function Athlete({ loaderData }: Route.ComponentProps) {
-  const { athlete, externalIds, results, upcoming, medals, status, fact } = loaderData;
+  const { athlete, externalIds, results, upcoming, medals, status, fact, target, qualification } = loaderData;
   const facts = [
     athlete.sport,
     athlete.dateOfBirth ? `born ${formatDate(athlete.dateOfBirth)}` : null,
@@ -127,6 +131,12 @@ export default function Athlete({ loaderData }: Route.ComponentProps) {
       {medals ? <div className="sub">{medals}</div> : null}
       <ActiveStatusLine status={status} fact={fact} editHref={`/curate/athletes/${athlete.id}/status`} />
       {athlete.note ? <p className="note">{athlete.note}</p> : null}
+
+      <QualificationSection
+        targets={qualification}
+        shown={target}
+        href={(key) => (key === "olympics" ? `/athletes/${athlete.id}` : `/athletes/${athlete.id}?target=${key}`)}
+      />
 
       <h2>Upcoming</h2>
       {upcoming.length > 0 ? (

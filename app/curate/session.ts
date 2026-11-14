@@ -5,7 +5,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 
-export type Sheet = "weekly";
+export type Sheet = "weekly" | "live";
 
 export type SessionView = {
   passed: Set<string>;

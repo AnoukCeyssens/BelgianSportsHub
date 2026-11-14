@@ -110,13 +110,6 @@ export async function seedTeam(d1: D1Database, t: { name: string; sport: string;
   return row.id;
 }
 
-/** A Belgian Entry in one event of a competition (an Athlete or a Team), as the Schedules step or a Selection names it. */
-export async function seedEntry(d1: D1Database, e: { competitionId: string; sport: string; event: string; athleteId?: string; teamId?: string }) {
-  await getDb(d1)
-    .insert(schema.entry)
-    .values({ ...e, athleteId: e.athleteId ?? null, teamId: e.teamId ?? null, checkedOn: "2026-01-01" });
-}
-
 /** Names an Athlete on a competition's entry list. */
 export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
   const db = getDb(d1);
@@ -184,9 +177,12 @@ export async function seedParticipationCuration(
 export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const db = getDb(env.DB);
   for (const table of [
+    schema.medalStanding,
+    schema.entryRound,
     schema.sessionRound,
     schema.session,
     schema.timetableVersion,
+    schema.qualificationTrack,
     schema.entry,
     schema.participationCuration,
     schema.activeFact,
@@ -207,7 +203,45 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   if (keys.length > 0) await env.RAW.delete(keys);
 }
 
-type ChecklistItemSeed = { topic: string; name: string; dueOn: string; url?: string; everyMonths?: number };
+type EntrySeed = { competitionId: string; sport: string; event: string; athleteId?: string; teamId?: string; firstRound?: string };
+
+/** A Belgian Entry, as the owner names it when storing a timetable. Returns its id. */
+export async function seedEntry(d1: D1Database, e: EntrySeed): Promise<string> {
+  const [row] = await getDb(d1)
+    .insert(schema.entry)
+    .values({ ...e, athleteId: e.athleteId ?? null, teamId: e.teamId ?? null, firstRound: e.firstRound ?? null, checkedOn: "2026-11-01" })
+    .returning({ id: schema.entry.id });
+  return row.id;
+}
+
+/** One Session: a sport's block on a venue-local date and time, with its rounds as [event, round]. */
+type SessionSeed = { sport: string; date: string; start?: string; code?: string; rounds: [string, string][] };
+
+/** A stored timetable version with these Sessions, as the Schedules step stores it. */
+export async function seedTimetable(d1: D1Database, competitionId: string, venueZone: string, sessions: SessionSeed[]) {
+  const db = getDb(d1);
+  const [version] = await db
+    .insert(schema.timetableVersion)
+    .values({ competitionId, version: "v1", storedAt: "2026-11-01T10:00:00.000Z", rawCopyId: await seedRawCopy(d1, "timetable") })
+    .returning({ id: schema.timetableVersion.id });
+  for (const s of sessions) {
+    const [row] = await db
+      .insert(schema.session)
+      .values({
+        competitionId,
+        timetableVersionId: version.id,
+        code: s.code ?? null,
+        sport: s.sport,
+        date: s.date,
+        startsAt: s.start ? `${s.date}T${s.start}` : null,
+        venueZone,
+      })
+      .returning({ id: schema.session.id });
+    await db.insert(schema.sessionRound).values(s.rounds.map(([event, round], position) => ({ sessionId: row.id, event, round, position })));
+  }
+}
+
+type ChecklistItemSeed ={ topic: string; name: string; dueOn: string; url?: string; everyMonths?: number };
 
 /** Adds a Monthly checklist item, as the owner would. */
 export async function seedChecklistItem(d1: D1Database, item: ChecklistItemSeed): Promise<string> {

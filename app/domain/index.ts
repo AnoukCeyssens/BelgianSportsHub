@@ -1,6 +1,6 @@
 // Domain rules: pure functions, no I/O. Every rule that depends on the current
 // time takes it as an explicit argument. Tested table-driven in tests/domain.
-export { BELGIAN_ZONE, toDisplayTime, type DisplayTime } from "./time-display";
+export { BELGIAN_ZONE, toDisplayTime, wallClockIn, type DisplayTime } from "./time-display";
 export { isSeniorInternationalPerformance, type Performance } from "./senior-performance";
 export { identityMatch, normaliseName, type ExternalId, type IdentityMatch, type IncomingIdentity, type KnownIdentity } from "./identity-match";
 export { matchesNameSearch } from "./name-search";
@@ -15,7 +15,7 @@ export {
   type SourceState,
   type SourceTier,
 } from "./source-health";
-export { runSheetProgress, WEEKLY_RUN_SHEET, type RunSheetProgress, type RunSheetStep } from "./run-sheet";
+export { LIVE_DAY_PASS, runSheetProgress, WEEKLY_RUN_SHEET, type RunSheetProgress, type RunSheetStep } from "./run-sheet";
 export {
   LIKELY_REVIEW_WEEKS,
   needsLikelyReview,
@@ -69,5 +69,35 @@ export {
   type TimetableSkip,
 } from "./timetable";
 export { venueZoneOf } from "./venue-zone";
-export { dayToShow, liveDays, roundsFor, venueLabel, type LiveDay, type RoundState } from "./live-day";
+export {
+  dayToShow,
+  liveDays,
+  roundsFor,
+  venueLabel,
+  type EntryProgress,
+  type EventResult,
+  type LiveDay,
+  type RoundOutcome,
+  type RoundProgress,
+  type RoundState,
+} from "./live-day";
+export { isBelgium, medalTable, readMedalTable, type MedalStanding, type MedalTableRow } from "./medal-table";
 export { activeStatus, isActive, type ActiveEntity, type ActiveFacts, type ActivePerformance, type ActiveReason, type ActiveStatus } from "./active";
+export {
+  inContention,
+  isQualificationStatus,
+  olympicCycleOf,
+  QUALIFICATION_STATUS_LABELS,
+  QUALIFICATION_STATUSES,
+  qualificationTargets,
+  TRACK_STATES,
+  trackProgress,
+  windowCountdown,
+  type OlympicCycle,
+  type QualificationStatus,
+  type QualificationTargets,
+  type TargetCompetition,
+  type TrackBetter,
+  type TrackMeasure,
+  type TrackState,
+} from "./qualification";

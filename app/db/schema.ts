@@ -126,7 +126,7 @@ export const source = sqliteTable("source", {
  */
 export const runSheetSession = sqliteTable("run_sheet_session", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  /** "weekly" (the Live day pass comes later). */
+  /** "weekly" or "live" (the Live day pass). */
   sheet: text("sheet").notNull(),
   startedAt: text("started_at").notNull(),
   finishedAt: text("finished_at"),
@@ -206,6 +206,12 @@ export const competition = sqliteTable(
     standardsPublishedOn: text("standards_published_on"),
     standardsUrl: text("standards_url"),
     standardsText: text("standards_text"),
+    /**
+     * YYYY-MM-DD the qualification window closes for this target (ticket
+     * #32; LA28: 11 Jun 2028, its last qualification event), curated with the
+     * standards. The Athlete page counts down to it.
+     */
+    qualificationClosesOn: text("qualification_closes_on"),
     source: text("source").notNull(),
     /** The source's own ID for this competition. */
     sourceRef: text("source_ref").notNull(),
@@ -420,6 +426,18 @@ export const entry = sqliteTable(
     /** Where the owner read the Entry (the timetable version's source), and the Belgian date of the last check. */
     sourceUrl: text("source_url"),
     checkedOn: text("checked_on").notNull(),
+    /**
+     * The Entry's Qualification status for this competition as a target
+     * (GLOSSARY "Qualification status", ticket #32): "not-in-contention" |
+     * "at-risk" | "on-track" | "eligible" | "qualified" | "selected" |
+     * "not-selected" | "withdrawn" (QualificationStatus); null when none is
+     * recorded. Set on the Athlete or Team only, never on roster members.
+     * #33 suggests it, #34 sets Selected / Not selected.
+     */
+    qualificationStatus: text("qualification_status"),
+    /** Where the owner read the status (a URL or a short description), and the Belgian date it was last checked. */
+    qualificationSource: text("qualification_source"),
+    qualificationCheckedOn: text("qualification_checked_on"),
   },
   (t) => [
     uniqueIndex("entry_athlete").on(t.competitionId, t.event, t.athleteId),
@@ -496,6 +514,65 @@ export const sessionRound = sqliteTable("session_round", {
 });
 
 /**
+ * An Entry's round attachment (spec #20, Data model; stories 56 and 58;
+ * ticket #38): what the Live day pass learnt about an Entry in one round of
+ * its event, keyed by the round's name so it outlives timetable versions.
+ * The outcome moves later rounds on ("advanced") or drops them
+ * ("eliminated"); the optional heat or match detail (any of it may be
+ * missing) shows on the day view and, once given, means a start list names
+ * the Entry in that round.
+ */
+export const entryRound = sqliteTable(
+  "entry_round",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    entryId: text("entry_id")
+      .notNull()
+      .references(() => entry.id, { onDelete: "cascade" }),
+    /** The round as the timetable names it, e.g. "Semi-finals". */
+    round: text("round").notNull(),
+    /** "advanced" | "eliminated" (RoundOutcome); null while not known. */
+    outcome: text("outcome"),
+    /** Heat, race, group or table, as the start list names it. */
+    heat: text("heat"),
+    lane: text("lane"),
+    /** The opponent in a match, e.g. "LI Wen (CHN)". */
+    opponent: text("opponent"),
+    /** Exact start, venue-local "HH:mm", when the start list gives one. */
+    startsAt: text("starts_at"),
+    /** ISO instant the owner last looked for heat or match detail (saved, or none published). */
+    detailCheckedAt: text("detail_checked_at"),
+    /** ISO instant of the owner's last change. */
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("entry_round_round").on(t.entryId, t.round)],
+);
+
+/**
+ * The other nations' medal counts at a competition, as the owner last pasted
+ * them from the official medal table (ticket #38). Belgium's own row is
+ * never stored: it is counted from Belgian results (`belgiumMedals`).
+ */
+export const medalStanding = sqliteTable(
+  "medal_standing",
+  {
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id, { onDelete: "cascade" }),
+    nation: text("nation").notNull(),
+    gold: integer("gold").notNull(),
+    silver: integer("silver").notNull(),
+    bronze: integer("bronze").notNull(),
+    /** ISO instant of the paste. */
+    pastedAt: text("pasted_at").notNull(),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+  },
+  (t) => [primaryKey({ columns: [t.competitionId, t.nation] })],
+);
+
+/**
  * The owner's curated facts behind the Active rule (GLOSSARY "Active",
  * "Hold"; spec #20, stories 20–23 and 114), at most one per kind per Entry
  * (an Athlete or a Team):
@@ -524,3 +601,35 @@ export const activeFact = sqliteTable(
   },
   (t) => [uniqueIndex("active_fact_athlete").on(t.athleteId, t.kind), uniqueIndex("active_fact_team").on(t.teamId, t.kind)],
 );
+
+/**
+ * One Qualification track of an Entry for its competition (GLOSSARY
+ * "Qualification track", ticket #32): one route or requirement (an entry
+ * standard, a ranking position, a quota place, a selection), what it needs,
+ * what the Entry has so far, and whether it is met. `changedOn` moves only
+ * when `needed`, `has` or `state` change, so the Qualification review (#33)
+ * can list Entries whose track changed.
+ */
+export const qualificationTrack = sqliteTable("qualification_track", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  entryId: text("entry_id")
+    .notNull()
+    .references(() => entry.id, { onDelete: "cascade" }),
+  /** Display order within the Entry. */
+  position: integer("position").notNull(),
+  /** e.g. "Entry standard", "World Ranking", "Quota place", "BOIC selection". */
+  name: text("name").notNull(),
+  /** What it needs, as written: "6 500 pts", "Top 24", "Criteria TBA". */
+  needed: text("needed").notNull(),
+  /** What the Entry has so far: "6 640 · Birmingham, Aug 2026", "#31". */
+  has: text("has").notNull(),
+  /** "met" | "not-met" | "pending" (TrackState). */
+  state: text("state").notNull(),
+  /** "higher" | "lower" (TrackBetter): which way the figures improve; null reads it from the text. */
+  better: text("better"),
+  /** Where it was read (a URL or a short description), when given. */
+  source: text("source"),
+  /** Belgian date of the last check, and of the last change to needed / has / state. */
+  checkedOn: text("checked_on").notNull(),
+  changedOn: text("changed_on").notNull(),
+});

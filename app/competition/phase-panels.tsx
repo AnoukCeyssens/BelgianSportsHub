@@ -1,7 +1,11 @@
+import { Link } from "react-router";
+import { sportColour } from "~/calendar/sport-colours";
 import type { Db } from "~/db/client";
-import { belgianDate, PHASE_LABELS, standardsForSports, type Phase } from "~/domain";
+import { belgianDate, PHASE_LABELS, QUALIFICATION_STATUS_LABELS, standardsForSports, windowCountdown, type Phase, type QualificationStatus } from "~/domain";
 import { formatDate } from "~/format";
-import { LiveDayPanel, loadLiveDay, type LiveDayView } from "./live-panel";
+import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
+import { QualificationBadge, TrackMark } from "~/qualification/qualification-section";
+import { LiveDayPanel, loadLiveDay, loadMedalTable, MedalTablePanel, type LiveDayView, type MedalTableView } from "./live-panel";
 import type { CompetitionRow } from "./phase-inputs";
 
 // What each Phase shows on a competition page (spec #20, stories 43–48;
@@ -25,9 +29,19 @@ export type PublishedStandards = { expectedOn: string | null; publishedOn: strin
 
 export type PhasePanelData =
   | { phase: "standards"; standards: PublishedStandards }
-  | { phase: "qualification"; standards: PublishedStandards }
+  | {
+      phase: "qualification";
+      standards: PublishedStandards;
+      /** When the qualification window closes (YYYY-MM-DD) and the days left; null when not recorded. */
+      closesOn: string | null;
+      closesIn: number | null;
+      /** Active potential Entries with their tracks (ticket #32), filtered by the chosen sport chips. */
+      entries: PotentialEntry[];
+      /** At the Games each Entry shows its sport's colour. */
+      games: boolean;
+    }
   | { phase: "selection" }
-  | { phase: "live"; day: LiveDayView | null }
+  | { phase: "live"; day: LiveDayView | null; medals: MedalTableView }
   | { phase: "after" };
 
 /** A Games' sports and the chosen chips; none chosen means All sports. A Championship has none. */
@@ -46,10 +60,25 @@ export async function loadPhasePanel(
 ): Promise<PhasePanelData> {
   switch (phase) {
     case "standards":
-    case "qualification":
       return { phase, standards: standardsOf(competition, now, chips) };
+    case "qualification": {
+      const entries = await potentialEntries(db, [competition.id], now);
+      const chosen = chips.chosen.map((s) => s.toLowerCase());
+      return {
+        phase,
+        standards: standardsOf(competition, now, chips),
+        closesOn: competition.qualificationClosesOn,
+        closesIn: windowCountdown(competition.qualificationClosesOn, now),
+        entries: chosen.length > 0 ? entries.filter((e) => chosen.includes(e.sport.toLowerCase())) : entries,
+        games: competition.kind === "games",
+      };
+    }
     case "live":
-      return { phase, day: await loadLiveDay(db, competition, now, chips.chosen, day) };
+      return {
+        phase,
+        day: await loadLiveDay(db, competition, now, chips.chosen, day),
+        medals: await loadMedalTable(db, competition, chips.chosen),
+      };
     case "selection":
     case "after":
       return { phase };
@@ -83,11 +112,16 @@ export function PhasePanel({ data, dayHref }: { data: PhasePanelData; dayHref: (
               <StandardLines lines={data.standards.lines} />
             </>
           ) : null}
-          <p className="sub">No Qualification statuses recorded yet.</p>
+          <Qualification data={data} />
         </>
       ) : null}
       {data.phase === "selection" ? <p className="sub">No Selection recorded yet.</p> : null}
-      {data.phase === "live" ? data.day ? <LiveDayPanel view={data.day} dayHref={dayHref} /> : <p className="sub">No Sessions recorded yet.</p> : null}
+      {data.phase === "live" ? (
+        <>
+          {data.day ? <LiveDayPanel view={data.day} dayHref={dayHref} /> : <p className="sub">No Sessions recorded yet.</p>}
+          <MedalTablePanel view={data.medals} />
+        </>
+      ) : null}
       {data.phase === "after" ? <p className="sub">No outcomes compared yet.</p> : null}
     </section>
   );
@@ -126,4 +160,67 @@ function StandardLines({ lines }: { lines: string[] }) {
       ))}
     </ul>
   ) : null;
+}
+
+/** Best standing first, for the counts line. */
+const COUNT_ORDER: readonly QualificationStatus[] = ["selected", "qualified", "eligible", "on-track", "at-risk", "not-in-contention", "not-selected", "withdrawn"];
+
+/** "1 qualified · 2 on track · 1 at risk": the count of each status, best standing first. */
+function statusCounts(entries: PotentialEntry[]) {
+  return COUNT_ORDER.map((status) => [status, entries.filter((e) => e.status === status).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([status, n]) => `${n} ${QUALIFICATION_STATUS_LABELS[status].toLowerCase()}`)
+    .join(" · ");
+}
+
+/** Spec story 45: each potential Entry with its tracks (✓ / ✗ / pending) and its status badge. */
+function Qualification({ data }: { data: Extract<PhasePanelData, { phase: "qualification" }> }) {
+  return (
+    <>
+      <h3>Qualification</h3>
+      {data.closesOn ? (
+        <p className="note">
+          {`Qualification window closes ${formatDate(data.closesOn)}`}
+          {data.closesIn !== null && data.closesIn >= 0 ? ` · ${data.closesIn} days left` : " · closed"}
+        </p>
+      ) : null}
+      {data.entries.length > 0 ? (
+        <>
+          <p className="meta">{statusCounts(data.entries)}</p>
+          <table aria-label="Potential Entries">
+            <thead>
+              <tr>
+                <th>Entry</th>
+                <th>Qualification tracks</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.entries.map((e) => (
+                <tr key={e.id}>
+                  <td>
+                    {data.games ? <span className="dot" style={{ background: sportColour(e.sport) }}></span> : null}
+                    <Link to={e.who.kind === "team" ? `/teams/${e.who.id}` : `/athletes/${e.who.id}`}>{e.who.name}</Link>
+                    <div className="sub">{e.event}</div>
+                  </td>
+                  <td>
+                    {e.tracks.map((t) => (
+                      <div key={t.id}>
+                        <TrackMark state={t.state} /> {t.name} <span className="sub">{`need ${t.needed} · has ${t.has}`}</span>
+                      </div>
+                    ))}
+                  </td>
+                  <td>
+                    <QualificationBadge status={e.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p className="sub">No Qualification statuses recorded yet.</p>
+      )}
+    </>
+  );
 }

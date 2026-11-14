@@ -8,10 +8,11 @@ import { actOnTimetable, loadTimetableReview } from "~/curate/timetables";
 import { SelectionsLikelyStep, actOnLikely, loadSelectionsLikely } from "~/curate/selections-likely";
 import { currentSession, finishSession, logAction } from "~/curate/session";
 import { SourceHealthStep, actOnSource, loadSourceHealth } from "~/curate/source-health";
+import { liveCompetitions } from "~/competition/placed-rounds";
 import { now } from "~/clock";
 import { cloudflareContext, dbFrom } from "~/context";
 import type { Db } from "~/db/client";
-import { runSheetProgress, WEEKLY_RUN_SHEET } from "~/domain";
+import { LIVE_DAY_PASS, runSheetProgress, WEEKLY_RUN_SHEET } from "~/domain";
 import { formatBelgianClock, formatMinutes } from "~/format";
 import type { Route } from "./+types/curate.run";
 
@@ -70,13 +71,15 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const index = stepIndex(params.step);
   const db = dbFrom(context);
   const at = now();
-  const [steps, session] = await Promise.all([loadSteps(db, at), currentSession(db, SHEET)]);
+  const [steps, session, live] = await Promise.all([loadSteps(db, at), currentSession(db, SHEET), liveCompetitions(db, at)]);
   const { sourceHealth, pasteImports, manualResults, mergeQueue, selectionsLikely, schedules, monthlyChecklist } = steps;
   const progress = runSheetProgress(steps.withOpenCounts, session.passed);
   return {
     index,
     step: progress.steps[index],
     progress,
+    // The Live day pass is offered while a competition with Belgian Entries is Live (ticket #38).
+    live: live.map((c) => c.name),
     log: session.log.map((e) => ({ ...e, time: formatBelgianClock(e.at) })),
     sourceHealth: params.step === "source-health" ? sourceHealth : null,
     pasteImports: params.step === "paste-imports" ? pasteImports : null,
@@ -132,6 +135,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
     index,
     step,
     progress,
+    live,
     log,
     sourceHealth,
     pasteImports,
@@ -167,6 +171,12 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
       </nav>
 
       <section className="step">
+        {live.length > 0 ? (
+          <p className="live-banner">
+            {`● Live · ${live.join(" · ")} · `}
+            <Link to={`/curate/live/${LIVE_DAY_PASS[0].key}`}>Live day pass</Link>
+          </p>
+        ) : null}
         <h1>{`${index + 1}. ${step.label}`}</h1>
         <p className="meta">
           {step.purpose} <span className="sub">{`${step.estimate} · ${step.open} open`}</span>

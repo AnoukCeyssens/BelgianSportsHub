@@ -8,6 +8,8 @@ import { formatDay, medalsText, placeText } from "~/format";
 import { now } from "~/clock";
 import { activeFactsOf, activeStatuses } from "~/roster/active";
 import { ActiveStatusLine, factBehind } from "~/roster/status-line";
+import { qualificationOf, type TargetKey } from "~/qualification/entries";
+import { QualificationSection } from "~/qualification/qualification-section";
 import type { Route } from "./+types/team";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -16,7 +18,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 // A Team's page (ADR 0001; spec #20 stories 12, 13 and 33): its results, each
 // with the roster the official result or squad list credits at that competition.
-export async function loader({ context, params }: Route.LoaderArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
   const db = dbFrom(context);
   const team = await db.query.team.findFirst({ where: eq(schema.team.id, params.teamId) });
   if (!team) throw data("No such Team", { status: 404 });
@@ -66,8 +68,11 @@ export async function loader({ context, params }: Route.LoaderArgs) {
   );
   const status = (await activeStatuses(db, now(), { teamIds: [team.id] })).teams.get(team.id)!;
   const fact = factBehind(status, await activeFactsOf(db, { teamId: team.id }));
+  const target: TargetKey = new URL(request.url).searchParams.get("target") === "championship" ? "championship" : "olympics";
   return {
     team,
+    target,
+    qualification: await qualificationOf(db, { teamId: team.id, sport: team.sport }, now()),
     status,
     fact,
     medals: medalsText(medals),
@@ -81,7 +86,7 @@ function CompetitionName({ name, kind }: { name: string; kind: string }) {
 }
 
 export default function Team({ loaderData }: Route.ComponentProps) {
-  const { team, status, fact, medals, results } = loaderData;
+  const { team, status, fact, medals, results, target, qualification } = loaderData;
   const facts = [
     team.sport,
     team.event,
@@ -93,6 +98,12 @@ export default function Team({ loaderData }: Route.ComponentProps) {
       <div className="meta">{facts.join(" · ")}</div>
       {medals ? <div className="sub">{medals}</div> : null}
       <ActiveStatusLine status={status} fact={fact} editHref={`/curate/teams/${team.id}/status`} />
+
+      <QualificationSection
+        targets={qualification}
+        shown={target}
+        href={(key) => (key === "olympics" ? `/teams/${team.id}` : `/teams/${team.id}?target=${key}`)}
+      />
 
       <h2>Results</h2>
       {results.length > 0 ? (
