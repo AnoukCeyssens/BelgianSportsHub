@@ -40,8 +40,29 @@
     {
       "idx": 5,
       "version": "6",
-      "when": 1794658177548,
-      "tag": "0005_participation",
+      "when": 1794657940363,
+      "tag": "0005_fis_points_list_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794658316047,
+      "tag": "0006_monthly_checklist",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794658341022,
+      "tag": "0007_documented_api_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794658660681,
+      "tag": "0008_participation",
       "breakpoints": true
     }
   ]

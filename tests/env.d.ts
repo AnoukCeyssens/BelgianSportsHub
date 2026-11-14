@@ -4,3 +4,9 @@ declare namespace Cloudflare {
     TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
   }
 }
+
+// Binary fixtures, byte for byte (the `bytes-fixtures` plugin in vitest.config.ts).
+declare module "*?bytes" {
+  const bytes: Uint8Array<ArrayBuffer>;
+  export default bytes;
+}

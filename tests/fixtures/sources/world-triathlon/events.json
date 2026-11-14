@@ -1,0 +1,86 @@
+{
+  "code": 200,
+  "status": "success",
+  "total": 2,
+  "per_page": 100,
+  "current_page": 1,
+  "last_page": 1,
+  "next_page_url": null,
+  "prev_page_url": null,
+  "from": 1,
+  "to": 2,
+  "data": [
+    {
+      "event_id": 190001,
+      "event_title": "2026 World Triathlon Cup Exampleton",
+      "event_slug": "2026_world_triathlon_cup_exampleton",
+      "event_edit_date": "2026-11-01T10:00:00+00:00",
+      "event_venue": "Exampleton",
+      "event_country": "",
+      "event_latitude": 0,
+      "event_longitude": 0,
+      "event_date": "2026-11-08",
+      "event_finish_date": "2026-11-15",
+      "event_country_isoa2": "ES",
+      "event_country_noc": "ESP",
+      "event_region_id": 0,
+      "event_country_id": 0,
+      "event_region_name": "",
+      "event_categories": [
+        {
+          "cat_name": "World Cup",
+          "cat_id": 349,
+          "cat_parent_id": 0
+        }
+      ],
+      "event_specifications": [
+        {
+          "cat_name": "Triathlon",
+          "cat_id": 357,
+          "cat_parent_id": 0
+        },
+        {
+          "cat_name": "Sprint",
+          "cat_id": 376,
+          "cat_parent_id": 357
+        }
+      ]
+    },
+    {
+      "event_id": 190002,
+      "event_title": "2026 Exampleton Age Group Triathlon",
+      "event_slug": "2026_exampleton_age_group_triathlon",
+      "event_edit_date": "2026-11-01T10:00:00+00:00",
+      "event_venue": "Exampleton",
+      "event_country": "",
+      "event_latitude": 0,
+      "event_longitude": 0,
+      "event_date": "2026-11-08",
+      "event_finish_date": "2026-11-08",
+      "event_country_isoa2": "ES",
+      "event_country_noc": "ESP",
+      "event_region_id": 0,
+      "event_country_id": 0,
+      "event_region_name": "",
+      "event_categories": [
+        {
+          "cat_name": "Age Group Event",
+          "cat_id": 360,
+          "cat_parent_id": 0
+        }
+      ],
+      "event_specifications": [
+        {
+          "cat_name": "Triathlon",
+          "cat_id": 357,
+          "cat_parent_id": 0
+        },
+        {
+          "cat_name": "Sprint",
+          "cat_id": 376,
+          "cat_parent_id": 357
+        }
+      ]
+    }
+  ]
+}

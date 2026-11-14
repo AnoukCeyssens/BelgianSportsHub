@@ -57,7 +57,7 @@ export async function seedMergeQueueItem(d1: D1Database, item: MergeQueueSeed): 
 async function seedRawCopy(d1: D1Database, source: string) {
   const [raw] = await getDb(d1)
     .insert(schema.rawCopy)
-    .values({ source, url: `https://example.test/${source}/${crypto.randomUUID()}`, r2Key: `raw/${source}/${crypto.randomUUID()}`, fetchedAt: "2026-11-01T04:00:00.000Z" })
+    .values({ source, url: `https://example.test/${source}/${crypto.randomUUID()}`, r2Key: `raw/${source}/${crypto.randomUUID()}`, fetchedAt: "2026-10-01T04:00:00.000Z" })
     .returning({ id: schema.rawCopy.id });
   return raw.id;
 }
@@ -65,16 +65,19 @@ async function seedRawCopy(d1: D1Database, source: string) {
 type CompetitionSeed = {
   name: string;
   sport: string;
+  /** Source key; "test-source" when it does not matter. */
+  source?: string;
   kind?: "championship" | "games" | "circuit";
   startDate: string;
+  /** Defaults to the start date (a one-day competition). */
   endDate?: string;
   city?: string;
   series?: string;
 };
 
-/** A competition as a source run would have stored it. */
+/** Adds a competition as its source would publish it (with a raw copy it came from). */
 export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promise<string> {
-  const source = "test-source";
+  const source = c.source ?? "test-source";
   const [row] = await getDb(d1)
     .insert(schema.competition)
     .values({
@@ -93,11 +96,11 @@ export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promi
   return row.id;
 }
 
-/** The competition's entry list names the Athlete, as an ingest run would record it. */
+/** Names an Athlete on a competition's entry list. */
 export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
-  await getDb(d1)
-    .insert(schema.entrant)
-    .values({ competitionId, athleteId, rawCopyId: await seedRawCopy(d1, "test-source") });
+  const db = getDb(d1);
+  const competition = await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) });
+  await db.insert(schema.entrant).values({ competitionId, athleteId, rawCopyId: competition!.rawCopyId });
 }
 
 /** A Belgian result of the Athlete at the competition. */
@@ -146,4 +149,12 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   }
   const keys = (await env.RAW.list({ prefix: "raw/" })).objects.map((o) => o.key);
   if (keys.length > 0) await env.RAW.delete(keys);
+}
+
+type ChecklistItemSeed = { topic: string; name: string; dueOn: string; url?: string; everyMonths?: number };
+
+/** Adds a Monthly checklist item, as the owner would. */
+export async function seedChecklistItem(d1: D1Database, item: ChecklistItemSeed): Promise<string> {
+  const [row] = await getDb(d1).insert(schema.checklistItem).values(item).returning({ id: schema.checklistItem.id });
+  return row.id;
 }

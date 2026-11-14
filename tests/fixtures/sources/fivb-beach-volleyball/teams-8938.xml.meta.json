@@ -1,0 +1,6 @@
+{
+  "url": "https://www.fivb.org/Vis2009/XmlRequest.asmx?Request=%3CRequest%20Type%3D%22GetBeachTeamList%22%20Fields%3D%22No%20Rank%20NoPlayer1%20NoPlayer2%20Player1FirstName%20Player1LastName%20Player1Birthdate%20Player1FederationCode%20Player2FirstName%20Player2LastName%20Player2Birthdate%20Player2FederationCode%22%3E%3CFilter%20NoTournament%3D%228938%22%2F%3E%3C%2FRequest%3E",
+  "status": 200,
+  "contentType": "application/xml",
+  "recordedAt": "2026-11-14T12:03:55.016Z"
+}

@@ -8,7 +8,7 @@ import { getDb, schema } from "~/db/client";
 import { sourceHealth, type SourceTier } from "~/domain";
 import { belgianRows } from "./belgian-rows";
 import type { IngestJob } from "./queue";
-import { fetchAndKeep } from "./raw-copy";
+import { fetchAndKeep, fetchStreamAndKeep } from "./raw-copy";
 import { SourceBlocked } from "./source-adapter";
 import { SOURCE_ADAPTERS } from "./sources";
 
@@ -30,7 +30,12 @@ export async function runSource(env: Pick<Env, "DB" | "RAW">, key: string): Prom
     await adapter.run({
       now: startedAt,
       since: source.lastSuccessAt ? new Date(source.lastSuccessAt) : null,
-      fetch: (url) => fetchAndKeep(env, key, url),
+      fetch: (url, init) => fetchAndKeep(env, key, url, init),
+      fetchStream: (url) => fetchStreamAndKeep(env, key, url),
+      secret: (name) => {
+        const value = (env as unknown as Record<string, unknown>)[name];
+        return typeof value === "string" && value !== "" ? value : undefined;
+      },
       rows,
     });
   } catch (error) {

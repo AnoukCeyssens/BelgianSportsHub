@@ -71,9 +71,14 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
     },
 
     async result(input: ResultInput) {
-      if (input.person.nationality !== BELGIUM) return;
-      let { athleteId, item } = await athleteFor(input.person);
-      if (!athleteId && !item) {
+      let athleteId: string | null;
+      let item: typeof schema.mergeQueueItem.$inferSelect | null = null;
+      if ("athleteId" in input) athleteId = input.athleteId;
+      else {
+        if (input.person.nationality !== BELGIUM) return;
+        ({ athleteId, item } = await athleteFor(input.person));
+      }
+      if (!athleteId && !item && "person" in input) {
         await db
           .insert(schema.mergeQueueItem)
           .values({
@@ -109,7 +114,8 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
         await db.update(schema.result).set({ ...values, rawCopyId: input.rawCopyId }).where(eq(schema.result.id, existing.id));
         changes++;
       }
-      if (athleteId) await extendAthleteSince(athleteId, input.date, input.competitionId);
+      // Only appearing in the result is a performance (DNF and DSQ included, DNS not).
+      if (athleteId && input.status !== "DNS") await extendAthleteSince(athleteId, input.date, input.competitionId);
     },
 
     async entrants(competitionId: string, people: Person[], rawCopyId: string) {

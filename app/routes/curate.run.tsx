@@ -1,5 +1,7 @@
 import { Form, Link, redirect } from "react-router";
+import { ManualResultsStep, actOnManualResult, loadManualResults } from "~/curate/manual-results";
 import { MergeQueueStep, actOnMergeQueueItem, loadMergeQueue } from "~/curate/merge-queue";
+import { MonthlyChecklistStep, actOnChecklist, loadMonthlyChecklist } from "~/curate/monthly-checklist";
 import { SelectionsLikelyStep, actOnLikely, loadSelectionsLikely } from "~/curate/selections-likely";
 import { currentSession, finishSession, logAction } from "~/curate/session";
 import { SourceHealthStep, actOnSource, loadSourceHealth } from "~/curate/source-health";
@@ -31,17 +33,28 @@ function stepIndex(key: string) {
 
 /** Each built step's items; the others have none yet. */
 async function loadSteps(db: Db, at: Date) {
-  const [sourceHealth, mergeQueue, selectionsLikely] = await Promise.all([
+  const [sourceHealth, manualResults, mergeQueue, selectionsLikely, monthlyChecklist] = await Promise.all([
     loadSourceHealth(db, at),
+    loadManualResults(db, at),
     loadMergeQueue(db),
     loadSelectionsLikely(db, at),
+    loadMonthlyChecklist(db, at),
   ]);
   const open: Record<string, number> = {
     "source-health": sourceHealth.open,
+    "manual-results": manualResults.open,
     "merge-queue": mergeQueue.open,
     "selections-likely": selectionsLikely.open,
+    "monthly-checklist": monthlyChecklist.open,
   };
-  return { sourceHealth, mergeQueue, selectionsLikely, withOpenCounts: WEEKLY_RUN_SHEET.map((s) => ({ ...s, open: open[s.key] ?? 0 })) };
+  return {
+    sourceHealth,
+    manualResults,
+    mergeQueue,
+    selectionsLikely,
+    monthlyChecklist,
+    withOpenCounts: WEEKLY_RUN_SHEET.map((s) => ({ ...s, open: open[s.key] ?? 0 })),
+  };
 }
 
 export async function loader({ context, params }: Route.LoaderArgs) {
@@ -49,7 +62,7 @@ export async function loader({ context, params }: Route.LoaderArgs) {
   const db = dbFrom(context);
   const at = now();
   const [steps, session] = await Promise.all([loadSteps(db, at), currentSession(db, SHEET)]);
-  const { sourceHealth, mergeQueue, selectionsLikely } = steps;
+  const { sourceHealth, manualResults, mergeQueue, selectionsLikely, monthlyChecklist } = steps;
   const progress = runSheetProgress(steps.withOpenCounts, session.passed);
   return {
     index,
@@ -57,8 +70,10 @@ export async function loader({ context, params }: Route.LoaderArgs) {
     progress,
     log: session.log.map((e) => ({ ...e, time: formatBelgianClock(e.at) })),
     sourceHealth: params.step === "source-health" ? sourceHealth : null,
+    manualResults: params.step === "manual-results" ? manualResults : null,
     mergeQueue: params.step === "merge-queue" ? mergeQueue : null,
     selectionsLikely: params.step === "selections-likely" ? selectionsLikely : null,
+    monthlyChecklist: params.step === "monthly-checklist" ? monthlyChecklist : null,
   };
 }
 
@@ -84,15 +99,17 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
   let message: string;
   if (step.key === "source-health") message = await actOnSource(db, env.INGEST, intent, String(form.get("source")), at);
+  else if (step.key === "manual-results") message = await actOnManualResult(env, intent, form, at);
   else if (step.key === "merge-queue") message = await actOnMergeQueueItem(env.DB, db, intent, form);
   else if (step.key === "selections-likely") message = await actOnLikely(db, intent, form, at);
+  else if (step.key === "monthly-checklist") message = await actOnChecklist(db, intent, form, at);
   else throw new Response(`Unknown action ${intent}`, { status: 400 });
   await logAction(db, SHEET, { step: step.key, action: intent, message }, at);
   return redirect(runPath(step.key), 303);
 }
 
 export default function RunSheet({ loaderData }: Route.ComponentProps) {
-  const { index, step, progress, log, sourceHealth, mergeQueue, selectionsLikely } = loaderData;
+  const { index, step, progress, log, sourceHealth, manualResults, mergeQueue, selectionsLikely, monthlyChecklist } = loaderData;
   const total = progress.steps.length;
   const last = index === total - 1;
   return (
@@ -122,8 +139,10 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
           {step.purpose} <span className="sub">{`${step.estimate} · ${step.open} open`}</span>
         </p>
         {sourceHealth ? <SourceHealthStep data={sourceHealth} /> : null}
+        {manualResults ? <ManualResultsStep data={manualResults} /> : null}
         {mergeQueue ? <MergeQueueStep data={mergeQueue} /> : null}
         {selectionsLikely ? <SelectionsLikelyStep data={selectionsLikely} /> : null}
+        {monthlyChecklist ? <MonthlyChecklistStep data={monthlyChecklist} /> : null}
         {step.open === 0 ? <p className="donebox">✓ Nothing left in this step.</p> : null}
         <Form method="post" className="foot">
           {index > 0 ? (

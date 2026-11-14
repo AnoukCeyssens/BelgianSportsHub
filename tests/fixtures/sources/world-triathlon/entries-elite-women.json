@@ -1,0 +1,54 @@
+{
+  "code": 200,
+  "status": "success",
+  "data": {
+    "prog_id": 290002,
+    "event_id": 190001,
+    "prog_name": "Elite Women",
+    "prog_date": "2026-11-15",
+    "entries": [
+      {
+        "athlete_id": 390011,
+        "athlete_title": "Lotte Voorbeeld",
+        "athlete_slug": "lotte_voorbeeld",
+        "athlete_first": "Lotte",
+        "athlete_last": "Voorbeeld",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "1998",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "BEL",
+        "athlete_country_name": "",
+        "athlete_country_isoa2": "BE",
+        "athlete_categories": [
+          42
+        ],
+        "start_num": 7,
+        "type": "start",
+        "approved": true
+      },
+      {
+        "athlete_id": 390012,
+        "athlete_title": "Ana Ejemplo",
+        "athlete_slug": "ana_ejemplo",
+        "athlete_first": "Ana",
+        "athlete_last": "Ejemplo",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "1998",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "ESP",
+        "athlete_country_name": "",
+        "athlete_country_isoa2": "ES",
+        "athlete_categories": [
+          42
+        ],
+        "start_num": 8,
+        "type": "start",
+        "approved": true
+      }
+    ]
+  }
+}

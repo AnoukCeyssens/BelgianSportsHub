@@ -1,0 +1,7 @@
+{
+  "url": "https://www.fivb.org/Vis2009/XmlRequest.asmx?Request=%3CRequest%20Type%3D%22GetVolleyPlayerList%22%20Fields%3D%22No%20NoTournament%22%3E%3CFilter%20NoTournament%3D%221470%22%2F%3E%3CRelation%20Name%3D%22Player%22%20Fields%3D%22No%20FirstName%20LastName%20Birthdate%20FederationCode%22%2F%3E%3C%2FRequest%3E",
+  "status": 200,
+  "contentType": "application/xml",
+  "recordedAt": "2026-11-14T12:04:23.238Z",
+  "trimmedByHand": "Kept the first 4 of the 24 Belgian registrations and 3 of the other 531."
+}
