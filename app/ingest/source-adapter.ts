@@ -38,6 +38,12 @@ export type SourceRun = {
 export type FetchInit = {
   /** Extra request headers, e.g. an API key. They are not kept with the raw copy. */
   headers?: Record<string, string>;
+  /**
+   * Sends a POST with this form (application/x-www-form-urlencoded, fields in
+   * the given order) instead of a GET, for sources whose grids only answer
+   * POSTs (UCI DataRide). The form is kept with the raw copy, as the URL is.
+   */
+  form?: Record<string, string>;
 };
 
 export type Fetched = {

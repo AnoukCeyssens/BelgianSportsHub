@@ -3,4 +3,5 @@ INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES 
 INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-athletics', 'World Athletics (worldathletics.org page data)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));--> statement-breakpoint
 INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-aquatics', 'World Aquatics (api.worldaquatics.com)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));--> statement-breakpoint
 INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('fie-fencing', 'FIE fencing (fie.org page data)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));--> statement-breakpoint
-INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-rowing', 'World Rowing (world-rowing-api.soticcloud.net)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('world-rowing', 'World Rowing (world-rowing-api.soticcloud.net)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));--> statement-breakpoint
+INSERT INTO `source` (`key`, `name`, `tier`, `cadence_days`, `added_at`) VALUES ('uci-cycling', 'UCI cycling (DataRide, dataride.uci.ch)', 'automatic', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

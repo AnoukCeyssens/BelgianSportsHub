@@ -1,0 +1,8 @@
+{
+  "url": "https://dataride.uci.ch/iframe/Competitions/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:26:57.500Z",
+  "requestBody": "disciplineId=1&take=1000&skip=0&page=1&pageSize=1000&sort%5B0%5D%5Bfield%5D=StartDate&sort%5B0%5D%5Bdir%5D=desc&filter%5Blogic%5D=and&filter%5Bfilters%5D%5B0%5D%5Bfield%5D=RaceTypeId&filter%5Bfilters%5D%5B0%5D%5Bvalue%5D=0&filter%5Bfilters%5D%5B1%5D%5Bfield%5D=CategoryId&filter%5Bfilters%5D%5B1%5D%5Bvalue%5D=0&filter%5Bfilters%5D%5B2%5D%5Bfield%5D=SeasonId&filter%5Bfilters%5D%5B2%5D%5Bvalue%5D=451",
+  "trimmedByHand": "Kept the competitions starting or ending between 1 Oct and 10 Dec 2026; 'total' is as received."
+}
