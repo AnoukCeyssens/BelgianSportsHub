@@ -18,7 +18,9 @@ export function stubOutboundFetch(responses: RecordedResponse[]) {
     const url = input instanceof Request ? input.url : String(input);
     const hit = byUrl.get(url);
     if (!hit) throw new Error(`Unstubbed outbound fetch: ${url}`);
-    const headers = hit.contentType ? { "content-type": hit.contentType } : undefined;
+    const headers = new Headers(hit.contentType ? { "content-type": hit.contentType } : undefined);
+    // Binary bodies (FIS ZIPs) come with their length, as a real download does.
+    if (hit.body instanceof Uint8Array) headers.set("content-length", String(hit.body.byteLength));
     return new Response(hit.body, { status: hit.status ?? 200, headers });
   });
 }
