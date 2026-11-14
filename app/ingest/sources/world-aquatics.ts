@@ -100,12 +100,18 @@ export const worldAquatics: SourceAdapter = {
       for (const sport of events.Sports) {
         const competitionId = competitionIds.get(sport.Code);
         if (!competitionId) continue;
+        // At the Games every sport's rows are the one Games competition: each result names its sport.
+        const sportName = SPORT_OF_CODE[sport.Code];
         for (const discipline of sport.DisciplineList) {
           if (discipline.HeatList.length === 0 || discipline.HeatList.some((h) => h.ResultStatus !== "OFFICIAL")) continue;
           const fetched = await run.fetch(`${API}/events/${discipline.Id}`);
           const body = JSON.parse(fetched.text) as DisciplineResults;
           if (TEAM_EVENT.test(discipline.DisciplineName)) {
-            await teamResults(run, { competitionId, competitionRef: c.id, disciplineId: discipline.Id, event: `${body.DisciplineName}${course}`, rawCopyId: fetched.rawCopyId }, body);
+            await teamResults(
+              run,
+              { competitionId, sport: sportName, competitionRef: c.id, disciplineId: discipline.Id, event: `${body.DisciplineName}${course}`, rawCopyId: fetched.rawCopyId },
+              body,
+            );
             continue;
           }
           for (const [personId, { heat, r }] of lastSwims(body)) {
@@ -115,6 +121,7 @@ export const worldAquatics: SourceAdapter = {
               competitionId,
               person: person(r),
               event: `${body.DisciplineName}${course}`,
+              sport: sportName,
               date: heat.Date,
               place: status === "finished" ? r.Rank : null,
               status,
@@ -129,7 +136,7 @@ export const worldAquatics: SourceAdapter = {
   },
 };
 
-type TeamContext = { competitionId: string; competitionRef: number; disciplineId: string; event: string; rawCopyId: string };
+type TeamContext = { competitionId: string; sport: string; competitionRef: number; disciplineId: string; event: string; rawCopyId: string };
 
 /**
  * Each Belgian Team's last swim or routine in the discipline (a final over a
@@ -157,6 +164,7 @@ async function teamResults(run: SourceRun, ctx: TeamContext, body: DisciplineRes
     if (!status || roster.size === 0) continue;
     await run.rows.teamResult({
       competitionId: ctx.competitionId,
+      sport: ctx.sport,
       nationality: "BEL",
       event: ctx.event,
       // Technical and free routines are one event for the Team: the duet stays the same partnership.
