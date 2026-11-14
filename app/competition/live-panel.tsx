@@ -225,7 +225,7 @@ export function LiveDayPanel({ view, dayHref }: { view: LiveDayView; dayHref: (d
   );
 }
 
-export function MedalTablePanel({ view }: { view: MedalTableView }) {
+export function MedalTablePanel({ view, title = "Medal table" }: { view: MedalTableView; title?: string }) {
   if (view.kind === "belgium") {
     return (
       <>
@@ -268,7 +268,7 @@ export function MedalTablePanel({ view }: { view: MedalTableView }) {
   }
   return (
     <>
-      <h3>Medal table</h3>
+      <h3>{title}</h3>
       {view.pastedAt ? <p className="note">{`Other nations as of ${formatInstant(view.pastedAt)} · Belgium from its own results`}</p> : null}
       <table aria-label="Medal table">
         <thead>

@@ -11,7 +11,10 @@
 // - `setPick` / `clearPick`: the owner's pick, refused unless `canPick`;
 // - `recordSeed` / `removeSeed`: a Seed snapshot (one per Entry per date);
 // - `recordWorldRanks`: monthly world-rank snapshots from a ranking import
-//   (#33), written only while one is due (`worldRankSnapshotDue`).
+//   (#33), written only while one is due (`worldRankSnapshotDue`);
+// - `recordGracenote` / `removeGracenote`: Gracenote picks at the Games (#41);
+// - `boicTargetOf` / `setBoicTarget` / `clearBoicTarget`: the Games' BOIC
+//   target, a delegation-level count (#41).
 // Writes are the owner's (app/routes/curate.expectations.tsx) or an import's.
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { gamesPhaseInputs, phaseInputsFor, type CompetitionRow } from "~/competition/phase-inputs";
@@ -55,6 +58,8 @@ export type EntryExpectations = {
   seed: SnapshotView | null;
   /** Whether this month's world-rank snapshot is still to be taken (no final Seed yet). */
   worldRankDue: boolean;
+  /** Gracenote picks (the Games only), oldest first (#41). */
+  gracenote: SnapshotView[];
   pick: PickView | null;
 };
 
@@ -77,17 +82,19 @@ export async function expectationsOf(db: Db, entryIds: readonly string[], now: D
   const today = belgianDate(now);
   return new Map(
     entryIds.map((id) => {
-      const seeds = snapshots
-        .filter((x) => x.entryId === id && x.source === "seed")
-        .map((x) => ({
-          id: x.id,
-          source: "seed" as const,
-          from: x.placeFrom,
-          to: x.placeTo,
-          method: isSeedMethod(x.method) ? x.method : null,
-          asOf: x.asOf,
-          sourceUrl: x.sourceUrl,
-        }));
+      const of = (source: ExpectationSource): SnapshotView[] =>
+        snapshots
+          .filter((x) => x.entryId === id && x.source === source)
+          .map((x) => ({
+            id: x.id,
+            source,
+            from: x.placeFrom,
+            to: x.placeTo,
+            method: isSeedMethod(x.method) ? x.method : null,
+            asOf: x.asOf,
+            sourceUrl: x.sourceUrl,
+          }));
+      const seeds = of("seed");
       const row = picks.find((x) => x.entryId === id);
       const shortcut = row ? readShortcut(row.shortcut) : null;
       return [
@@ -96,6 +103,7 @@ export async function expectationsOf(db: Db, entryIds: readonly string[], now: D
           seeds,
           seed: seeds.at(-1) ?? null,
           worldRankDue: worldRankSnapshotDue(seeds, today),
+          gracenote: of("gracenote"),
           pick:
             row && shortcut
               ? { from: row.placeFrom, to: row.placeTo, shortcut: row.shortcut, label: shortcutLabel(shortcut), pickedAt: row.pickedAt }
@@ -178,11 +186,35 @@ export async function recordSeed(db: Db, input: SeedInput, now: Date) {
     .onConflictDoUpdate({ target: [s.entryId, s.source, s.asOf], set: values });
 }
 
-/** Removes one Seed snapshot of this competition's Entries. */
-export async function removeSeed(db: Db, competition: CompetitionRow, snapshotId: string) {
+/**
+ * Records a Gracenote pick (#41; the Games only), entered by hand from a
+ * Sporza/VRT update: attributed to Gracenote and linked to the article. One
+ * on the same date for the same Entry is replaced.
+ */
+export async function recordGracenote(db: Db, competition: CompetitionRow, input: PlaceRange & { entryId: string; asOf: string; sourceUrl: string }, now: Date) {
+  if (competition.kind !== "games") refuse("Gracenote picks are for the Games only");
+  await entryAt(db, competition, input.entryId);
+  if (!Number.isInteger(input.from) || !Number.isInteger(input.to) || input.from < 1 || input.to < input.from) refuse("A Gracenote pick is a place or a place range");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOf)) refuse("A Gracenote pick needs the date of its update");
+  if (!/^https?:\/\//.test(input.sourceUrl)) refuse("A Gracenote pick needs the link to the article it was read in");
+  const values = { placeFrom: input.from, placeTo: input.to, method: null, sourceUrl: input.sourceUrl, rawCopyId: null, recordedAt: now.toISOString() };
   const s = schema.expectationSnapshot;
-  const row = await db.query.expectationSnapshot.findFirst({ where: and(eq(s.id, snapshotId), eq(s.source, "seed")) });
-  if (!row) refuse("No such Seed", 404);
+  await db
+    .insert(s)
+    .values({ entryId: input.entryId, source: "gracenote", asOf: input.asOf, ...values })
+    .onConflictDoUpdate({ target: [s.entryId, s.source, s.asOf], set: values });
+}
+
+/** Removes one Seed snapshot of this competition's Entries. */
+export const removeSeed = (db: Db, competition: CompetitionRow, snapshotId: string) => removeSnapshot(db, competition, "seed", snapshotId);
+
+/** Removes one Gracenote pick of this Games' Entries. */
+export const removeGracenote = (db: Db, competition: CompetitionRow, snapshotId: string) => removeSnapshot(db, competition, "gracenote", snapshotId);
+
+async function removeSnapshot(db: Db, competition: CompetitionRow, source: ExpectationSource, snapshotId: string) {
+  const s = schema.expectationSnapshot;
+  const row = await db.query.expectationSnapshot.findFirst({ where: and(eq(s.id, snapshotId), eq(s.source, source)) });
+  if (!row) refuse(source === "seed" ? "No such Seed" : "No such Gracenote pick", 404);
   await entryAt(db, competition, row!.entryId);
   await db.delete(s).where(eq(s.id, snapshotId));
 }
@@ -207,4 +239,32 @@ export async function recordWorldRanks(
     written++;
   }
   return written;
+}
+
+export type BoicTargetView = { medals: number | null; top8: number | null; statedOn: string; sourceUrl: string };
+
+/** The Belgian Olympic Committee's target for a Games (#41): a delegation-level count, not an Expectation. Null when none is recorded. */
+export async function boicTargetOf(db: Db, competition: CompetitionRow): Promise<BoicTargetView | null> {
+  if (competition.kind !== "games") return null;
+  const row = await db.query.boicTarget.findFirst({ where: eq(schema.boicTarget.competitionId, competition.id) });
+  return row ? { medals: row.medals, top8: row.top8, statedOn: row.statedOn, sourceUrl: row.sourceUrl } : null;
+}
+
+/** Records (replaces) the Games' BOIC target: medals and/or top-8 places, when and where it was stated. */
+export async function setBoicTarget(db: Db, competition: CompetitionRow, input: BoicTargetView, now: Date) {
+  if (competition.kind !== "games") refuse("A BOIC target is for the Games only");
+  const count = (n: number | null) => n === null || (Number.isInteger(n) && n >= 0);
+  if (!count(input.medals) || !count(input.top8) || (input.medals === null && input.top8 === null)) refuse("A BOIC target is a count of medals and/or top-8 places");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.statedOn)) refuse("A BOIC target needs the date it was stated");
+  if (!/^https?:\/\//.test(input.sourceUrl)) refuse("A BOIC target needs the link to where it was stated");
+  const values = { ...input, recordedAt: now.toISOString() };
+  await db
+    .insert(schema.boicTarget)
+    .values({ competitionId: competition.id, ...values })
+    .onConflictDoUpdate({ target: schema.boicTarget.competitionId, set: values });
+}
+
+/** Clears the Games' BOIC target. */
+export async function clearBoicTarget(db: Db, competition: CompetitionRow) {
+  await db.delete(schema.boicTarget).where(eq(schema.boicTarget.competitionId, competition.id));
 }

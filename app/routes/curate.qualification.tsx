@@ -5,6 +5,7 @@ import { dbFrom } from "~/context";
 import { type Db, schema } from "~/db/client";
 import {
   belgianDate,
+  BELGIAN_ZONE,
   isQualificationStatus,
   olympicCycleOf,
   QUALIFICATION_STATUS_LABELS,
@@ -19,6 +20,7 @@ import {
   quotaPlaceTransition,
   referenceGamesOf,
   TRACK_STATES,
+  zonedWallClockToInstant,
   type QuotaPlaceKind,
   type TrackState,
 } from "~/domain";
@@ -26,6 +28,7 @@ import { formatDate } from "~/format";
 import { potentialEntries } from "~/qualification/entries";
 import { followRanking } from "~/qualification/ranked-tracks";
 import { linkAtSelection, quotaPlacesOf, recordQuotaPlaces } from "~/qualification/quota-places";
+import { withdrawalColumn } from "~/qualification/withdrawal";
 import { activeStatuses } from "~/roster/active";
 import type { Route } from "./+types/curate.qualification";
 
@@ -108,7 +111,8 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const form = await request.formData();
   const field = (name: string) => String(form.get(name) ?? "").trim() || null;
   const required = (name: string) => field(name) ?? refuse(`${name} is required`);
-  const today = belgianDate(now());
+  const at = now();
+  const today = belgianDate(at);
   const e = schema.entry;
   const t = schema.qualificationTrack;
   const q = schema.quotaPlace;
@@ -137,6 +141,13 @@ export async function action({ context, params, request }: Route.ActionArgs) {
     if (!isQualificationStatus(value)) refuse("Unknown Qualification status");
     return value;
   };
+  /** When a Withdrawn Entry withdrew, as the owner states it (Belgian wall clock); null: not stated. */
+  const withdrawnAt = () => {
+    const stated = field("withdrawnAt");
+    if (stated === null) return null;
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(stated)) refuse("Withdrawn at is a Belgian date and time");
+    return zonedWallClockToInstant(stated!, BELGIAN_ZONE).toISOString();
+  };
 
   switch (field("intent")) {
     case "add-entry": {
@@ -162,7 +173,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
         .select({ id: e.id })
         .from(e)
         .where(and(eq(e.competitionId, target.id), eq(e.event, event), kind === "athlete" ? eq(e.athleteId, id) : eq(e.teamId, id)));
-      if (existing) await db.update(e).set(qualification).where(eq(e.id, existing.id));
+      if (existing) await db.update(e).set({ ...qualification, ...withdrawalColumn(qualificationStatus, at, withdrawnAt()) }).where(eq(e.id, existing.id));
       else
         await db.insert(e).values({
           competitionId: target.id,
@@ -173,15 +184,17 @@ export async function action({ context, params, request }: Route.ActionArgs) {
           sourceUrl: /^https?:\/\//.test(source) ? source : null,
           checkedOn: today,
           ...qualification,
+          withdrawnAt: qualificationStatus === "withdrawn" ? (withdrawnAt() ?? at.toISOString()) : null,
         });
       await followSelection(sport, event);
       break;
     }
     case "set-status": {
       const row = await activeEntry(required("entryId"));
+      const value = status();
       await db
         .update(e)
-        .set({ qualificationStatus: status(), qualificationSource: required("source"), qualificationCheckedOn: today })
+        .set({ qualificationStatus: value, qualificationSource: required("source"), qualificationCheckedOn: today, ...withdrawalColumn(value, at, withdrawnAt()) })
         .where(eq(e.id, row.id));
       await followSelection(row.sport, row.event);
       break;
@@ -418,6 +431,10 @@ export default function CurateQualification({ loaderData }: Route.ComponentProps
             <label>
               Source
               <input name="source" defaultValue={entry.source ?? ""} required />
+            </label>
+            <label>
+              Withdrawn at (Belgian time; empty: now)
+              <input type="datetime-local" name="withdrawnAt" />
             </label>
             <button type="submit">Save status</button>
           </Form>

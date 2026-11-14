@@ -12,10 +12,12 @@ import {
   QUOTA_PLACE_STATES,
   standardsForSports,
   windowCountdown,
+  VERDICT_LABELS,
   type Phase,
   type QualificationStatus,
 } from "~/domain";
 import { expectationsOf, pickLockFor, type PickView, type SnapshotView } from "~/expectations/expectations";
+import { AFTER_SOURCE_LABELS, loadAfter, type AfterRow, type AfterView, type Compared } from "~/expectations/verdicts";
 import { formatBelgianClock, formatDate, formatDay } from "~/format";
 import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
 import { quotaPlacesOf, type QuotaPlaceView } from "~/qualification/quota-places";
@@ -70,7 +72,12 @@ export type PhasePanelData =
       picksLockAt: string;
     }
   | { phase: "live"; day: LiveDayView | null; medals: MedalTableView }
-  | { phase: "after" };
+  | {
+      phase: "after";
+      /** Every Expectation against the outcome, tallies and counts (ticket #41), filtered by the chosen sport chips. */
+      after: AfterView;
+      medals: MedalTableView;
+    };
 
 /** Shown next to a Selected Entry: the latest Seed, how the monthly world rank moved before a final Seed, and the pick. */
 export type SelectedExpectations = { seed: SnapshotView | null; worldRanks: SnapshotView[]; pick: PickView | null };
@@ -140,7 +147,7 @@ export async function loadPhasePanel(
         medals: await loadMedalTable(db, competition, chips.chosen),
       };
     case "after":
-      return { phase };
+      return { phase, after: await loadAfter(db, competition, chips.chosen), medals: await loadMedalTable(db, competition, chips.chosen) };
   }
 }
 
@@ -188,7 +195,12 @@ export function PhasePanel({ data, dayHref }: { data: PhasePanelData; dayHref: (
           <MedalTablePanel view={data.medals} />
         </>
       ) : null}
-      {data.phase === "after" ? <p className="sub">No outcomes compared yet.</p> : null}
+      {data.phase === "after" ? (
+        <>
+          <After view={data.after} />
+          <MedalTablePanel view={data.medals} title="Final medal table" />
+        </>
+      ) : null}
     </section>
   );
 }
@@ -489,6 +501,179 @@ function QuotaPlaces({ places }: { places: QuotaPlaceView[] }) {
       ) : (
         <p className="sub">No Quota places recorded yet.</p>
       )}
+    </>
+  );
+}
+
+const whoHref = (who: AfterRow["who"]) => (who.kind === "team" ? `/teams/${who.id}` : `/athletes/${who.id}`);
+
+const ORDINAL_MEDAL = ["G", "S", "B"] as const;
+
+/** The outcome as published: the place, Withdrawn, or the result's status (DNF, DSQ); "no place" without a result. */
+function outcomeText(o: AfterRow["outcome"]) {
+  if (o.place !== null) return placeRangeLabel({ from: o.place, to: o.place });
+  if (o.withdrawn) return "Withdrawn";
+  return o.status && o.status !== "finished" ? o.status : "no place";
+}
+
+function ComparedCell({ c }: { c: Compared }) {
+  return (
+    <td className="n">
+      {c ? (
+        <>
+          {placeRangeLabel(c)} <span className={`verdict v-${c.verdict}`}>{VERDICT_LABELS[c.verdict]}</span>
+        </>
+      ) : (
+        "–"
+      )}
+    </td>
+  );
+}
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
+/**
+ * Spec stories 48, 51–52 and 71–75 (ticket #41): each Entry's Expectations
+ * (Seed, Gracenote at the Games, the owner's pick) with the raw places and a
+ * Verdict, the outcome, a Beat/Met/Missed tally per source, Belgium's medal
+ * and top-8 counts against the BOIC target and the implied counts, and
+ * Belgium's best results.
+ */
+function After({ view }: { view: AfterView }) {
+  return (
+    <>
+      <h3>Expectation vs outcome</h3>
+      {view.rows.length > 0 ? (
+        <>
+          <table aria-label="Expectations vs outcome">
+            <thead>
+              <tr>
+                <th>Entry</th>
+                <th>Event</th>
+                {view.sources.map((s) => (
+                  <th key={s} className="n">
+                    {AFTER_SOURCE_LABELS[s]}
+                  </th>
+                ))}
+                <th className="n">Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.rows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    {view.games ? <span className="dot" style={{ background: sportColour(row.sport) }}></span> : null}
+                    <Link to={whoHref(row.who)}>{row.who.name}</Link>
+                  </td>
+                  <td className="sub">{row.event}</td>
+                  {view.sources.map((s) => (
+                    <ComparedCell key={s} c={row.compared[s]} />
+                  ))}
+                  <td className="n">
+                    <b>{outcomeText(row.outcome)}</b>
+                    {row.outcome.performance ? <div className="sub">{row.outcome.performance}</div> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="sub">
+            Seeds and Gracenote picks as they stood the day before the start; picks as locked. A pick for an Entry withdrawn before the lock is voided.
+          </p>
+          {view.gracenoteUpdates.map((u) => (
+            <p className="sub" key={`${u.asOf} ${u.sourceUrl}`}>
+              {"Gracenote via "}
+              <a href={u.sourceUrl}>{hostOf(u.sourceUrl)}</a>
+              {` · ${formatDate(u.asOf)}`}
+            </p>
+          ))}
+
+          <h3>Tally</h3>
+          <table aria-label="Tally">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th className="n">Beat</th>
+                <th className="n">Met</th>
+                <th className="n">Missed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.tallies.map(({ source, tally }) => (
+                <tr key={source}>
+                  <td>{AFTER_SOURCE_LABELS[source]}</td>
+                  <td className="n">{tally.beat}</td>
+                  <td className="n">{tally.met}</td>
+                  <td className="n">{tally.missed}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p className="sub">No Selected Entries to compare in these sports.</p>
+      )}
+
+      <h3>Medals and top 8</h3>
+      <table aria-label="Medals and top 8">
+        <thead>
+          <tr>
+            <th></th>
+            <th className="n">Medals</th>
+            <th className="n">Top 8</th>
+          </tr>
+        </thead>
+        <tbody>
+          {view.counts.map((c, i) => (
+            <tr key={c.label} className={i === 0 ? "bel" : undefined}>
+              <td>{c.sourceUrl ? <a href={c.sourceUrl}>{c.label}</a> : c.label}</td>
+              <td className="n">{c.counts.medals ?? "–"}</td>
+              <td className="n">{c.counts.top8 ?? "–"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="sub">A pick or Seed that is a range counts toward a medal or the top 8 only when the whole range lies inside it.</p>
+
+      {view.best.length > 0 ? (
+        <>
+          <h3>Best results</h3>
+          <table aria-label="Best results">
+            <thead>
+              <tr>
+                <th>Place</th>
+                <th>Entry</th>
+                <th className="n">Performance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.best.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    {row.outcome.place! <= 3 ? (
+                      <span className={`medal m${row.outcome.place}`}>{ORDINAL_MEDAL[row.outcome.place! - 1]}</span>
+                    ) : (
+                      placeRangeLabel({ from: row.outcome.place!, to: row.outcome.place! })
+                    )}
+                  </td>
+                  <td>
+                    {view.games ? <span className="dot" style={{ background: sportColour(row.sport) }}></span> : null}
+                    <Link to={whoHref(row.who)}>{row.who.name}</Link>
+                    <div className="sub">{row.event}</div>
+                  </td>
+                  <td className="n">{row.outcome.performance ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : null}
     </>
   );
 }

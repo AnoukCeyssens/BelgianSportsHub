@@ -161,3 +161,9 @@ tr.if-through td a { color: #999; }
 tr.bel td { background: #fff3c4; font-weight: 700; }
 .live-banner { background: #b3261e; color: #fff; padding: 4px 10px; font-size: 13px; }
 .live-banner a { color: #fff; font-weight: 700; }
+/* After: Verdicts (ticket #41), the prototype's up / down / even colours. */
+.verdict { font-size: 11px; font-weight: 700; white-space: nowrap; }
+.verdict.v-beat { color: var(--ok); }
+.verdict.v-missed { color: var(--no); }
+.verdict.v-met { color: var(--muted); }
+.verdict.v-voided { color: var(--faint); font-weight: 400; }
