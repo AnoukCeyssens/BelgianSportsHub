@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { ISU_WORLDS_2026_RUN, isuWorlds2026Run } from "../fixtures/sources/isu-speed-skating";
 import { AQUATICS_TIMETABLE_RUN, aquaticsTimetableRun } from "../fixtures/sources/world-aquatics";
+import { ARCHERY_TIMETABLE_RUN, archeryPublishedTimetableRun, archeryTimetableRun } from "../fixtures/sources/world-archery";
 import { WA_TIMETABLE_RUN, waTimetableRun } from "../fixtures/sources/world-athletics";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch, type RecordedResponse } from "../support/outbound-fetch";
@@ -205,6 +206,52 @@ describe("World Aquatics timetables", () => {
     expect(dayRows(await page(`/championship/${beijing}`))).toEqual([
       "03:00 · 10:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Heats",
       "12:00 · 19:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Semifinal if through [greyed]",
+    ]);
+  });
+});
+
+describe("World Archery timetables", () => {
+  const SOURCE = "world-archery-timetables";
+  let medellin: string;
+
+  beforeEach(async () => {
+    await clearIngestedData(env);
+    medellin = await seedCompetition(env.DB, {
+      name: "Medellin 2027 Hyundai World Archery Championships",
+      sport: "Archery",
+      source: "world-archery",
+      sourceRef: "31556",
+      kind: "championship",
+      startDate: "2027-09-20",
+      endDate: "2027-09-27",
+      city: "Medellin",
+    });
+    const archer = await seedAthlete(env.DB, { name: "Ana Example", sport: "Archery" });
+    const mixed = await seedTeam(env.DB, { name: "Belgium recurve mixed team", sport: "Archery", event: "Recurve Mixed Team" });
+    await seedEntry(env.DB, { competitionId: medellin, sport: "Archery", event: "Recurve Women", athleteId: archer });
+    await seedEntry(env.DB, { competitionId: medellin, sport: "Archery", event: "Recurve Mixed Team", teamId: mixed });
+  });
+
+  it("stores nothing while the Worlds' schedule is not published", async () => {
+    await runSource(SOURCE, ARCHERY_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", archeryTimetableRun);
+
+    expect(await storedTimetables()).toEqual([]);
+    expect(await getDb(env.DB).select().from(schema.competition)).toHaveLength(1);
+  });
+
+  it("stores the published schedule: each category's phases as rounds, in Colombian time", async () => {
+    await runSource(SOURCE, ARCHERY_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", archeryPublishedTimetableRun);
+
+    expect(await storedTimetables()).toEqual(["Medellin 2027 Hyundai World Archery Championships · fetched 2026-11-14 8 Sessions source Name Entries"]);
+    fixClock("2027-09-21T22:00:00.000Z"); // 17:00 in Medellín
+    expect(dayRows(await page(`/championship/${medellin}`))).toEqual([
+      "16:00 · 09:00 Medellin Belgium recurve mixed team Recurve Mixed Team · Qualification round",
+      "20:30 · 13:30 Medellin Ana Example Recurve Women · Qualification round",
+    ]);
+    expect(dayRows(await page(`/championship/${medellin}?day=2027-09-26`))).toEqual([
+      "21:00 · 14:00 Medellin Ana Example Recurve Women · Semifinal if through [greyed]",
+      "22:00 · 15:00 Medellin Ana Example Recurve Women · Bronze medal match if through [greyed]",
+      "22:00 · 15:00 Medellin Ana Example Recurve Women · Gold medal match if through [greyed]",
     ]);
   });
 });
