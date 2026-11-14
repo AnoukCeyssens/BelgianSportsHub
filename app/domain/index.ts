@@ -84,3 +84,12 @@ export {
   type TrackMeasure,
   type TrackState,
 } from "./qualification";
+export {
+  BOIC,
+  entryListSelection,
+  namesFoundIn,
+  SELECTION_LOOKAHEAD_WEEKS,
+  selectionDue,
+  selectorFor,
+  type SelectionCandidate,
+} from "./selection";

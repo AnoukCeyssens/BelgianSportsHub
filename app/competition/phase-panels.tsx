@@ -40,7 +40,14 @@ export type PhasePanelData =
       /** At the Games each Entry shows its sport's colour. */
       games: boolean;
     }
-  | { phase: "selection" }
+  | {
+      phase: "selection";
+      /** The selector's final list (ticket #34), the non-selected Entries underneath, and those still qualifying; filtered by the chosen sport chips. */
+      selected: PotentialEntry[];
+      notSelected: PotentialEntry[];
+      stillQualifying: PotentialEntry[];
+      games: boolean;
+    }
   | { phase: "live"; day: LiveDayView | null }
   | { phase: "after" };
 
@@ -62,23 +69,37 @@ export async function loadPhasePanel(
     case "standards":
       return { phase, standards: standardsOf(competition, now, chips) };
     case "qualification": {
-      const entries = await potentialEntries(db, [competition.id], now);
-      const chosen = chips.chosen.map((s) => s.toLowerCase());
+      const entries = chosenOnly(await potentialEntries(db, [competition.id], now), chips);
       return {
         phase,
         standards: standardsOf(competition, now, chips),
         closesOn: competition.qualificationClosesOn,
         closesIn: windowCountdown(competition.qualificationClosesOn, now),
-        entries: chosen.length > 0 ? entries.filter((e) => chosen.includes(e.sport.toLowerCase())) : entries,
+        entries,
+        games: competition.kind === "games",
+      };
+    }
+    case "selection": {
+      const entries = chosenOnly(await potentialEntries(db, [competition.id], now), chips);
+      return {
+        phase,
+        selected: entries.filter((e) => e.status === "selected"),
+        notSelected: entries.filter((e) => e.status === "not-selected"),
+        stillQualifying: entries.filter((e) => e.status !== "selected" && e.status !== "not-selected" && e.status !== "withdrawn"),
         games: competition.kind === "games",
       };
     }
     case "live":
       return { phase, day: await loadLiveDay(db, competition, now, chips.chosen, day) };
-    case "selection":
     case "after":
       return { phase };
   }
+}
+
+/** The Entries of the chosen sports (all when none is chosen). */
+function chosenOnly(entries: PotentialEntry[], chips: SportChips) {
+  const chosen = chips.chosen.map((s) => s.toLowerCase());
+  return chosen.length > 0 ? entries.filter((e) => chosen.includes(e.sport.toLowerCase())) : entries;
 }
 
 /** The recorded standards; only the expected date until they are published. Lines headed by a sport not chosen are left out. */
@@ -111,7 +132,7 @@ export function PhasePanel({ data, dayHref }: { data: PhasePanelData; dayHref: (
           <Qualification data={data} />
         </>
       ) : null}
-      {data.phase === "selection" ? <p className="sub">No Selection recorded yet.</p> : null}
+      {data.phase === "selection" ? <Selection data={data} /> : null}
       {data.phase === "live" ? data.day ? <LiveDayPanel view={data.day} dayHref={dayHref} /> : <p className="sub">No Sessions recorded yet.</p> : null}
       {data.phase === "after" ? <p className="sub">No outcomes compared yet.</p> : null}
     </section>
@@ -212,6 +233,85 @@ function Qualification({ data }: { data: Extract<PhasePanelData, { phase: "quali
       ) : (
         <p className="sub">No Qualification statuses recorded yet.</p>
       )}
+    </>
+  );
+}
+
+const SELECTION_KIND = { "press-release": "press release", "entry-list": "IF entry list" } as const;
+
+/** Each distinct Selection behind the list ("Selected by … · date · source"). */
+function selectionsBehind(entries: PotentialEntry[]) {
+  const seen = new Map<string, NonNullable<PotentialEntry["selection"]>>();
+  for (const e of entries) if (e.selection) seen.set(JSON.stringify(e.selection), e.selection);
+  return [...seen.values()];
+}
+
+function EntryCells({ entry, games }: { entry: PotentialEntry; games: boolean }) {
+  return (
+    <>
+      <td>
+        {games ? <span className="dot" style={{ background: sportColour(entry.sport) }}></span> : null}
+        <Link to={entry.who.kind === "team" ? `/teams/${entry.who.id}` : `/athletes/${entry.who.id}`}>{entry.who.name}</Link>
+      </td>
+      <td className="sub">{entry.event}</td>
+    </>
+  );
+}
+
+function EntryTable({ label, entries, games, badge = false }: { label: string; entries: PotentialEntry[]; games: boolean; badge?: boolean }) {
+  return (
+    <table aria-label={label}>
+      <thead>
+        <tr>
+          <th>Entry</th>
+          <th>Event</th>
+          {badge ? <th>Status</th> : null}
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e) => (
+          <tr key={e.id}>
+            <EntryCells entry={e} games={games} />
+            {badge ? (
+              <td>
+                <QualificationBadge status={e.status} />
+              </td>
+            ) : null}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Spec story 46: the selector's final list, the non-selected Entries underneath; others may still be qualifying. */
+function Selection({ data }: { data: Extract<PhasePanelData, { phase: "selection" }> }) {
+  return (
+    <>
+      <h3>Selection</h3>
+      {selectionsBehind(data.selected).map((s, i) => (
+        <p className="meta" key={i}>
+          {`Selected by ${s.selector ?? "the selector"}${s.on ? ` · ${formatDate(s.on)}` : ""} · `}
+          {s.source ? <a href={s.source}>{SELECTION_KIND[s.kind]}</a> : SELECTION_KIND[s.kind]}
+        </p>
+      ))}
+      {data.selected.length > 0 ? (
+        <EntryTable label="Selected Entries" entries={data.selected} games={data.games} />
+      ) : (
+        <p className="sub">No Entry Selected in these sports yet.</p>
+      )}
+      {data.notSelected.length > 0 ? (
+        <>
+          <h3>Not selected</h3>
+          <EntryTable label="Not selected Entries" entries={data.notSelected} games={data.games} />
+        </>
+      ) : null}
+      {data.stillQualifying.length > 0 ? (
+        <>
+          <h3>Still qualifying</h3>
+          <EntryTable label="Entries still qualifying" entries={data.stillQualifying} games={data.games} badge />
+        </>
+      ) : null}
     </>
   );
 }

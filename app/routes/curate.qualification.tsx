@@ -13,6 +13,7 @@ import {
   TRACK_STATES,
   type TrackState,
 } from "~/domain";
+import { formatDate } from "~/format";
 import { potentialEntries } from "~/qualification/entries";
 import { activeStatuses } from "~/roster/active";
 import type { Route } from "./+types/curate.qualification";
@@ -75,6 +76,11 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     entries,
     candidates,
     statuses: QUALIFICATION_STATUSES.map((s) => ({ value: s, label: QUALIFICATION_STATUS_LABELS[s] })),
+    // A Selection per sport is entered in the Run sheet's Selections & likely step (#34).
+    selectionLinks: [...new Set(entries.map((x) => x.sport))].map((sport) => ({
+      sport,
+      href: `/curate/run/selections-likely?${new URLSearchParams({ selection: target.id, sport })}#selection`,
+    })),
   };
 }
 
@@ -205,7 +211,7 @@ async function notOnATeamRoster(db: Db, athleteId: string, sport: string, event:
 }
 
 export default function CurateQualification({ loaderData }: Route.ComponentProps) {
-  const { competition, entries, candidates, statuses } = loaderData;
+  const { competition, entries, candidates, statuses, selectionLinks } = loaderData;
   const statusSelect = (value: string | null) => (
     <select name="status" defaultValue={value ?? "on-track"}>
       {statuses.map((s) => (
@@ -243,6 +249,12 @@ export default function CurateQualification({ loaderData }: Route.ComponentProps
       {entries.map((entry) => (
         <section key={entry.id} className="card" aria-label={`${entry.who.name} · ${entry.event}`}>
           <h3>{`${entry.who.name} · ${entry.event}`}</h3>
+          {entry.selection ? (
+            <p className="sub">
+              {`Selection: ${entry.selection.selector ?? "selector not named"}${entry.selection.on ? ` · ${formatDate(entry.selection.on)}` : ""} · `}
+              {entry.selection.kind === "entry-list" ? "IF entry list" : "press release"}
+            </p>
+          ) : null}
           <Form method="post" className="fields">
             <input type="hidden" name="intent" value="set-status" />
             <input type="hidden" name="entryId" value={entry.id} />
@@ -323,6 +335,20 @@ export default function CurateQualification({ loaderData }: Route.ComponentProps
           </Form>
         </section>
       ))}
+
+      {selectionLinks.length > 0 ? (
+        <>
+          <h2>Selection</h2>
+          <p className="sub">
+            {selectionLinks.map((l, i) => (
+              <span key={l.sport}>
+                {i > 0 ? " · " : ""}
+                <Link to={l.href}>{`Enter the ${l.sport} Selection`}</Link>
+              </span>
+            ))}
+          </p>
+        </>
+      ) : null}
 
       <h2>Add a potential Entry</h2>
       {candidates.length > 0 ? (

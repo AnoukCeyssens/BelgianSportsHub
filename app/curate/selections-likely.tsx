@@ -1,13 +1,14 @@
 // Run sheet step 6, Selections & likely (spec #20, stories 96, 109 and 114):
 // the likely Participations of the coming six weeks the owner has not checked
 // this week, each with why it is likely; confirm, keep or drop it, or add one
-// by hand. Selections from press releases join this step with #34.
+// by hand. Selections from press releases come first (#34, app/curate/selections.tsx).
 import { eq } from "drizzle-orm";
 import { Form } from "react-router";
 import { participationsBetween, REASON_TEXT } from "~/calendar/participations";
 import { type Db, schema } from "~/db/client";
 import { BELGIAN_ZONE, LIKELY_REVIEW_WEEKS, needsLikelyReview } from "~/domain";
 import { formatDate, formatDayRange } from "~/format";
+import { loadDueSelections, SelectionCard, type SelectionItem } from "./selections";
 
 /** How far ahead a likely Participation can be added by hand. */
 const ADD_AHEAD_DAYS = 365;
@@ -24,7 +25,8 @@ export async function loadSelectionsLikely(db: Db, now: Date) {
   const addable = upcoming
     .filter((c) => c.participation.status === "none" && c.startDate >= today)
     .map((c) => ({ id: c.id, name: c.name, startDate: c.startDate }));
-  return { likely, addable, open: likely.length };
+  const selections = await loadDueSelections(db, now);
+  return { selections, likely, addable, open: selections.length + likely.length };
 }
 
 export type SelectionsLikelyData = Awaited<ReturnType<typeof loadSelectionsLikely>>;
@@ -54,61 +56,70 @@ export async function actOnLikely(db: Db, intent: string, form: FormData, now: D
   return `${competition.name}: ${logged}`;
 }
 
-export function SelectionsLikelyStep({ data }: { data: SelectionsLikelyData }) {
+export function SelectionsLikelyStep({ data, review }: { data: SelectionsLikelyData; review: SelectionItem | null }) {
+  const same = (s: SelectionItem) => review !== null && s.competition.id === review.competition.id && s.sport.toLowerCase() === review.sport.toLowerCase();
   return (
-    <div className="card">
-      <h3>{`Likely Participations, next ${LIKELY_REVIEW_WEEKS} weeks`}</h3>
-      {data.likely.length > 0 ? (
-        <table aria-label="Likely Participations">
-          <thead>
-            <tr>
-              <th>Competition</th>
-              <th>Why likely</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.likely.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <b>{c.name}</b>
-                  <div className="sub">{`${formatDayRange(c.startDate, c.endDate)} · ${c.sport}`}</div>
-                </td>
-                <td className="sub">{c.why.map((w) => REASON_TEXT[w]).join("; ")}</td>
-                <td>
-                  <Form method="post" className="actions">
-                    <input type="hidden" name="competition" value={c.id} />
-                    <button type="submit" name="intent" value="confirm" className="secondary">
-                      Confirm
-                    </button>
-                    <button type="submit" name="intent" value="keep">
-                      Keep
-                    </button>
-                    <button type="submit" name="intent" value="drop" className="secondary">
-                      Drop
-                    </button>
-                  </Form>
-                </td>
+    <>
+      {review ? <SelectionCard item={review} opened /> : null}
+      {data.selections
+        .filter((s) => !same(s))
+        .map((s) => (
+          <SelectionCard key={`${s.competition.id}:${s.sport}`} item={s} />
+        ))}
+      <div className="card">
+        <h3>{`Likely Participations, next ${LIKELY_REVIEW_WEEKS} weeks`}</h3>
+        {data.likely.length > 0 ? (
+          <table aria-label="Likely Participations">
+            <thead>
+              <tr>
+                <th>Competition</th>
+                <th>Why likely</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
-      {data.addable.length > 0 ? (
-        <Form method="post" className="actions">
-          <label>
-            {"Add a likely Participation by hand "}
-            <select name="competition">
-              {data.addable.map((c) => (
-                <option value={c.id} key={c.id}>{`${c.name} · ${formatDate(c.startDate)}`}</option>
+            </thead>
+            <tbody>
+              {data.likely.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <b>{c.name}</b>
+                    <div className="sub">{`${formatDayRange(c.startDate, c.endDate)} · ${c.sport}`}</div>
+                  </td>
+                  <td className="sub">{c.why.map((w) => REASON_TEXT[w]).join("; ")}</td>
+                  <td>
+                    <Form method="post" className="actions">
+                      <input type="hidden" name="competition" value={c.id} />
+                      <button type="submit" name="intent" value="confirm" className="secondary">
+                        Confirm
+                      </button>
+                      <button type="submit" name="intent" value="keep">
+                        Keep
+                      </button>
+                      <button type="submit" name="intent" value="drop" className="secondary">
+                        Drop
+                      </button>
+                    </Form>
+                  </td>
+                </tr>
               ))}
-            </select>
-          </label>
-          <button type="submit" name="intent" value="add" className="secondary">
-            + Add
-          </button>
-        </Form>
-      ) : null}
-    </div>
+            </tbody>
+          </table>
+        ) : null}
+        {data.addable.length > 0 ? (
+          <Form method="post" className="actions">
+            <label>
+              {"Add a likely Participation by hand "}
+              <select name="competition">
+                {data.addable.map((c) => (
+                  <option value={c.id} key={c.id}>{`${c.name} · ${formatDate(c.startDate)}`}</option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" name="intent" value="add" className="secondary">
+              + Add
+            </button>
+          </Form>
+        ) : null}
+      </div>
+    </>
   );
 }

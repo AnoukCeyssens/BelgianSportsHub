@@ -5,6 +5,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "~/db/client";
 import { identityMatch, teamIdentity, type KnownIdentity } from "~/domain";
+import { applyEntryList } from "~/qualification/selection";
 import { knownIdentities } from "./identities";
 import type { BelgianRows, CompetitionInput, Person, ResultInput, TeamInput, TeamResultInput } from "./source-adapter";
 
@@ -129,12 +130,16 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
       }
       const current = await db.select().from(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
       const same = current.length === athleteIds.size && current.every((e) => athleteIds.has(e.athleteId));
-      if (same) return;
-      await db.delete(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
-      if (athleteIds.size > 0) {
-        await db.insert(schema.entrant).values([...athleteIds].map((athleteId) => ({ competitionId, athleteId, rawCopyId })));
+      if (!same) {
+        await db.delete(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
+        if (athleteIds.size > 0) {
+          await db.insert(schema.entrant).values([...athleteIds].map((athleteId) => ({ competitionId, athleteId, rawCopyId })));
+        }
+        changes++;
       }
-      changes++;
+      // The IF entry list replaces the Selection (#34), also for Entries named since the list was stored.
+      // A list without Belgians may simply not be published yet, so it leaves the Selection alone.
+      if (athleteIds.size > 0) changes += await applyEntryList(db, competitionId, same ? current[0]?.rawCopyId ?? rawCopyId : rawCopyId, now);
     },
   };
 
