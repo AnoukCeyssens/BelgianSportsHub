@@ -40,3 +40,4 @@ export {
   type SavedColumnMapping,
 } from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
+export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";

@@ -101,3 +101,4 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 .chip.champ { font-weight: 700; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 td.when { width: 96px; white-space: nowrap; }
+.subscribe code { word-break: break-all; font-size: 11px; }
