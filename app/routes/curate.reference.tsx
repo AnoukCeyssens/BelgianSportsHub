@@ -86,7 +86,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const who = athlete ? { athlete: athlete.id } : { team: team!.id, roster };
   const typed = { games: games.key, ...who, sport, event, date, status, place: placeText, performance };
   const rawCopyId = await keepRawCopy(env, { source: GAMES_SOURCE, url: sourceUrl, body: JSON.stringify(typed), contentType: "application/json", fetchedAt: at });
-  await belgianRows(env.DB, GAMES_SOURCE, at).result({
+  await belgianRows(env, GAMES_SOURCE, at).result({
     competitionId,
     ...(athlete ? { athleteId: athlete.id } : { teamId: team!.id, roster }),
     sport,

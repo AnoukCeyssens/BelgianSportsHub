@@ -201,7 +201,7 @@ export async function actOnTodaysResult(env: Pick<Env, "DB" | "RAW">, intent: st
     sourceRef: `live/${entry.id}`,
     rawCopyId,
   };
-  const writer = belgianRows(env.DB, OWNER_SOURCE, now);
+  const writer = belgianRows(env, OWNER_SOURCE, now);
   if (entry.athleteId) await writer.result({ ...result, athleteId: entry.athleteId });
   else {
     const roster = await db

@@ -55,8 +55,12 @@ export {
   type TrackedGames,
 } from "./games";
 export {
+  belgianRounds,
   readTimetable,
+  sameEvent,
   splitEventRound,
+  timetableText,
+  TIMETABLE_TEXT_HEAD,
   TIMETABLE_COLUMN_ROLES,
   timetableColumnMapping,
   type SavedTimetableMapping,
@@ -64,6 +68,7 @@ export {
   type TimetableRound,
   type TimetableSkip,
 } from "./timetable";
+export { venueZoneOf } from "./venue-zone";
 export {
   dayToShow,
   liveDays,

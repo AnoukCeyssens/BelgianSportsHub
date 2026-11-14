@@ -10,6 +10,8 @@ export type RawInput = {
   fetchedAt: Date;
   /** The request body, when the input was asked for with a POST: kept next to it, so the raw copy says exactly what was asked. */
   request?: { method: "POST"; contentType: string; body: string };
+  /** The raw copy this one was read from, when it is a reading of another (a fetched timetable kept as a table). */
+  derivedFrom?: string;
 };
 
 /**
@@ -35,7 +37,7 @@ async function keep(env: Pick<Env, "DB" | "RAW">, input: RawInput): Promise<{ id
   }
   await env.RAW.put(r2Key, input.body, {
     httpMetadata: input.contentType ? { contentType: input.contentType } : undefined,
-    customMetadata: { url: input.url, fetchedAt, ...request },
+    customMetadata: { url: input.url, fetchedAt, ...request, ...(input.derivedFrom ? { derivedFrom: input.derivedFrom } : {}) },
   });
   await getDb(env.DB)
     .insert(schema.rawCopy)

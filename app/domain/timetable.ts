@@ -141,3 +141,58 @@ function withYear(year: string | undefined, month: number, day: number, competit
   const years = [competition.startDate.slice(0, 4), competition.endDate.slice(0, 4)];
   return years.map(on).find((d) => d >= competition.startDate && d <= competition.endDate) ?? on(years[0]);
 }
+
+// Ticket #39: timetables fetched automatically (World Athletics, World
+// Aquatics, World Archery, ISU) arrive as rounds, not as a paste. They name
+// events the federation's way, so an Entry the owner named "Women's 400m
+// Hurdles" must still find "Women's 400 Metres Hurdles".
+
+/**
+ * Whether two names are the same event: case, spacing, apostrophes, the
+ * gender word's place, "Metres"/"m" and thousands separators do not count;
+ * every other word does (Hurdles, Relay, a course in brackets).
+ */
+export function sameEvent(a: string, b: string): boolean {
+  return eventKey(a) === eventKey(b);
+}
+
+function eventKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/(\d),(\d{3})/g, "$1$2")
+    .replace(/[’']s\b/g, "")
+    .replace(/[()]/g, " ")
+    .replace(/(\d+)\s*(?:metres|meters|m)\b/g, "$1m")
+    .split(/\s+/)
+    .filter((w) => w !== "")
+    .sort()
+    .join(" ");
+}
+
+/**
+ * The rounds of events with a Belgian Entry (spec #20, story 63), each named
+ * as its Entry names the event, so the Live view finds the Entry's rounds.
+ */
+export function belgianRounds<R extends { sport: string; event: string }>(
+  rounds: readonly R[],
+  entries: readonly { sport: string; event: string }[],
+): R[] {
+  return rounds.flatMap((r) => {
+    const entry = entries.find((e) => e.sport.toLowerCase() === r.sport.toLowerCase() && sameEvent(e.event, r.event));
+    return entry ? [{ ...r, event: entry.event }] : [];
+  });
+}
+
+export const TIMETABLE_TEXT_HEAD = ["Date", "Start", "End", "Session", "Sport", "Event", "Round"] as const;
+
+/**
+ * A fetched timetable as a tab-separated table, rounds in time order: what is
+ * kept of it (the Schedules step reads it back like a paste, to name Entries)
+ * and what tells one version from the next (unchanged text, same version).
+ */
+export function timetableText(rounds: readonly Omit<TimetableRound, "index">[]): string {
+  const rows = rounds
+    .map((r) => [r.date, r.start ?? "", r.end ?? "", r.session ?? "", r.sport, r.event, r.round].map((c) => c.replace(/\s+/g, " ").trim()))
+    .sort((a, b) => a.join("\t").localeCompare(b.join("\t")));
+  return [TIMETABLE_TEXT_HEAD.join("\t"), ...rows.map((r) => r.join("\t"))].join("\n") + "\n";
+}

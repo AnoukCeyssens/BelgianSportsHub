@@ -141,6 +141,13 @@
       "when": 1794667485019,
       "tag": "0019_quota_places",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794667706909,
+      "tag": "0020_automatic_timetables",
+      "breakpoints": true
     }
   ]
 }

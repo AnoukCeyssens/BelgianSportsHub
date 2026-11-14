@@ -15,9 +15,9 @@
 // swimming team is Belgium's Team for the event, each synchro pair or duet its
 // own Team; the roster is whoever the result credits, reserves left out. No
 // structured entry lists, so there is no Upcoming.
-import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
+import type { CompetitionInput, CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
-const API = "https://api.worldaquatics.com/fina";
+export const API = "https://api.worldaquatics.com/fina";
 const SPORT = "Aquatics";
 const FIRST_RUN_LOOKBACK_DAYS = 365;
 /** The list is asked from this many days before the window, so a competition that started earlier but is still running comes along. */
@@ -25,12 +25,13 @@ const LIST_LEAD_DAYS = 14;
 /** Competitions starting within this many days are listed already, for the calendar. */
 const CALENDAR_HORIZON_DAYS = 14;
 
-type Competition = {
+export type Competition = {
   id: number;
   name: string;
   venueDateFrom: string;
   venueDateTo: string;
-  location: { countryCode: string | null; city: string | null };
+  /** Missing while the host is not known. */
+  location?: { countryCode?: string | null; city?: string | null };
   competitionType: { name: string };
   series: unknown[];
 };
@@ -74,24 +75,10 @@ export const worldAquatics: SourceAdapter = {
 
     for (const c of await competitions(run, windowStart, addDays(today, CALENDAR_HORIZON_DAYS))) {
       const kind = competitionKind(c.competitionType.name);
-      const startDate = c.venueDateFrom.slice(0, 10);
-      const endDate = c.venueDateTo.slice(0, 10);
-      if (!kind || endDate < windowStart) continue;
-      const city = c.location.city || null;
-      const competitionId = await run.rows.competition({
-        // World Cup legs share one name; the city tells them apart.
-        name: c.series.length > 0 && city ? `${c.name}, ${city}` : c.name,
-        sport: SPORT,
-        kind,
-        startDate,
-        endDate,
-        city,
-        country: c.location.countryCode || null,
-        venueZone: null,
-        sourceRef: String(c.id),
-        rawCopyId: c.rawCopyId,
-      });
-      if (startDate > today) continue;
+      if (!kind || c.venueDateTo.slice(0, 10) < windowStart) continue;
+      const input = competitionInput(c, kind);
+      const competitionId = await run.rows.competition(input);
+      if (input.startDate > today) continue;
 
       const listed = await run.fetch(`${API}/competitions/${c.id}/events`);
       const events = JSON.parse(listed.text) as Events;
@@ -180,16 +167,37 @@ function teamMembers(r: SwimResult): Person[] {
 }
 
 async function competitions(run: SourceRun, from: string, to: string) {
-  const url =
-    `${API}/competitions?pageSize=100&venueDateFrom=${addDays(from, -LIST_LEAD_DAYS)}T00:00:00%2B00:00` +
-    `&venueDateTo=${to}T23:59:59%2B00:00&group=FINA&sort=dateFrom,asc`;
+  return competitionList(run, addDays(from, -LIST_LEAD_DAYS), to);
+}
+
+/** The World Aquatics competitions held between two dates. */
+export async function competitionList(run: SourceRun, from: string, to: string) {
+  const url = `${API}/competitions?pageSize=100&venueDateFrom=${from}T00:00:00%2B00:00&venueDateTo=${to}T23:59:59%2B00:00&group=FINA&sort=dateFrom,asc`;
   const fetched = await run.fetch(url);
   const body = JSON.parse(fetched.text) as { content: Competition[] };
   return body.content.map((c) => ({ ...c, rawCopyId: fetched.rawCopyId }));
 }
 
+/** A listed competition as a competition row (shared with the timetable source, which writes as this one). */
+export function competitionInput(c: Competition & { rawCopyId: string }, kind: CompetitionKind): CompetitionInput {
+  const city = c.location?.city || null;
+  return {
+    // World Cup legs share one name; the city tells them apart.
+    name: c.series.length > 0 && city ? `${c.name}, ${city}` : c.name,
+    sport: SPORT,
+    kind,
+    startDate: c.venueDateFrom.slice(0, 10),
+    endDate: c.venueDateTo.slice(0, 10),
+    city,
+    country: c.location?.countryCode || null,
+    venueZone: null,
+    sourceRef: String(c.id),
+    rawCopyId: c.rawCopyId,
+  };
+}
+
 /** The Games, the World Championships (long and short course) and the World Cups; not Grand Prix, youth or masters events. */
-function competitionKind(type: string): CompetitionKind | null {
+export function competitionKind(type: string): CompetitionKind | null {
   if (/youth|junior|masters/i.test(type)) return null;
   if (/^Olympic Games/i.test(type)) return "games";
   // The long-course Worlds are typed plain "World Championships".
