@@ -22,6 +22,24 @@ import tokyoCalendarOw from "./tokyo-calendar-ow.html?raw";
 import tokyoCalendarOwMeta from "./tokyo-calendar-ow.html.meta.json";
 import tokyoDay1 from "./tokyo-day-1.html?raw";
 import tokyoDay1Meta from "./tokyo-day-1.html.meta.json";
+import timetableCalendarOw from "./timetable-calendar-ow.html?raw";
+import timetableCalendarOwMeta from "./timetable-calendar-ow.html.meta.json";
+import beijing27Timetable from "./beijing27-timetable.html?raw";
+import beijing27TimetableMeta from "./beijing27-timetable.html.meta.json";
+
+/**
+ * The timetable run (#39) on Saturday 14 Nov 2026 at 04:00 UTC:
+ * - the OW calendar of the next 400 days: the World Championships in Beijing
+ *   (10–19 Sep 2027);
+ * - its timetable page (trimmed): the women's 400m and 400m hurdles, the
+ *   heptathlon, the men's 100m, shot put (qualification in groups A and B)
+ *   and decathlon events, and the mixed relays. Times are Beijing time.
+ */
+export const waTimetableRun: RecordedResponse[] = [
+  { ...timetableCalendarOwMeta, body: timetableCalendarOw },
+  { ...beijing27TimetableMeta, body: beijing27Timetable },
+];
+export const WA_TIMETABLE_RUN = { now: "2026-11-14T04:00:00.000Z" };
 
 /**
  * The daily run on Sunday 6 Sep 2026 at 04:00 UTC, after a run on 5 Sep:

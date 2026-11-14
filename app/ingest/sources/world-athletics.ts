@@ -17,9 +17,9 @@
 // it went out in, and its roster everyone the day's races credit (heats-only
 // runners included).
 // Entry lists are not published in structured form, so there is no Upcoming.
-import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
+import type { CompetitionInput, CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
-const SITE = "https://worldathletics.org";
+export const SITE = "https://worldathletics.org";
 const SPORT = "Athletics";
 const FIRST_RUN_LOOKBACK_DAYS = 365;
 const CALENDAR_HORIZON_DAYS = 14;
@@ -28,7 +28,7 @@ const CALENDAR_HORIZON_DAYS = 14;
 const TOP_CATEGORIES = { OW: 4, DF: 11, GW: 5, GL: 6 } as const;
 const TOP = new Set<string>(Object.keys(TOP_CATEGORIES));
 
-type CalendarEvent = {
+export type CalendarEvent = {
   id: number;
   name: string;
   venue: string;
@@ -37,6 +37,8 @@ type CalendarEvent = {
   startDate: string;
   endDate: string;
   hasApiResults: boolean;
+  /** The competition's page on the site, e.g. "/competitions/world-athletics-championships/…/timetable". */
+  wasUrl?: string | null;
 };
 
 type ResultsPage = {
@@ -78,19 +80,7 @@ export const worldAthletics: SourceAdapter = {
     for (const c of await calendar(run, windowStart, horizon)) {
       const kind = competitionKind(c);
       if (!kind || c.endDate < windowStart) continue;
-      const venue = c.venue.match(/(?:^|, )([^,]+) \(([A-Z]{3})\)$/);
-      const competitionId = await run.rows.competition({
-        name: c.name,
-        sport: SPORT,
-        kind,
-        startDate: c.startDate,
-        endDate: c.endDate,
-        city: venue?.[1] ?? null,
-        country: venue?.[2] ?? null,
-        venueZone: null,
-        sourceRef: String(c.id),
-        rawCopyId: c.rawCopyId,
-      });
+      const competitionId = await run.rows.competition(competitionInput(c, kind));
       if (!c.hasApiResults) continue;
 
       // Days already read on an earlier run are not read again.
@@ -174,13 +164,39 @@ function relayStatus(race: string, r: RaceResult): ResultStatus {
   return /^Final\b/.test(race) ? "finished" : "eliminated";
 }
 
+/** A calendar event as a competition row (shared with the timetable source, which writes as this one). */
+export function competitionInput(c: CalendarEvent & { rawCopyId: string }, kind: CompetitionKind): CompetitionInput {
+  const venue = venueOf(c);
+  return {
+    name: c.name,
+    sport: SPORT,
+    kind,
+    startDate: c.startDate,
+    endDate: c.endDate,
+    city: venue.city,
+    country: venue.country,
+    venueZone: null,
+    sourceRef: String(c.id),
+    rawCopyId: c.rawCopyId,
+  };
+}
+
+/** "National Stadium, Beijing (CHN)" → Beijing, CHN. */
+export function venueOf(c: CalendarEvent): { city: string | null; country: string | null } {
+  const venue = c.venue.match(/(?:^|, )([^,]+) \(([A-Z]{3})\)$/);
+  return { city: venue?.[1] ?? null, country: venue?.[2] ?? null };
+}
+
+/** The calendar of one ranking category between two dates. */
+export async function categoryCalendar(run: SourceRun, category: keyof typeof TOP_CATEGORIES, from: string, to: string) {
+  const fetched = await run.fetch(`${SITE}/competition/calendar-results?startDate=${from}&endDate=${to}&rankingCategoryId=${TOP_CATEGORIES[category]}`);
+  const events = nextData<{ initialEvents: { results: CalendarEvent[] } }>(fetched.text).initialEvents.results;
+  return events.map((e) => ({ ...e, rawCopyId: fetched.rawCopyId }));
+}
+
 async function calendar(run: SourceRun, from: string, to: string) {
   const all: (CalendarEvent & { rawCopyId: string })[] = [];
-  for (const id of Object.values(TOP_CATEGORIES)) {
-    const fetched = await run.fetch(`${SITE}/competition/calendar-results?startDate=${from}&endDate=${to}&rankingCategoryId=${id}`);
-    const events = nextData<{ initialEvents: { results: CalendarEvent[] } }>(fetched.text).initialEvents.results;
-    all.push(...events.map((e) => ({ ...e, rawCopyId: fetched.rawCopyId })));
-  }
+  for (const category of Object.keys(TOP_CATEGORIES) as (keyof typeof TOP_CATEGORIES)[]) all.push(...(await categoryCalendar(run, category, from, to)));
   return all;
 }
 
@@ -190,7 +206,7 @@ async function calendar(run: SourceRun, from: string, to: string) {
  * top series, next to label road races and cross-country tours, which are
  * left out.
  */
-function competitionKind(c: CalendarEvent): CompetitionKind | null {
+export function competitionKind(c: CalendarEvent): CompetitionKind | null {
   const group = c.competitionGroup ?? "";
   if (c.rankingCategory === "OW") return /Olympic Games/i.test(c.name) ? "games" : "championship";
   if (c.rankingCategory === "DF" || group.includes("Diamond League")) return "circuit";
@@ -235,7 +251,7 @@ function dateOfBirth(text: string | null): string | null {
   return `${m[3]}-${String(MONTHS.indexOf(m[2]) + 1).padStart(2, "0")}-${m[1]}`;
 }
 
-function nextData<T>(html: string): T {
+export function nextData<T>(html: string): T {
   const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
   if (!m) throw new Error("World Athletics page without __NEXT_DATA__ (format changed?)");
   return (JSON.parse(m[1]) as { props: { pageProps: T } }).props.pageProps;

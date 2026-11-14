@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldarchery.org/v3/COMPETITIONS/?DisciplineId=1&StartDate=2026-11-14&EndDate=2027-12-19&RBP=All",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T14:42:46.225Z",
+  "trimmedByHand": "Kept the World, youth, para and Asian youth Championships and one World Cup stage; pageInfo left as recorded."
+}

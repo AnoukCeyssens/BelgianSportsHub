@@ -24,6 +24,16 @@ import wc1At2025Results17 from "./wc1-2025-results-17.json?raw";
 import wc1At2025Results17Meta from "./wc1-2025-results-17.json.meta.json";
 import wc1At2025Results24 from "./wc1-2025-results-24.json?raw";
 import wc1At2025Results24Meta from "./wc1-2025-results-24.json.meta.json";
+import events20260227 from "./events-2026-02-27.json?raw";
+import events20260227Meta from "./events-2026-02-27.json.meta.json";
+import worlds2026Schedule from "./worlds-2026-schedule.json?raw";
+import worlds2026ScheduleMeta from "./worlds-2026-schedule.json.meta.json";
+import worlds2026Competitors from "./worlds-2026-competitors.json?raw";
+import worlds2026CompetitorsMeta from "./worlds-2026-competitors.json.meta.json";
+import europeans2027Schedule from "./europeans-2027-schedule.json?raw";
+import europeans2027ScheduleMeta from "./europeans-2027-schedule.json.meta.json";
+import worlds2027Schedule from "./worlds-2027-schedule.json?raw";
+import worlds2027ScheduleMeta from "./worlds-2027-schedule.json.meta.json";
 
 /**
  * The daily run on Saturday 14 Nov 2026 around 12:00 UTC, during World Cup #1
@@ -34,7 +44,8 @@ import wc1At2025Results24Meta from "./wc1-2025-results-24.json.meta.json";
  * - results of 7 (Fran Vanhoutte 17th in the 1000m Women), 8 (no Belgian) and
  *   12 (Indra Medard 18th in the 1500m Men Division B);
  * - competitors of World Cup #1 (trimmed; Medard, Bart Swings, Vanhoutte) and
- *   of World Cup #2 (Tokyo, from 20 Nov; none published yet).
+ *   of World Cup #2 (Tokyo, from 20 Nov; none published yet);
+ * - the schedules of the 2027 Europeans and Worlds (none published yet).
  */
 export const isuWorldCup1Run: RecordedResponse[] = [
   { ...eventsMeta, body: events },
@@ -44,6 +55,8 @@ export const isuWorldCup1Run: RecordedResponse[] = [
   { ...wc1Results12Meta, body: wc1Results12 },
   { ...wc1CompetitorsMeta, body: wc1Competitors },
   { ...wc2CompetitorsMeta, body: wc2Competitors },
+  { ...europeans2027ScheduleMeta, body: europeans2027Schedule },
+  { ...worlds2027ScheduleMeta, body: worlds2027Schedule },
 ];
 export const ISU_WORLD_CUP_1_RUN = { now: "2026-11-14T12:00:00.000Z", lastSuccessAt: "2026-11-13T08:00:00.000Z" };
 
@@ -73,3 +86,20 @@ export const isuTeamPursuitRun: RecordedResponse[] = [
   { ...wc1At2025Results24Meta, body: wc1At2025Results24 },
 ];
 export const ISU_TEAM_PURSUIT_RUN = { now: "2025-11-17T04:00:00.000Z", lastSuccessAt: "2025-11-16T04:00:00.000Z" };
+
+/**
+ * The daily run on Sunday 1 Mar 2026 at 04:00 UTC, after a run on 28 Feb,
+ * before the Allround and Sprint World Championships (Heerenveen, 5–8 Mar):
+ * - the senior events ending on or after 27 Feb (the 2026 Worlds to the 2027 Worlds);
+ * - the 2026 Worlds' schedule (16 races, UTC start times) and its
+ *   competitors (trimmed to the first one and the Belgians);
+ * - the schedules of the 2027 Europeans and Worlds (none published yet).
+ */
+export const isuWorlds2026Run: RecordedResponse[] = [
+  { ...events20260227Meta, body: events20260227 },
+  { ...worlds2026ScheduleMeta, body: worlds2026Schedule },
+  { ...worlds2026CompetitorsMeta, body: worlds2026Competitors },
+  { ...europeans2027ScheduleMeta, body: europeans2027Schedule },
+  { ...worlds2027ScheduleMeta, body: worlds2027Schedule },
+];
+export const ISU_WORLDS_2026_RUN = { now: "2026-03-01T04:00:00.000Z", lastSuccessAt: "2026-02-28T04:00:00.000Z" };

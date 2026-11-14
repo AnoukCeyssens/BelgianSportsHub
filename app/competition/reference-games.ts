@@ -21,7 +21,7 @@ export async function referenceGamesRow(env: Pick<Env, "DB" | "RAW">, games: Ref
     contentType: "application/json",
     fetchedAt: now,
   });
-  return belgianRows(env.DB, GAMES_SOURCE, now).competition({
+  return belgianRows(env, GAMES_SOURCE, now).competition({
     name,
     sport,
     kind: "games",

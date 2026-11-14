@@ -25,7 +25,7 @@ export async function runSource(env: Pick<Env, "DB" | "RAW">, key: string): Prom
     db.update(schema.source).set(set).where(eq(schema.source.key, key));
   await health({ lastAttemptAt: stamp });
 
-  const rows = belgianRows(env.DB, key, startedAt);
+  const rows = belgianRows(env, adapter.writesAs ?? key, startedAt);
   try {
     await adapter.run({
       now: startedAt,

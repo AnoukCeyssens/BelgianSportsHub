@@ -8,7 +8,7 @@
 // with the round it starts in after a bye. "Store" keeps the version stamp,
 // names the Entries and replaces the previous version's Sessions with this
 // version's Sessions, keeping only the rounds of events with a Belgian Entry.
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import { Form } from "react-router";
 import { type Db, getDb, schema } from "~/db/client";
 import {
@@ -21,15 +21,15 @@ import {
   type SavedTimetableMapping,
   type TimetableColumnRole,
   type TimetableRound,
+  timetableText,
 } from "~/domain";
 import { formatDate, formatDayRange } from "~/format";
+import { TIMETABLE_RAW_SOURCE as RAW_SOURCE } from "~/ingest/belgian-rows";
 import { fetchAndKeep, keepRawCopy } from "~/ingest/raw-copy";
+import { addVersion, fingerprintOf, LATEST_FIRST, replaceSessions, versionsOf } from "~/ingest/timetable-versions";
 
 const STEP_PATH = "/curate/run/schedules";
-const RAW_SOURCE = "timetable";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-/** Latest stored version first (the insertion order breaks a tie within one instant). */
-const LATEST_FIRST = [desc(schema.timetableVersion.storedAt), desc(sql`timetable_version.rowid`)];
 
 const ROLE_LABEL: Record<TimetableColumnRole, string> = {
   ignore: "(ignore)",
@@ -73,6 +73,14 @@ export async function loadTimetables(db: Db, now: Date) {
         sourceUrl: latest.sourceUrl,
         replaces: previous?.version ?? null,
         sessions: counts.filter((s) => s.versionId === latest.id).length,
+        // Reopens the review on the stored version (a fetched timetable's only way to name its Entries).
+        nameEntries: `${STEP_PATH}?${new URLSearchParams({
+          timetable: x.id,
+          raw: latest.rawCopyId,
+          version: latest.version,
+          ...(latest.publishedOn ? { publishedOn: latest.publishedOn } : {}),
+          ...(latest.sourceUrl ? { sourceUrl: latest.sourceUrl } : {}),
+        })}#timetable`,
       },
     ];
   });
@@ -187,7 +195,6 @@ async function store(env: Pick<Env, "DB" | "RAW">, db: Db, competition: Competit
   const checkedOn = belgianDate(now);
 
   // The Entries named per event: events in this paste are named afresh; Entries of other events stay.
-  const named = new Set<string>();
   for (const [key, value] of form.entries()) {
     const m = key.match(/^event\.(\d+)$/);
     if (!m) continue;
@@ -195,49 +202,28 @@ async function store(env: Pick<Env, "DB" | "RAW">, db: Db, competition: Competit
     if (!event) continue;
     const ticked = form.getAll(`entry.${m[1]}`).map(String);
     await nameEntries(db, competition.id, event, ticked, (who) => field(`firstRound.${m[1]}.${who}`) || null, sourceUrl, checkedOn);
-    if (ticked.length > 0) named.add(`${event.sport}\n${event.event}`);
   }
 
-  const [stored] = await db
-    .insert(schema.timetableVersion)
-    .values({
-      competitionId: competition.id,
-      version,
-      publishedOn,
-      sourceUrl,
-      columnMapping: Object.fromEntries(table.head.map((h, i) => [h.trim().toLowerCase(), roles[i] ?? "ignore"])),
-      storedAt: now.toISOString(),
-      rawCopyId: copy.id,
-    })
-    .returning({ id: schema.timetableVersion.id });
-  await db.delete(schema.session).where(eq(schema.session.competitionId, competition.id));
+  // Naming Entries on the stored version itself (a fetched timetable's "Name Entries") is no new version.
+  const [latest] = await versionsOf(db, competition.id);
+  const versionId =
+    latest?.rawCopyId === copy.id
+      ? latest.id
+      : await addVersion(db, {
+          competitionId: competition.id,
+          version,
+          publishedOn,
+          sourceUrl,
+          columnMapping: Object.fromEntries(table.head.map((h, i) => [h.trim().toLowerCase(), roles[i] ?? "ignore"])),
+          rawCopyId: copy.id,
+          fingerprint: await fingerprintOf(timetableText(rounds)),
+          storedAt: now,
+        });
   if (!competition.venueZone) await db.update(schema.competition).set({ venueZone }).where(eq(schema.competition.id, competition.id));
 
-  // Belgian events only (story 63): a coded Session (the Games) holds its rows' rounds; otherwise each row is its own Session.
-  const belgian = rounds.filter((r) => named.has(`${r.sport}\n${r.event}`));
-  const sessions = new Map<string, TimetableRound[]>();
-  for (const r of belgian) {
-    const key = r.session ? `code:${r.sport}:${r.session}` : `row:${r.index}`;
-    sessions.set(key, [...(sessions.get(key) ?? []), r]);
-  }
-  for (const [, list] of sessions) {
-    const first = list[0];
-    const [row] = await db
-      .insert(schema.session)
-      .values({
-        competitionId: competition.id,
-        timetableVersionId: stored.id,
-        code: first.session,
-        sport: first.sport,
-        date: first.date,
-        startsAt: first.start ? `${first.date}T${first.start}` : null,
-        endsAt: first.end ? `${first.date}T${first.end}` : null,
-        venueZone,
-      })
-      .returning({ id: schema.session.id });
-    await db.insert(schema.sessionRound).values(list.map((r, position) => ({ sessionId: row.id, event: r.event, round: r.round, position })));
-  }
-  return { message: `${competition.name}: timetable ${version} stored, ${sessions.size} Sessions with Belgian Entries`, to: STEP_PATH };
+  // Belgian events only (story 63): the events named here, and any named before that this paste lacks (none of their rounds are in it).
+  const { sessions } = await replaceSessions(db, competition.id, versionId, rounds, venueZone);
+  return { message: `${competition.name}: timetable ${version} stored, ${sessions} Sessions with Belgian Entries`, to: STEP_PATH };
 }
 
 async function nameEntries(
@@ -369,6 +355,9 @@ export function TimetablesPart({ data, review }: { data: TimetablesData; review:
                 </td>
                 <td className="n">{`${s.sessions} Sessions`}</td>
                 <td className="sub">{s.sourceUrl ? <a href={s.sourceUrl}>source</a> : null}</td>
+                <td className="sub">
+                  <a href={s.nameEntries}>Name Entries</a>
+                </td>
               </tr>
             ))}
           </tbody>

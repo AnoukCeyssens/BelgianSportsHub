@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldarchery.org/v3/SCHEDULE/?CompId=31556&RBP=All",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T14:45:00.000Z",
+  "builtFromDocumentation": "SCHEDULE answered an empty list for every competition probed on 14 Nov 2026 (Medellin 2027, the 2026 World Cup stages and Europeans, Gwangju 2025). Built by hand from the response example at https://api.worldarchery.org/v3/API/Schedule (same fields and phase codes: -10 qualification round, 48/24/8 elimination rounds, 2 semifinals, 1 bronze, 0 gold), moved to the Medellin 2027 dates and Colombian time. Replace with a recorded schedule once World Archery publishes one."
+}

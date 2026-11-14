@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5d63ea8a-c77d-4c28-a390-f5bc87148636",
+  "id": "96fa090a-0c0c-4539-9bba-273d6a1b3234",
   "prevId": "4abb2510-55cd-4075-b28f-16f5c48a36ba",
   "tables": {
     "active_fact": {
@@ -672,41 +672,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "selector": {
-          "name": "selector",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selection_source": {
-          "name": "selection_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selection_kind": {
-          "name": "selection_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selected_on": {
-          "name": "selected_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selection_raw_copy_id": {
-          "name": "selection_raw_copy_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -762,19 +727,6 @@
           "tableTo": "team",
           "columnsFrom": [
             "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "entry_selection_raw_copy_id_raw_copy_id_fk": {
-          "name": "entry_selection_raw_copy_id_raw_copy_id_fk",
-          "tableFrom": "entry",
-          "tableTo": "raw_copy",
-          "columnsFrom": [
-            "selection_raw_copy_id"
           ],
           "columnsTo": [
             "id"
@@ -2381,6 +2333,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },
