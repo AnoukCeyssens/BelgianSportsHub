@@ -4,7 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { ISU_WORLD_CUP_1_RUN, isuWorldCup1Run } from "../fixtures/sources/isu-speed-skating";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
-import { clearIngestedData, seedAthlete, seedMergeQueueItem, seedSource, setSource } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedMergeQueueItem, seedSource, setSource } from "../support/seed";
 import { get, getDeployed, OWNER_EMAIL, post, signedInAs } from "../support/worker";
 
 // Spec #20, stories 98–103 and 106; ticket #24: the weekly Run sheet shell,
@@ -59,6 +59,9 @@ describe("Run sheet", () => {
       lastFailureAt: "2026-11-14T04:00:00.000Z",
       lastError: "HTTP 500",
     });
+    // A Belgian is entered at a UCI race this week, so the blocked (Assisted) UCI source is due for a paste.
+    const race = await seedCompetition(env.DB, { name: "UCI Track Nations Cup", sport: "Track cycling", source: "uci", startDate: "2026-11-13", endDate: "2026-11-15" });
+    await seedEntrant(env.DB, race, await seedAthlete(env.DB, { name: "Lindsay De Vylder", sport: "Track cycling" }));
   }
 
   it("opens on the first step, Source health", async () => {
@@ -74,12 +77,13 @@ describe("Run sheet", () => {
     const html = await page(SOURCE_HEALTH);
 
     expect(railStep(html, "Source health")).toEqual({ done: false, text: "1 Source health ~5 min · 2 open" });
-    expect(railStep(html, "Paste imports")).toEqual({ done: true, text: "✓ Paste imports 0.5–1.25 h · 0 open" });
+    // The blocked UCI source is Assisted, so it is pasted this week too (#25).
+    expect(railStep(html, "Paste imports")).toEqual({ done: false, text: "2 Paste imports 0.5–1.25 h · 1 open" });
     expect(railStep(html, "Merge queue")).toEqual({ done: false, text: "4 Merge queue ~10 min · 1 open" });
     expect(railStep(html, "Monthly checklist")).toEqual({ done: true, text: "✓ Monthly checklist ~15 min · 0 open" });
-    expect(html).toContain("6 of 8 steps done");
-    // 2 sources × 2 min + 1 identity × 3 min.
-    expect(timeLeft(html)).toBe("7 min");
+    expect(html).toContain("5 of 8 steps done");
+    // 2 sources × 2 min + 1 paste import × 12 min + 1 identity × 3 min.
+    expect(timeLeft(html)).toBe("19 min");
     expect(sessionLog(html)).toEqual([]);
   });
 
@@ -111,9 +115,9 @@ describe("Run sheet", () => {
     expect(res.headers.get("location")).toBe("/curate/run/paste-imports");
     const html = await page("/curate/run/paste-imports");
     expect(railStep(html, "Source health").done).toBe(true);
-    expect(html).toContain("8 of 8 steps done");
-    // The items are still open, so they still count toward time left.
-    expect(timeLeft(html)).toBe("4 min");
+    expect(html).toContain("7 of 8 steps done");
+    // The items are still open, so they still count toward time left (and UCI's paste import).
+    expect(timeLeft(html)).toBe("16 min");
     expect(sessionLog(html)).toEqual(["13:00 · Source health: left 2 for next week"]);
   });
 

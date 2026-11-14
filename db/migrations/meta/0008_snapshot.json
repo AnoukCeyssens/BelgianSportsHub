@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1aec1a92-6e51-4192-a40f-41fdfe946f8d",
+  "id": "908bfaf0-eb0a-4557-9300-587f0cbba958",
   "prevId": "63f98a20-72fc-4340-8936-ed8a1e15ebd1",
   "tables": {
     "athlete": {
@@ -967,6 +967,34 @@
         },
         "acknowledged_at": {
           "name": "acknowledged_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sport": {
+          "name": "sport",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_scheme": {
+          "name": "id_scheme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "column_mapping": {
+          "name": "column_mapping",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_pasted_at": {
+          "name": "last_pasted_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

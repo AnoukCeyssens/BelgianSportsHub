@@ -26,7 +26,7 @@ async function keep(env: Pick<Env, "DB" | "RAW">, input: RawInput): Promise<{ id
   // (a seed run reads a sitemap and many profiles), so the key carries an id too.
   const id = crypto.randomUUID();
   const r2Key = `raw/${input.source}/${fetchedAt}/${id}`;
-  const request = input.request ? { method: input.request.method, requestKey: `${r2Key}.request` } : {};
+  const request: Record<string, string> = input.request ? { method: input.request.method, requestKey: `${r2Key}.request` } : {};
   if (input.request) {
     await env.RAW.put(`${r2Key}.request`, input.request.body, {
       httpMetadata: { contentType: input.request.contentType },

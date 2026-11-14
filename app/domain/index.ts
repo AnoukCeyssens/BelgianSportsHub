@@ -6,6 +6,7 @@ export { identityMatch, normaliseName, type ExternalId, type IdentityMatch, type
 export { matchesNameSearch } from "./name-search";
 export { CURATION_PATH, isCurationPath, offlineReading, type OfflineReading } from "./offline-reading";
 export {
+  pasteImportDue,
   sourceAttention,
   sourceHealth,
   type SourceAttentionState,
@@ -15,4 +16,28 @@ export {
   type SourceTier,
 } from "./source-health";
 export { runSheetProgress, WEEKLY_RUN_SHEET, type RunSheetProgress, type RunSheetStep } from "./run-sheet";
+export {
+  LIKELY_REVIEW_WEEKS,
+  needsLikelyReview,
+  onCalendar,
+  participation,
+  type OwnerParticipationDecision,
+  type Participation,
+  type ParticipationFacts,
+  type ParticipationReason,
+  type ParticipationStatus,
+} from "./participation";
+export {
+  belgianPastedRows,
+  columnMapping,
+  mappingToSave,
+  PASTE_COLUMN_ROLES,
+  readHtmlTable,
+  readPastedTable,
+  type PasteColumnRole,
+  type PastedResultRow,
+  type PastedTable,
+  type SavedColumnMapping,
+} from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
+export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";

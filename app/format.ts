@@ -38,3 +38,10 @@ export function placeText(place: number | null, status: string) {
     place % 100 >= 11 && place % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[place % 10] ?? "th";
   return `${place}${suffix}`;
 }
+
+/** "22 Nov", "20–22 Nov", "28 Nov–6 Dec" for a competition's days. */
+export function formatDayRange(start: string, end: string) {
+  if (start === end) return formatDay(start);
+  if (start.slice(0, 7) === end.slice(0, 7)) return `${Number(start.slice(8))}–${formatDay(end)}`;
+  return `${formatDay(start)}–${formatDay(end)}`;
+}
