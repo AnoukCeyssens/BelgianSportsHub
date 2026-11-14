@@ -73,7 +73,7 @@ Runs in workerd through `@cloudflare/vitest-plugin`, with a real local D1 (all m
 Adapters are tested against real federation payloads.
 
 1. `npm run record-fixture -- world-athletics thiam-results.json "https://…"` writes `tests/fixtures/sources/world-athletics/thiam-results.json` (byte for byte) and `thiam-results.json.meta.json` (`url`, `status`, `contentType`, `recordedAt`).
-2. In the test: `import body from "../fixtures/sources/<source>/<file>?raw"` and `import meta from "…/<file>.meta.json"`, then `stubOutboundFetch([{ ...meta, body }])`. Binary payloads (FIS ZIPs) need a loader that yields a `Uint8Array`; the first binary adapter adds it here.
+2. In the test: `import body from "../fixtures/sources/<source>/<file>?raw"` and `import meta from "…/<file>.meta.json"`, then `stubOutboundFetch([{ ...meta, body }])`. Binary payloads (FIS ZIPs): `import zip from "…/<file>.zip?bytes"` yields a `Uint8Array` byte for byte (the `bytes-fixtures` plugin in `vitest.config.ts`); the stub then sends its `content-length`, as a real download does. See `tests/fixtures/sources/fis-points-lists/index.ts`.
 3. Keep fixtures small: record one realistic page, not a whole season. Record by hand from a public endpoint only; never in CI; never from Olympedia, Olympics.com or Totallympics.
 4. When a source changes format, record a new fixture next to the old one; the old one stays as a regression case.
 5. A payload too big to keep whole (e.g. Team Belgium's 1 MB sitemaps) may be trimmed by hand after recording; say so in a `trimmedByHand` field of its `.meta.json`. A source whose test needs many files gets an `index.ts` next to them exporting the ready-to-stub list (see `tests/fixtures/sources/team-belgium/index.ts`).
@@ -94,7 +94,8 @@ Set by the first Automatic source, ISU speed skating (#23). Every later Automati
 
 **The adapter seam** (`app/ingest/source-adapter.ts`). An adapter is `{ run(run: SourceRun) }` and knows only its source's URLs and payloads:
 - `run.now`, and `run.since` (start of the last successful run, null on the first): fetch only what changed since; on the first run choose a bounded backfill (ISU: one year).
-- `run.fetch(url)` fetches politely, keeps the body as received in R2 and a `raw_copy` row, and returns `{ text, rawCopyId }`. Never call `fetch()` directly. Binary or streamed payloads (FIS ZIPs) will need a sibling of `fetch` on `SourceRun`; add it there, not in the adapter.
+- `run.fetch(url)` fetches politely, keeps the body as received in R2 and a `raw_copy` row, and returns `{ text, rawCopyId }`. Never call `fetch()` directly.
+- `run.fetchStream(url)` is its sibling for large or binary payloads (FIS ZIPs): the body streams into R2 and comes back as a stream read from R2 (`{ body, rawCopyId }`), so a job never holds it whole (128 MB). `app/ingest/zip-stream.ts` reads a ZIP from such a stream entry by entry, line by line.
 - `run.rows` takes what was parsed: `competition()` (returns its id; only qualification-relevant senior competitions), `result()` (one Belgian performance; leave out DNS and withdrawals) and `entrants()` (a competition's entry list, replaced as a whole). Each input carries the `rawCopyId` it was parsed from, so every row links to its raw copy. A `sourceRef` (the source's own ID) makes a re-fetch update the same row instead of duplicating it.
 - The writer keeps Belgian rows only (`person.nationality === "BEL"`), but filter early anyway. It matches identities with `identityMatch` (IF ID, then name + date of birth), remembers the IF ID on a name + date-of-birth match, moves "Athlete since" back for an earlier performance, and sends anything unmatched to the merge queue with its results attached.
 - Adapters never touch D1, R2, identity rules or health.
