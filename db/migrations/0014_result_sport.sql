@@ -1,0 +1,1 @@
+ALTER TABLE `result` ADD `sport` text;

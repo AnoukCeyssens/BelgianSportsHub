@@ -1,119 +1,9 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "eb9a0877-c695-4d2c-95d9-f58a57e8ce61",
+  "id": "bedc1bd3-496d-4384-87c6-f3b678980c13",
   "prevId": "e043f58a-9fc4-4a3f-8ea5-ea5868729d8e",
   "tables": {
-    "active_fact": {
-      "name": "active_fact",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "athlete_id": {
-          "name": "athlete_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "team_id": {
-          "name": "team_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "date": {
-          "name": "date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "checked_on": {
-          "name": "checked_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "active_fact_athlete": {
-          "name": "active_fact_athlete",
-          "columns": [
-            "athlete_id",
-            "kind"
-          ],
-          "isUnique": true
-        },
-        "active_fact_team": {
-          "name": "active_fact_team",
-          "columns": [
-            "team_id",
-            "kind"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "active_fact_athlete_id_athlete_id_fk": {
-          "name": "active_fact_athlete_id_athlete_id_fk",
-          "tableFrom": "active_fact",
-          "tableTo": "athlete",
-          "columnsFrom": [
-            "athlete_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "active_fact_team_id_team_id_fk": {
-          "name": "active_fact_team_id_team_id_fk",
-          "tableFrom": "active_fact",
-          "tableTo": "team",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "athlete": {
       "name": "athlete",
       "columns": {
@@ -161,13 +51,6 @@
         },
         "athlete_since_competition": {
           "name": "athlete_since_competition",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "profile_latest_performance_on": {
-          "name": "profile_latest_performance_on",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -948,6 +831,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "sport": {
+          "name": "sport",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "date": {
           "name": "date",
           "type": "text",
@@ -1492,6 +1382,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "dissolved_on": {
+          "name": "dissolved_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "raw_copy_id": {

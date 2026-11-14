@@ -43,5 +43,15 @@ export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type Checkli
 export { athleteMedals, belgiumMedals, teamIdentity, type MedalCount, type MedalEntry, type MedalResult, type TeamIdentity, type TeamKind, type TeamMember } from "./teams";
 export { combinedPhaseInputs, currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
 export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";
-export { chosenSports, GAMES_SOURCE, standardsForSports, toggledSports, TRACKED_GAMES, type TrackedGames } from "./games";
+export {
+  chosenSports,
+  GAMES_SOURCE,
+  REFERENCE_GAMES,
+  referenceGamesOf,
+  standardsForSports,
+  toggledSports,
+  TRACKED_GAMES,
+  type ReferenceGames,
+  type TrackedGames,
+} from "./games";
 export { activeStatus, isActive, type ActiveEntity, type ActiveFacts, type ActivePerformance, type ActiveReason, type ActiveStatus } from "./active";
