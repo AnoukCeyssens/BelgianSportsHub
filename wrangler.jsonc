@@ -1,0 +1,83 @@
+// Cloudflare Worker configuration (ADR 0003).
+//
+// Top level = local development and the Vitest Workers pool (bindings are
+// simulated locally by Miniflare). `env.test` and `env.live` are the two
+// deployed copies, each with its own D1, R2 bucket and queue. Bindings are not
+// inherited by environments, so each one declares its own.
+//
+// PLACEHOLDERS, to be replaced by a human before the first deploy (see
+// docs/agents/conventions.md, "Deploying"):
+//   - "bsh.example.com"        → the real custom domain
+//   - "REPLACE_WITH_*_D1_ID"   → ids printed by `wrangler d1 create`
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "belgian-sports-hub",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // The app lives on a custom domain only (an installed PWA is tied to its origin).
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "vars": { "APP_ENV": "dev" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bsh-dev",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "RAW", "bucket_name": "bsh-raw-dev" }],
+  "queues": {
+    "producers": [{ "binding": "INGEST", "queue": "bsh-ingest-dev" }],
+    "consumers": [{ "queue": "bsh-ingest-dev", "max_batch_size": 1, "max_retries": 3 }]
+  },
+  "env": {
+    // Test copy: deployed on every push to main; scheduled fetches OFF.
+    "test": {
+      "name": "belgian-sports-hub-test",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [{ "pattern": "test.bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
+      "vars": { "APP_ENV": "test" },
+      "triggers": { "crons": [] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "bsh-test",
+          "database_id": "REPLACE_WITH_TEST_D1_ID", // PLACEHOLDER
+          "migrations_dir": "db/migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "RAW", "bucket_name": "bsh-raw-test" }],
+      "queues": {
+        "producers": [{ "binding": "INGEST", "queue": "bsh-ingest-test" }],
+        "consumers": [{ "queue": "bsh-ingest-test", "max_batch_size": 1, "max_retries": 3 }]
+      }
+    },
+    // Live copy: deployed by hand ("update app") through the Deploy live workflow.
+    "live": {
+      "name": "belgian-sports-hub",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [{ "pattern": "bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
+      "vars": { "APP_ENV": "live" },
+      // Daily ingest: the scheduled handler queues one job per due source.
+      "triggers": { "crons": ["0 4 * * *"] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "bsh-live",
+          "database_id": "REPLACE_WITH_LIVE_D1_ID", // PLACEHOLDER
+          "migrations_dir": "db/migrations"
+        }
+      ],
+      "r2_buckets": [{ "binding": "RAW", "bucket_name": "bsh-raw-live" }],
+      "queues": {
+        "producers": [{ "binding": "INGEST", "queue": "bsh-ingest-live" }],
+        "consumers": [{ "queue": "bsh-ingest-live", "max_batch_size": 1, "max_retries": 3 }]
+      }
+    }
+  }
+}
