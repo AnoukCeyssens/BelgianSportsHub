@@ -14,7 +14,19 @@ import {
   SEED_METHODS,
   expandShortcut,
 } from "~/domain";
-import { clearPick, expectationsOf, pickLockFor, recordSeed, removeSeed, setPick } from "~/expectations/expectations";
+import {
+  boicTargetOf,
+  clearBoicTarget,
+  clearPick,
+  expectationsOf,
+  pickLockFor,
+  recordGracenote,
+  recordSeed,
+  removeGracenote,
+  removeSeed,
+  setBoicTarget,
+  setPick,
+} from "~/expectations/expectations";
 import { formatBelgianClock, formatDate, formatDay } from "~/format";
 import { potentialEntries } from "~/qualification/entries";
 import type { Route } from "./+types/curate.expectations";
@@ -29,6 +41,10 @@ import type { Route } from "./+types/curate.expectations";
 // - Seeds: dated snapshots per Entry: the world-ranking position monthly
 //   (marked due when this month's is missing) until the entry list exists,
 //   then the final Seed with its method. Same date = replaced.
+// - The Games only (ticket #41): Gracenote picks, entered by hand from each
+//   Sporza/VRT update (a shortcut or place, the update's date, the article's
+//   link; same date = replaced), and the BOIC target, a delegation-level count
+//   of medals and top-8 places (not an Expectation).
 // Reference Games have no Expectations (404).
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -51,7 +67,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const db = dbFrom(context);
   const { row, page, here } = await targetOf(db, params.competitionId, request);
   const at = now();
-  const [entries, lockAt] = await Promise.all([potentialEntries(db, [row.id], at), pickLockFor(db, row)]);
+  const [entries, lockAt, boic] = await Promise.all([potentialEntries(db, [row.id], at), pickLockFor(db, row), boicTargetOf(db, row)]);
   // Seeds for every Entry still in the running; picks for Selected ones.
   const shown = entries.filter((e) => e.status !== "not-selected" && e.status !== "withdrawn");
   const expectations = await expectationsOf(
@@ -61,7 +77,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   );
   const locked = at >= lockAt;
   return {
-    competition: { name: row.name, page, here },
+    competition: { name: row.name, page, here, games: row.kind === "games" },
+    boic,
     lock: `${locked ? "Picks locked" : "Picks lock"} ${belgianMoment(lockAt)}`,
     locked,
     today: belgianDate(at),
@@ -83,6 +100,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
           asOf: s.asOf,
           sourceUrl: s.sourceUrl,
         })),
+        gracenote: x.gracenote.map((s) => ({ id: s.id, place: placeRangeLabel(s), asOf: s.asOf, sourceUrl: s.sourceUrl })),
       };
     }),
   };
@@ -116,6 +134,24 @@ export async function action({ context, params, request }: Route.ActionArgs) {
     case "remove-seed":
       await removeSeed(db, row, field("snapshotId"));
       break;
+    case "record-gracenote": {
+      // A Gracenote pick is typed like a personal pick: Gold, Medal, 5, 5-8.
+      const shortcut = readShortcut(field("place"));
+      if (!shortcut) throw data("A Gracenote pick is Gold, Silver, Bronze, Medal, a place (5) or a range (5-8)", { status: 400 });
+      await recordGracenote(db, row, { entryId: field("entryId"), ...expandShortcut(shortcut), asOf: field("asOf"), sourceUrl: field("sourceUrl") }, at);
+      break;
+    }
+    case "remove-gracenote":
+      await removeGracenote(db, row, field("snapshotId"));
+      break;
+    case "boic-target": {
+      const count = (name: string) => (field(name) === "" ? null : Number(field(name)));
+      await setBoicTarget(db, row, { medals: count("medals"), top8: count("top8"), statedOn: field("statedOn"), sourceUrl: field("sourceUrl") }, at);
+      break;
+    }
+    case "clear-boic-target":
+      await clearBoicTarget(db, row);
+      break;
     default:
       throw data("Unknown action", { status: 400 });
   }
@@ -123,14 +159,14 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 }
 
 export default function SeedsAndPicks({ loaderData }: Route.ComponentProps) {
-  const { competition, lock, locked, today, methods, entries } = loaderData;
+  const { competition, lock, locked, today, methods, entries, boic } = loaderData;
   const selected = entries.filter((e) => e.selected);
   return (
     <>
       <p className="sub">
         <Link to={competition.page}>{competition.name}</Link>
       </p>
-      <h1>Seeds and picks</h1>
+      <h1>{competition.games ? "Seeds, picks and targets" : "Seeds and picks"}</h1>
       <p className="note">{lock}</p>
 
       <h2>Personal picks</h2>
@@ -248,6 +284,92 @@ export default function SeedsAndPicks({ loaderData }: Route.ComponentProps) {
       ) : (
         <p className="sub">No potential Entries recorded yet.</p>
       )}
+
+      {competition.games ? (
+        <>
+          <h2>Gracenote picks</h2>
+          <p className="sub">From each Sporza/VRT update of Gracenote&apos;s Virtual Medal Table: the pick (Gold, Silver, Bronze, Medal, a place or a range), the update&apos;s date and the article&apos;s link.</p>
+          {entries.length > 0 ? (
+            <table aria-label="Gracenote picks">
+              <thead>
+                <tr>
+                  <th>Entry</th>
+                  <th>Updates</th>
+                  <th>Record</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e) => (
+                  <tr key={e.id}>
+                    <td>
+                      {e.name}
+                      <div className="sub">{e.event}</div>
+                    </td>
+                    <td>
+                      {e.gracenote.map((s) => (
+                        <Form method="post" key={s.id}>
+                          <input type="hidden" name="snapshotId" value={s.id} />
+                          {`${s.place} · Gracenote · ${formatDay(s.asOf)} `}
+                          {s.sourceUrl ? <a href={s.sourceUrl}>source</a> : null}{" "}
+                          <button name="intent" value="remove-gracenote" className="link">
+                            remove
+                          </button>
+                        </Form>
+                      ))}
+                    </td>
+                    <td>
+                      <Form method="post">
+                        <input type="hidden" name="entryId" value={e.id} />
+                        <input name="place" list="pick-shortcuts" placeholder="Gold" size={6} aria-label={`Gracenote pick for ${e.name}`} required />
+                        <input type="date" name="asOf" defaultValue={today} aria-label="Update of" required />
+                        <input type="url" name="sourceUrl" placeholder="Article URL" aria-label="Article URL" required />
+                        <button name="intent" value="record-gracenote">
+                          Record
+                        </button>
+                      </Form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+
+          <h2>BOIC target</h2>
+          <p className="sub">The Belgian Olympic Committee&apos;s stated ambition for the delegation: a count, compared with Belgium&apos;s totals in After. Not an Expectation.</p>
+          {boic ? (
+            <Form method="post">
+              <p className="meta">
+                {`BOIC target: ${[boic.medals !== null ? `${boic.medals} medals` : null, boic.top8 !== null ? `${boic.top8} top-8 places` : null].filter(Boolean).join(" · ")} · stated ${formatDate(boic.statedOn)} · `}
+                <a href={boic.sourceUrl}>source</a>{" "}
+                <button name="intent" value="clear-boic-target" className="link">
+                  clear
+                </button>
+              </p>
+            </Form>
+          ) : null}
+          <Form method="post" className="fields">
+            <label>
+              Medals
+              <input type="number" name="medals" min={0} defaultValue={boic?.medals ?? ""} size={3} />
+            </label>
+            <label>
+              Top-8 places
+              <input type="number" name="top8" min={0} defaultValue={boic?.top8 ?? ""} size={3} />
+            </label>
+            <label>
+              Stated on
+              <input type="date" name="statedOn" defaultValue={boic?.statedOn ?? today} required />
+            </label>
+            <label>
+              Source
+              <input type="url" name="sourceUrl" defaultValue={boic?.sourceUrl ?? ""} required />
+            </label>
+            <button name="intent" value="boic-target">
+              Save target
+            </button>
+          </Form>
+        </>
+      ) : null}
     </>
   );
 }

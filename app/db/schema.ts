@@ -457,6 +457,13 @@ export const entry = sqliteTable(
     selectionKind: text("selection_kind"),
     selectedOn: text("selected_on"),
     selectionRawCopyId: text("selection_raw_copy_id").references(() => rawCopy.id),
+    /**
+     * When the Entry was withdrawn (ISO instant; ticket #41): set with the
+     * Withdrawn status (the owner's stated moment, else when it was recorded),
+     * kept while it stays Withdrawn, cleared otherwise. A withdrawal before
+     * the picks lock voids the Entry's Verdicts; from the lock on it is Missed.
+     */
+    withdrawnAt: text("withdrawn_at"),
   },
   (t) => [
     uniqueIndex("entry_athlete").on(t.competitionId, t.event, t.athleteId),
@@ -785,4 +792,22 @@ export const personalPick = sqliteTable("personal_pick", {
   placeTo: integer("place_to").notNull(),
   /** ISO instant of the last change. */
   pickedAt: text("picked_at").notNull(),
+});
+
+/**
+ * The Belgian Olympic Committee's target for a Games (spec #20, story 66;
+ * ticket #41): a delegation-level count of medals and top-8 places, not an
+ * Expectation. Either count may be unstated. One per Games, entered by hand.
+ */
+export const boicTarget = sqliteTable("boic_target", {
+  competitionId: text("competition_id")
+    .primaryKey()
+    .references(() => competition.id, { onDelete: "cascade" }),
+  medals: integer("medals"),
+  top8: integer("top8"),
+  /** Belgian date the target was stated, and where (press article or interview). */
+  statedOn: text("stated_on").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  /** ISO instant it was recorded. */
+  recordedAt: text("recorded_at").notNull(),
 });

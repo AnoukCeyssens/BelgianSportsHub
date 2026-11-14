@@ -68,6 +68,7 @@ export async function recordSelection(db: Db, input: SelectionInput, now: Date):
         selectionKind: input.kind,
         selectedOn: input.announcedOn,
         selectionRawCopyId: input.rawCopyId,
+        withdrawnAt: null,
       })
       .where(eq(schema.entry.id, c.id));
   }
@@ -108,6 +109,7 @@ export async function applyEntryList(db: Db, competitionId: string, rawCopyId: s
         selectionKind: "entry-list",
         selectedOn: row.selectionKind === "entry-list" && row.selectedOn ? row.selectedOn : belgianDate(new Date(copy.fetchedAt)),
         selectionRawCopyId: rawCopyId,
+        withdrawnAt: null,
       })
       .where(eq(e.id, id));
     changed++;

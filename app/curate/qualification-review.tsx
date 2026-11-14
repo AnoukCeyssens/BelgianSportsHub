@@ -24,6 +24,7 @@ import { formatDate } from "~/format";
 import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
 import { linkAtSelection } from "~/qualification/quota-places";
 import { QualificationBadge } from "~/qualification/qualification-section";
+import { withdrawalColumn } from "~/qualification/withdrawal";
 
 type Change = { what: string; from: string | null; to: string; needed: string | null; on: string; ranking: string | null };
 
@@ -182,7 +183,7 @@ export async function actOnQualificationReview(db: Db, intent: string, form: For
       if (!item.suggested) throw new Response("Nothing suggested for this Entry", { status: 400 });
       await db
         .update(e)
-        .set({ qualificationStatus: item.suggested, qualificationSource: item.suggestedSource, qualificationCheckedOn: today })
+        .set({ qualificationStatus: item.suggested, qualificationSource: item.suggestedSource, qualificationCheckedOn: today, ...withdrawalColumn(item.suggested, now) })
         .where(eq(e.id, entryId));
       await followSelection(db, item);
       return `${item.title}: ${label(item.current)} → ${label(item.suggested)}`;
@@ -195,7 +196,7 @@ export async function actOnQualificationReview(db: Db, intent: string, form: For
       const source = String(form.get("source") ?? "").trim();
       if (!isQualificationStatus(status)) throw new Response("Unknown Qualification status", { status: 400 });
       if (!source) throw new Response("A status needs its source", { status: 400 });
-      await db.update(e).set({ qualificationStatus: status, qualificationSource: source, qualificationCheckedOn: today }).where(eq(e.id, entryId));
+      await db.update(e).set({ qualificationStatus: status, qualificationSource: source, qualificationCheckedOn: today, ...withdrawalColumn(status, now) }).where(eq(e.id, entryId));
       await followSelection(db, item);
       return `${item.title}: set ${label(status)}`;
     }

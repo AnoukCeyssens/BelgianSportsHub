@@ -187,6 +187,7 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
     schema.quotaPlace,
     schema.expectationSnapshot,
     schema.personalPick,
+    schema.boicTarget,
     schema.entry,
     schema.participationCuration,
     schema.activeFact,
