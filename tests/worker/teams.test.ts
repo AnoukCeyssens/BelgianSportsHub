@@ -136,6 +136,42 @@ describe("Teams and rosters", () => {
     expect(html).toMatch(/href="\/teams\/[^"]+"[^>]*>Belgium · Team Pursuit Women</);
   });
 
+  it("confirms Belgium's Participation through a Team result, and makes the next edition likely", async () => {
+    fixClock("2026-11-14T12:00:00.000Z");
+    const a = await seedAthlete(env.DB, { name: "Relay Runner A", sport: "Athletics" });
+    const thisYear = await seedCompetition(env.DB, {
+      name: "Relay Meeting 2026",
+      sport: "Athletics",
+      source: "manual",
+      startDate: "2026-11-07",
+      endDate: "2026-11-08",
+      series: "test:relay-meeting",
+    });
+    await seedTeamResult(env.DB, { competitionId: thisYear, sport: "Athletics", event: "4x100m Women", place: 5, roster: [a] });
+    const lastYear = await seedCompetition(env.DB, {
+      name: "Relay Meeting 2025",
+      sport: "Athletics",
+      source: "manual",
+      startDate: "2025-11-21",
+      endDate: "2025-11-22",
+      series: "test:relay-meeting-late",
+    });
+    await seedTeamResult(env.DB, { competitionId: lastYear, sport: "Athletics", event: "4x400m Women", place: 5, roster: [a] });
+    await seedCompetition(env.DB, {
+      name: "Relay Meeting Late 2026",
+      sport: "Athletics",
+      source: "manual",
+      startDate: "2026-11-21",
+      endDate: "2026-11-22",
+      series: "test:relay-meeting-late",
+    });
+
+    const text = (await page("/calendar")).replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+    expect(text).toContain("Relay Meeting 2026 Athletics · Confirmed · Belgium · 4x100m Women");
+    expect(text).toContain("Relay Meeting Late 2026 Athletics · Likely: Belgian Entry at the previous edition");
+  });
+
   it("counts a Team medal on each roster member's record, and once on the Team's", async () => {
     const a = await seedAthlete(env.DB, { name: "Relay Runner A", sport: "Athletics" });
     const b = await seedAthlete(env.DB, { name: "Relay Runner B", sport: "Athletics" });
