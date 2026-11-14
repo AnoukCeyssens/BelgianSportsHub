@@ -40,6 +40,7 @@ export {
   type SavedColumnMapping,
 } from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
+export { athleteMedals, belgiumMedals, teamIdentity, type MedalCount, type MedalEntry, type MedalResult, type TeamIdentity, type TeamKind, type TeamMember } from "./teams";
 export { combinedPhaseInputs, currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
 export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";
 export {

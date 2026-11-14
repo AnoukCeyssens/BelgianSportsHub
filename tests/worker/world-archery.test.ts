@@ -78,7 +78,7 @@ describe("World Archery source", () => {
 
     const db = getDb(env.DB);
     const events = await db.selectDistinct({ event: schema.result.event }).from(schema.result);
-    expect(events.map((e) => e.event).sort()).toEqual(["Compound Men", "Recurve Men", "Recurve Women"]);
+    expect(events.map((e) => e.event).sort()).toEqual(["Compound Men", "Compound Men Team", "Recurve Men", "Recurve Men Team", "Recurve Women"]);
     const competitions = await db.select({ name: schema.competition.name, kind: schema.competition.kind }).from(schema.competition);
     expect(competitions.sort((a, b) => a.name.localeCompare(b.name))).toEqual([
       { name: "Antalya 2026 Hyundai Archery World Cup stage 3", kind: "circuit" },
@@ -86,8 +86,31 @@ describe("World Archery source", () => {
       { name: "Madrid 2026 Hyundai Archery World Cup stage 4", kind: "circuit" },
       { name: "Shanghai 2026 Hyundai Archery World Cup stage 2", kind: "circuit" },
     ]);
-    // 20 senior performances: 3 in Shanghai, 7 at the Europeans, 4 in Antalya, 6 in Madrid.
-    expect(await db.$count(schema.result)).toBe(20);
+    // 20 individual senior performances (3 in Shanghai, 7 at the Europeans, 4 in Antalya, 6 in Madrid)
+    // and 5 team ones (Shanghai, two at the Europeans, Antalya, Madrid).
+    expect(await db.$count(schema.result)).toBe(25);
+  });
+
+  it("writes Belgium's team places to its default Team, with the archers the result names as its roster", async () => {
+    const deSmedt = await seedAthlete(env.DB, {
+      name: "Jarno De Smedt",
+      sport: "Archery",
+      externalIds: [{ scheme: "world-archery", value: "20515" }],
+    });
+
+    await firstRun();
+
+    const results = (await athletePage(deSmedt)).split("<h2>Results</h2>")[1];
+    expect(results).toContain("Recurve Men Team");
+    expect(results).toContain("8th");
+    const team = results.match(/href="\/teams\/([^"]+)"[^>]*>Belgium · Recurve Men Team</)?.[1];
+    expect(team).toBeDefined();
+    const page = (await (await get(`/teams/${team}`)).text()).split("<h2>Results</h2>")[1];
+    // One Team whatever its roster: four competitions, with the archers each result names.
+    for (const competition of ["Shanghai", "European Outdoor Championships 2026", "Antalya", "Madrid"]) expect(page).toContain(competition);
+    for (const archer of ["Estéban Gilson", "Axel Simons", "Maarten Vanhaeren", "Wout Van dun"]) expect(page).toContain(archer);
+    // "Other International Event" team rows are left out, as individual ones are.
+    expect(page).not.toContain("Spring Arrows");
   });
 
   it("sends Belgians it cannot match to the merge queue with their World Archery ID", async () => {

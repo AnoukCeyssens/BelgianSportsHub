@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldaquatics.com/fina/competitions/5129/events",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T13:13:53.077Z",
+  "trimmedByHand": "Kept the women's duets (technical and free) only."
+}

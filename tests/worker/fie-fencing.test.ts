@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
-import { FIE_BERNE_RUN, fieBerneRun } from "../fixtures/sources/fie";
+import { FIE_BERNE_RUN, FIE_TAKAMATSU_RUN, fieBerneRun, fieTakamatsuRun } from "../fixtures/sources/fie";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, setSource } from "../support/seed";
@@ -86,5 +86,28 @@ describe("FIE fencing source", () => {
     expect(result.retryMessages).toEqual([]);
     const source = await getDb(env.DB).query.source.findFirst({ where: eq(schema.source.key, FIE) });
     expect(source?.blockedAt).toBe(FIE_BERNE_RUN.now);
+  });
+
+  it("writes Belgium's place in a team event to its default Team, which the page credits without fencers", async () => {
+    await setSource(env.DB, FIE, { lastSuccessAt: FIE_TAKAMATSU_RUN.lastSuccessAt });
+    fixClock(FIE_TAKAMATSU_RUN.now);
+    stubOutboundFetch(fieTakamatsuRun);
+
+    const result = await deliverIngestJobs([job]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    const teams = await getDb(env.DB).select({ id: schema.team.id, name: schema.team.name, kind: schema.team.kind }).from(schema.team);
+    expect(teams.map(({ name, kind }) => ({ name, kind }))).toEqual([{ name: "Belgium · Men's Foil Team", kind: "default" }]);
+    const html = await (await get(`/teams/${teams[0].id}`)).text();
+    const results = html.slice(html.indexOf("<h2>Results</h2>"));
+    expect(results).toContain("Takamatsu City World Cup 2026");
+    expect(results).toContain("16th");
+    expect(await getDb(env.DB).$count(schema.rosterMember)).toBe(0);
+  });
+
+  it("leaves a team event that is not decided yet for the next run", async () => {
+    await runBerne();
+
+    expect(await getDb(env.DB).$count(schema.team)).toBe(0);
   });
 });

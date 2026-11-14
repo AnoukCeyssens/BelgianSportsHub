@@ -25,6 +25,10 @@ export const EXTERNAL_ID_SCHEMES = {
   "world-athletics": "World Athletics",
   isu: "ISU",
   fis: "FIS",
+  fivb: "FIVB",
+  "world-archery": "World Archery",
+  "world-triathlon": "World Triathlon",
+  "world-aquatics-gms": "World Aquatics (GMS)",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;
@@ -258,9 +262,58 @@ export const mergeQueueItem = sqliteTable(
 );
 
 /**
- * A Belgian result in one event of a competition (spec #20, Data model). Until
- * Teams and Entries arrive (#27) it belongs to an Athlete, or to a merge-queue
- * item while that identity is unresolved.
+ * A Team (GLOSSARY "Team", ADR 0001): two or more Athletes competing together
+ * for Belgium in one event. By default one per Belgium + event, keeping its
+ * identity as its roster changes; where Belgium can field several at once
+ * (beach volleyball pairs, doubles, boats) one per standing partnership.
+ * `key` is the identity from the domain rule `teamIdentity`.
+ */
+export const team = sqliteTable("team", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  sport: text("sport").notNull(),
+  /** Event as the Team competes in it, e.g. "Team Pursuit Women", "Men". */
+  event: text("event").notNull(),
+  /** "default" | "partnership" (TeamKind). */
+  kind: text("kind").notNull(),
+  /** YYYY-MM-DD the partnership dissolved (its "retirement"); null while it stands. */
+  dissolvedOn: text("dissolved_on"),
+  /** The raw copy this Team was first seen in; null when entered by hand. */
+  rawCopyId: text("raw_copy_id").references(() => rawCopy.id),
+});
+
+/**
+ * A Team's roster at one competition (GLOSSARY "Roster"): whoever the official
+ * result or squad list credits. A member is an Athlete, or a merge-queue item
+ * while that identity is unresolved.
+ */
+export const rosterMember = sqliteTable(
+  "roster_member",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    teamId: text("team_id")
+      .notNull()
+      .references(() => team.id),
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id),
+    athleteId: text("athlete_id").references(() => athlete.id),
+    mergeQueueItemId: text("merge_queue_item_id").references(() => mergeQueueItem.id),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+  },
+  (t) => [
+    uniqueIndex("roster_member_athlete").on(t.teamId, t.competitionId, t.athleteId),
+    uniqueIndex("roster_member_merge_queue_item").on(t.teamId, t.competitionId, t.mergeQueueItemId),
+  ],
+);
+
+/**
+ * A Belgian result in one event of a competition (spec #20, Data model). It
+ * belongs to an Entry, an Athlete or a Team (ADR 0001), or to a merge-queue
+ * item while an Athlete's identity is unresolved.
  */
 export const result = sqliteTable(
   "result",
@@ -271,6 +324,8 @@ export const result = sqliteTable(
       .references(() => competition.id),
     athleteId: text("athlete_id").references(() => athlete.id),
     mergeQueueItemId: text("merge_queue_item_id").references(() => mergeQueueItem.id),
+    /** Set for a Team's result; its members are the Team's roster at this competition. */
+    teamId: text("team_id").references(() => team.id),
     /** Event as the source titles it, e.g. "1000m Women". */
     event: text("event").notNull(),
     /**

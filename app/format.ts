@@ -39,6 +39,12 @@ export function placeText(place: number | null, status: string) {
   return `${place}${suffix}`;
 }
 
+/** "Medals: 1 gold · 2 bronze"; null when there are none. */
+export function medalsText(m: { gold: number; silver: number; bronze: number }) {
+  const parts = (["gold", "silver", "bronze"] as const).filter((c) => m[c] > 0).map((c) => `${m[c]} ${c}`);
+  return parts.length > 0 ? `Medals: ${parts.join(" · ")}` : null;
+}
+
 /** "22 Nov", "20–22 Nov", "28 Nov–6 Dec" for a competition's days. */
 export function formatDayRange(start: string, end: string) {
   if (start === end) return formatDay(start);

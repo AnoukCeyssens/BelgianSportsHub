@@ -10,9 +10,12 @@
 //    to two weeks ahead: one request per 100 events;
 // 2. for each qualification-relevant one (the Games, World Championships and
 //    Championship Series, World Cups, continental championships), its programs;
-// 3. the results of each Elite Men / Elite Women race held since the window
-//    start, Belgian rows only; the start list of each such race still to come.
-// Mixed relays wait for Teams (#27); rankings wait for rankings ingest (#33).
+// 3. the results of each Elite Men / Elite Women race and each senior relay
+//    held since the window start, Belgian rows only; the start list of each
+//    individual race still to come.
+// Senior relays (mixed relay) go to Belgium's relay Team (ADR 0001), with the
+// team members the result credits as its roster. Rankings wait for rankings
+// ingest (#33).
 // The API gives only a year of birth, so a Belgian not yet known by World
 // Triathlon ID waits in the merge queue.
 import { SourceBlocked, type CompetitionKind, type Person, type ResultStatus, type SourceAdapter, type SourceRun } from "../source-adapter";
@@ -26,6 +29,7 @@ const FIRST_RUN_LOOKBACK_DAYS = 365;
 const LOOKBACK_DAYS = 7;
 const ENTRY_LIST_HORIZON_DAYS = 14;
 const ELITE_RACES = new Set(["Elite Men", "Elite Women"]);
+const RELAY = /Relay/i;
 
 /** Event categories of qualification-relevant senior competitions, by World Triathlon's category name. */
 const RELEVANT_CATEGORY = /World Championships|World Triathlon (Championship )?Series|World Cup|Continental Championship|Major Games|Olympic/i;
@@ -46,6 +50,13 @@ type EventPage = { current_page: number; last_page: number; data: TriEvent[] };
 type Program = { prog_id: number; prog_name: string; prog_date: string; results: boolean; team: boolean };
 type TriAthlete = { athlete_id: number; athlete_title: string; athlete_noc: string };
 type TriResult = TriAthlete & { result_id: number; position: number | string | null; total_time: string | null };
+type TriTeamResult = {
+  team_noc: string;
+  team_members: TriAthlete[];
+  result_id: number;
+  position: number | string | null;
+  total_time: string | null;
+};
 
 export const worldTriathlon: SourceAdapter = {
   async run(run) {
@@ -78,8 +89,16 @@ export const worldTriathlon: SourceAdapter = {
 
       const programs = await get<Program[]>(`${API}/events/${event.event_id}/programs?is_race=true`);
       for (const program of programs.body.data) {
-        if (program.team || !ELITE_RACES.has(program.prog_name)) continue;
         const race = `${API}/events/${event.event_id}/programs/${program.prog_id}`;
+        if (program.team) {
+          if (!RELAY.test(program.prog_name) || NOT_SENIOR.test(program.prog_name)) continue;
+          if (program.results && program.prog_date >= from && program.prog_date <= today) {
+            const results = await get<{ results: TriTeamResult[] }>(`${race}/results`);
+            await writeTeamResults(run, competitionId, program, results.body.data.results, results.rawCopyId);
+          }
+          continue;
+        }
+        if (!ELITE_RACES.has(program.prog_name)) continue;
         if (program.results && program.prog_date >= from && program.prog_date <= today) {
           const results = await get<{ results: TriResult[] }>(`${race}/results`);
           await writeResults(run, competitionId, program, results.body.data.results, results.rawCopyId);
@@ -123,6 +142,26 @@ async function writeResults(run: SourceRun, competitionId: string, program: Prog
       performance: status === "finished" ? r.total_time : null,
       sourceRef: String(r.result_id),
       rawCopyId,
+    });
+  }
+}
+
+async function writeTeamResults(run: SourceRun, competitionId: string, program: Program, results: TriTeamResult[], rawCopyId: string) {
+  for (const r of results) {
+    if (r.team_noc !== "BEL") continue;
+    const status = resultStatus(r.position);
+    if (!status) continue;
+    await run.rows.teamResult({
+      competitionId,
+      nationality: r.team_noc,
+      event: program.prog_name,
+      date: program.prog_date,
+      place: typeof r.position === "number" ? r.position : null,
+      status,
+      performance: status === "finished" ? r.total_time : null,
+      sourceRef: String(r.result_id),
+      rawCopyId,
+      roster: r.team_members.map(person),
     });
   }
 }
