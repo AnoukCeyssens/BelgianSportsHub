@@ -60,7 +60,7 @@ describe("World Triathlon source", () => {
     const source = await sourceRow();
     expect(source.blockedAt).toBe(TRIATHLON_WORLD_CUP_RUN.now);
     expect(source.blockedReason).toContain("WORLD_TRIATHLON_API_KEY");
-    expect(await (await get("/curate/sources")).text()).toMatch(/World Triathlon.*?Assisted.*?blocked/s);
+    expect(await (await get("/curate/run/source-health")).text()).toMatch(/World Triathlon.*?Assisted.*?blocked/s);
   });
 
   it("is flagged blocked when api.triathlon.org refuses the key", async () => {

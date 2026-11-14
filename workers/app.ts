@@ -3,6 +3,7 @@ import { runWeeklyBackup, WEEKLY_BACKUP_CRON } from "~/backup/weekly-backup";
 import { cloudflareContext } from "~/context";
 import { consumeIngestBatch, type IngestJob } from "~/ingest/queue";
 import { queueDueSources } from "~/ingest/source-run";
+import { refuseNonOwnerCuration } from "~/owner";
 
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
 
@@ -12,6 +13,8 @@ const requestHandler = createRequestHandler(() => import("virtual:react-router/s
 // message (queue).
 export default {
   async fetch(request, env, ctx) {
+    const refused = refuseNonOwnerCuration(request, env);
+    if (refused) return refused;
     const context = new RouterContextProvider();
     context.set(cloudflareContext, { env, ctx });
     return requestHandler(request, context);

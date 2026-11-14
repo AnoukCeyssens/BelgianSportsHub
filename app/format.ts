@@ -21,6 +21,16 @@ export function formatInstant(iso: string | null) {
   return `${formatDate(iso.slice(0, 10))}, ${iso.slice(11, 16)} UTC`;
 }
 
+/** "13:00": the Belgian wall-clock time of an ISO instant. */
+export function formatBelgianClock(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" });
+}
+
+/** "7 min", "1 h 05". */
+export function formatMinutes(minutes: number) {
+  return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}` : `${minutes} min`;
+}
+
 /** "17th"; a result without a place shows its status (DNF, DSQ). */
 export function placeText(place: number | null, status: string) {
   if (place === null) return status;

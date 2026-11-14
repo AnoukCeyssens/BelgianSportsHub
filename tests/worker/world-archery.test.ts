@@ -93,7 +93,7 @@ describe("World Archery source", () => {
   it("sends Belgians it cannot match to the merge queue with their World Archery ID", async () => {
     await firstRun();
 
-    const queue = await (await get("/curate/merge-queue")).text();
+    const queue = await (await get("/curate/run/merge-queue")).text();
     expect(queue).toContain("Feel Stinkens");
     expect(queue).toContain("45057");
     // Para and youth archers are not senior Olympic-category entrants.
@@ -148,6 +148,6 @@ describe("World Archery source", () => {
     expect(result.explicitAcks).toEqual(["msg-1"]);
     const source = await sourceRow();
     expect(source.blockedAt).toBe(ARCHERY_FIRST_RUN.now);
-    expect(await (await get("/curate/sources")).text()).toMatch(/World Archery.*?Assisted.*?blocked/s);
+    expect(await (await get("/curate/run/source-health")).text()).toMatch(/World Archery.*?Assisted.*?blocked/s);
   });
 });

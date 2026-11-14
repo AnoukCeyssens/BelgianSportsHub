@@ -22,6 +22,11 @@ export type SourceRun = {
    */
   fetch(url: string, init?: FetchInit): Promise<Fetched>;
   /**
+   * Like fetch, for large or binary payloads (FIS ZIPs): the body goes to R2
+   * as a stream and is read back as one, so it is never held in memory whole.
+   */
+  fetchStream(url: string): Promise<FetchedStream>;
+  /**
    * A credential the owner set as a Worker secret (e.g. World Triathlon's API
    * key), or undefined when it is not set. Send it in a header, never in the
    * URL: URLs are kept with every raw copy.
@@ -37,6 +42,13 @@ export type FetchInit = {
 
 export type Fetched = {
   text: string;
+  /** The raw copy every row parsed from this body must carry. */
+  rawCopyId: string;
+};
+
+export type FetchedStream = {
+  /** The body as received, read back from its raw copy. */
+  body: ReadableStream<Uint8Array>;
   /** The raw copy every row parsed from this body must carry. */
   rawCopyId: string;
 };

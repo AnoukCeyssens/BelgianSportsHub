@@ -1,6 +1,6 @@
 import { now } from "~/clock";
 import { getDb, schema } from "~/db/client";
-import { SourceBlocked, type Fetched, type FetchInit } from "./source-adapter";
+import { SourceBlocked, type Fetched, type FetchedStream, type FetchInit } from "./source-adapter";
 
 export type RawInput = {
   source: string;
@@ -15,6 +15,10 @@ export type RawInput = {
  * raw_copy row that every row produced from it references. Returns that row's id.
  */
 export async function keepRawCopy(env: Pick<Env, "DB" | "RAW">, input: RawInput): Promise<string> {
+  return (await keep(env, input)).id;
+}
+
+async function keep(env: Pick<Env, "DB" | "RAW">, input: RawInput): Promise<{ id: string; r2Key: string }> {
   const fetchedAt = input.fetchedAt.toISOString();
   // One job can fetch several inputs from one source within the same instant
   // (a seed run reads a sitemap and many profiles), so the key carries an id too.
@@ -27,7 +31,7 @@ export async function keepRawCopy(env: Pick<Env, "DB" | "RAW">, input: RawInput)
   await getDb(env.DB)
     .insert(schema.rawCopy)
     .values({ id, source: input.source, url: input.url, r2Key, contentType: input.contentType, fetchedAt });
-  return id;
+  return { id, r2Key };
 }
 
 const USER_AGENT = "BelgianSportsHub (private, low-volume)";
@@ -46,11 +50,7 @@ export async function fetchAndKeep(
   url: string,
   init: FetchInit = {},
 ): Promise<Fetched> {
-  const res = await fetch(url, { headers: { ...init.headers, "user-agent": USER_AGENT } });
-  if (REFUSAL_STATUSES.has(res.status) || res.headers.get("cf-mitigated") === "challenge") {
-    throw new SourceBlocked(`${url} refused the Worker (${res.status})`);
-  }
-  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
+  const res = await politeFetch(url, init);
   const body = await res.arrayBuffer();
   const rawCopyId = await keepRawCopy(env, {
     source,
@@ -60,4 +60,32 @@ export async function fetchAndKeep(
     fetchedAt: now(),
   });
   return { rawCopyId, text: new TextDecoder().decode(body) };
+}
+
+/**
+ * fetchAndKeep for large or binary payloads: streams the body straight into
+ * R2 (when the source states its length, as downloads do) and hands it back as
+ * a stream read from R2, so a job never holds it whole (128 MB limit).
+ */
+export async function fetchStreamAndKeep(env: Pick<Env, "DB" | "RAW">, source: string, url: string): Promise<FetchedStream> {
+  const res = await politeFetch(url);
+  // R2 takes a stream only when its length is known; otherwise buffer it once.
+  const body = res.body && res.headers.has("content-length") ? res.body : await res.arrayBuffer();
+  const kept = await keep(env, { source, url, body, contentType: res.headers.get("content-type"), fetchedAt: now() });
+  const object = await env.RAW.get(kept.r2Key);
+  if (!object) throw new Error(`Raw copy of ${url} missing from R2`);
+  return { rawCopyId: kept.id, body: object.body };
+}
+
+async function politeFetch(url: string, init: FetchInit = {}): Promise<Response> {
+  const res = await fetch(url, { headers: { ...init.headers, "user-agent": USER_AGENT } });
+  if (REFUSAL_STATUSES.has(res.status) || res.headers.get("cf-mitigated") === "challenge") {
+    await res.body?.cancel();
+    throw new SourceBlocked(`${url} refused the Worker (${res.status})`);
+  }
+  if (!res.ok) {
+    await res.body?.cancel();
+    throw new Error(`${url} answered ${res.status}`);
+  }
+  return res;
 }

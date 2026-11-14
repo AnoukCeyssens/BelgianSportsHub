@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { offlineReading } from "~/domain";
+import { isCurationPath, offlineReading } from "~/domain";
 
 // Spec #20, story 117: recently viewed reader pages read offline; curation
 // works online only. React Router fetches a page's data from "<path>.data"
@@ -19,5 +19,21 @@ describe("offlineReading", () => {
     { name: "a reader page that merely starts with the same letters", path: "/curated-picks", expected: "reader" },
   ])("$name", ({ path, expected }) => {
     expect(offlineReading(path)).toBe(expected);
+  });
+});
+
+// Spec #20, story 98 and ticket #24: curation routes are owner-only, however
+// the path is spelled (route matching ignores case and decodes the path).
+describe("isCurationPath", () => {
+  it.each([
+    { name: "the Run sheet", path: "/curate/run/source-health", expected: true },
+    { name: "the curation area's own data request", path: "/curate.data", expected: true },
+    { name: "upper case", path: "/CURATE/run/merge-queue", expected: true },
+    { name: "percent-encoded letters", path: "/%63urate/roster-seed", expected: true },
+    { name: "doubled slashes", path: "//curate//roster-seed", expected: true },
+    { name: "a reader page", path: "/athletes/0b6c", expected: false },
+    { name: "a reader page that merely starts with the same letters", path: "/curated-picks", expected: false },
+  ])("$name", ({ path, expected }) => {
+    expect(isCurationPath(path)).toBe(expected);
   });
 });

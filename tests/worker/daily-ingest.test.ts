@@ -28,16 +28,13 @@ describe("daily ingest cron", () => {
 
     const queued = await runScheduled(DAILY_INGEST_CRON, "2026-11-16T04:00:00.000Z");
 
-    // Other Automatic sources from the migrations (never fetched yet, so due) are queued too.
-    expect(queued).toEqual(
-      expect.arrayContaining([
-        { kind: "fetch-source", source: "isu-speed-skating" },
-        { kind: "fetch-source", source: "weekly-due" },
-      ]),
-    );
-    for (const source of ["weekly-not-due", "blocked", "pasted"]) {
-      expect(queued).not.toContainEqual({ kind: "fetch-source", source });
-    }
+    // Other Automatic sources from the migrations (never fetched here, so due) are queued too.
+    const sources = queued.map((job) => job.kind === "fetch-source" && job.source);
+    expect(sources).toContain("isu-speed-skating");
+    expect(sources).toContain("weekly-due");
+    expect(sources).not.toContain("weekly-not-due");
+    expect(sources).not.toContain("blocked");
+    expect(sources).not.toContain("pasted");
   });
 
   it("lets the owner fetch a source now, which clears a block and runs it", async () => {
@@ -48,15 +45,15 @@ describe("daily ingest cron", () => {
     });
     fixClock(ISU_WORLD_CUP_1_RUN.now);
     stubOutboundFetch(isuWorldCup1Run);
-    expect(await (await get("/curate/sources")).text()).toContain("Fetch now");
+    expect(await (await get("/curate/run/source-health")).text()).toContain("Fetch now");
 
-    const res = await post("/curate/sources", { source: "isu-speed-skating" });
+    const res = await post("/curate/run/source-health", { intent: "retry", source: "isu-speed-skating" });
 
     expect(res.status).toBe(303);
     // Through the real local queue, so wait for the consumer to finish.
     await vi.waitFor(
       async () => {
-        const page = await (await get("/curate/sources")).text();
+        const page = await (await get("/curate/run/source-health")).text();
         // The ISU row: Automatic again, fetched just now, healthy.
         const row = page.match(/<tr><td>ISU speed skating.*?<\/tr>/s)?.[0] ?? "";
         expect(row).toContain("<td>Automatic</td>");
