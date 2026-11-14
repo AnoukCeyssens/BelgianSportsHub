@@ -197,6 +197,20 @@
       "when": 1794673484253,
       "tag": "0027_curated_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1794674869113,
+      "tag": "0028_games_results_on_owner_row",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1794674869686,
+      "tag": "0029_uci_derived_ids",
+      "breakpoints": true
     }
   ]
 }

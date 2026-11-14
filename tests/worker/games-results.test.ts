@@ -81,6 +81,7 @@ describe("Games results from automatic sources", () => {
     fixClock("2028-08-01T12:00:00.000Z");
     const after = await page(`/games/${la}`);
     expect(rows(after, "Best results")).toEqual(["B Ana Example Women's 50m Freestyle 23.44"]);
-    expect(rows(after, "Medals and top 8")[0]).toBe("Belgium 1 1");
+    // Belgium's own counts take every Belgian result there: the bronze, and the duet's 5th (no Entry recorded).
+    expect(rows(after, "Medals and top 8")[0]).toBe("Belgium 1 2");
   });
 });
