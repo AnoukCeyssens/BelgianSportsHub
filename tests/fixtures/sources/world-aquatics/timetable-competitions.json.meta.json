@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldaquatics.com/fina/competitions?pageSize=100&venueDateFrom=2026-11-14T00:00:00%2B00:00&venueDateTo=2027-12-19T23:59:59%2B00:00&group=FINA&sort=dateFrom,asc",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T14:41:02.581Z",
+  "trimmedByHand": "Kept the high diving World Cup (first), the two World Championships, the masters and a U20 water polo championships; pageInfo left as recorded."
+}

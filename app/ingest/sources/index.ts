@@ -9,6 +9,7 @@ import { ijfJudo } from "./ijf-judo";
 import { isuSpeedSkating } from "./isu-speed-skating";
 import { uciCycling } from "./uci-cycling";
 import { worldAquatics } from "./world-aquatics";
+import { worldAquaticsTimetables } from "./world-aquatics-timetables";
 import { worldArchery } from "./world-archery";
 import { worldAthletics } from "./world-athletics";
 import { worldAthleticsTimetables } from "./world-athletics-timetables";
@@ -29,6 +30,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   "world-athletics": worldAthletics,
   "world-athletics-timetables": worldAthleticsTimetables,
   "world-aquatics": worldAquatics,
+  "world-aquatics-timetables": worldAquaticsTimetables,
   "fie-fencing": fieFencing,
   "world-rowing": worldRowing,
   "uci-cycling": uciCycling,

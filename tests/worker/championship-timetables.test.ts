@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { ISU_WORLDS_2026_RUN, isuWorlds2026Run } from "../fixtures/sources/isu-speed-skating";
+import { AQUATICS_TIMETABLE_RUN, aquaticsTimetableRun } from "../fixtures/sources/world-aquatics";
 import { WA_TIMETABLE_RUN, waTimetableRun } from "../fixtures/sources/world-athletics";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch, type RecordedResponse } from "../support/outbound-fetch";
@@ -164,5 +165,46 @@ describe("World Athletics timetables", () => {
     fixClock("2027-09-10T14:00:00.000Z"); // 22:00 in Beijing on day 1
     expect(dayRows(await page(`/championship/${beijing}`))).toEqual(["13:02 · 19:02 Beijing Belgium mixed relay Mixed 4x400m Relay · Round 1"]);
     expect(dayRows(await page(`/championship/${beijing}?day=2027-09-18`))[0]).toBe("03:05 · 09:05 Beijing Nafissatou Thiam Women's Heptathlon · 100 Metres Hurdles");
+  });
+});
+
+describe("World Aquatics timetables", () => {
+  const SOURCE = "world-aquatics-timetables";
+  let beijing: string;
+
+  beforeEach(async () => {
+    await clearIngestedData(env);
+    beijing = await seedCompetition(env.DB, {
+      name: "World Aquatics Swimming Championships (25m) 2026",
+      sport: "Aquatics",
+      source: "world-aquatics",
+      sourceRef: "5052",
+      kind: "championship",
+      startDate: "2026-12-01",
+      endDate: "2026-12-06",
+      city: "Beijing",
+    });
+    const roos = await seedAthlete(env.DB, { name: "Roos Vanotterdijk", sport: "Aquatics" });
+    // Named as the World Aquatics results source names short-course events.
+    await seedEntry(env.DB, { competitionId: beijing, sport: "Aquatics", event: "Women's 50m Freestyle (25m)", athleteId: roos });
+  });
+
+  it("fetches the short-course Worlds' schedule, and none for Worlds without one yet", async () => {
+    await runSource(SOURCE, AQUATICS_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", aquaticsTimetableRun);
+
+    expect(await storedTimetables()).toEqual(["World Aquatics Swimming Championships (25m) 2026 · fetched 2026-11-14 3 Sessions source Name Entries"]);
+    const budapest = await competitionBy("world-aquatics", "5546");
+    expect(budapest.kind).toBe("championship");
+    expect(await getDb(env.DB).select().from(schema.timetableVersion).where(eq(schema.timetableVersion.competitionId, budapest.id))).toEqual([]);
+  });
+
+  it("places the Belgian in her heats, then the later rounds if through", async () => {
+    await runSource(SOURCE, AQUATICS_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", aquaticsTimetableRun);
+
+    fixClock("2026-12-05T12:00:00.000Z"); // 20:00 in Beijing
+    expect(dayRows(await page(`/championship/${beijing}`))).toEqual([
+      "03:00 · 10:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Heats",
+      "12:00 · 19:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Semifinal if through [greyed]",
+    ]);
   });
 });
