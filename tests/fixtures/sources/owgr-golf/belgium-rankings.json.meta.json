@@ -1,0 +1,6 @@
+{
+  "url": "https://apiweb.owgr.com/api/owgr/rankings/getRankings?pageSize=200&pageNumber=1&regionId=0&countryId=21&sortString=Rank+ASC",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T14:55:45.978Z"
+}

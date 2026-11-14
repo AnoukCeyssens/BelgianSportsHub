@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { FIS_ALPINE_RUN, FIS_SNOWBOARD_RUN, fisAlpineRun, fisSnowboardRun } from "../fixtures/sources/fis-points-lists";
 import { ARCHERY_FIRST_RUN, ARCHERY_JULY_2026_RUN, archeryFirstRun, archeryJuly2026Run } from "../fixtures/sources/world-archery";
+import { OWGR_RUN, owgrRun } from "../fixtures/sources/owgr-golf";
 import { ISU_TEAM_PURSUIT_RUN, ISU_WORLD_CUP_1_RUN, isuTeamPursuitRun, isuWorldCup1Run } from "../fixtures/sources/isu-speed-skating";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
@@ -421,5 +422,37 @@ describe("Rankings ingest (World Archery world rankings)", () => {
 
     expect(result.explicitAcks).toEqual(["msg-1"]);
     expect(await snapshots()).toEqual([]);
+  });
+});
+
+describe("Rankings ingest (OWGR golf, a ranking-only source)", () => {
+  beforeEach(async () => {
+    await clearIngestedData(env);
+  });
+
+  it("stores the Official World Golf Ranking of each Belgian known as an Athlete, remembering the OWGR ID", async () => {
+    // Matched on name + date of birth; Pieters by his OWGR ID; amateurs and unknown golfers are left out.
+    const detry = await seedAthlete(env.DB, { name: "Thomas Detry", sport: "Golf", dateOfBirth: "1993-01-13" });
+    await seedAthlete(env.DB, { name: "Thomas Pieters", sport: "Golf", externalIds: [{ scheme: "owgr", value: "13944" }] });
+    await seedAthlete(env.DB, { name: "Arthur Haghedooren", sport: "Golf", dateOfBirth: "2009-07-04" });
+    await setSource(env.DB, "owgr-golf", { lastSuccessAt: null, blockedAt: null, blockedReason: null });
+    fixClock(OWGR_RUN.now);
+    stubOutboundFetch(owgrRun);
+
+    const result = await deliverIngestJobs([{ kind: "fetch-source", source: "owgr-golf" }]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    expect((await snapshots()).map(({ who, ranking, position, points, asOf }) => `${who}: ${ranking} #${position} (${points}) ${asOf}`).toSorted()).toEqual([
+      "Thomas Detry: Official World Golf Ranking #93 (1.3645) 2026-11-14",
+      "Thomas Pieters: Official World Golf Ranking #292 (0.5479) 2026-11-14",
+    ]);
+    const ids = await getDb(env.DB).select().from(schema.athleteExternalId).where(eq(schema.athleteExternalId.athleteId, detry));
+    expect(ids.map((i) => `${i.scheme}:${i.value}`)).toEqual(["owgr:14181"]);
+    const source = (await getDb(env.DB).query.source.findFirst({ where: eq(schema.source.key, "owgr-golf") }))!;
+    expect({ tier: source.tier, cadenceDays: source.cadenceDays, lastChangeAt: source.lastChangeAt }).toEqual({
+      tier: "automatic",
+      cadenceDays: 7,
+      lastChangeAt: OWGR_RUN.now,
+    });
   });
 });
