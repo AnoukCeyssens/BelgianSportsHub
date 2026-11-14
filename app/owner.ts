@@ -15,7 +15,8 @@ export function refuseNonOwnerCuration(request: Request, env: Pick<Env, "APP_ENV
   return new Response("Curation is for the owner only.", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
 
-function isOwner(request: Request, env: Pick<Env, "APP_ENV" | "OWNER_EMAIL">) {
+/** Whether the request comes from the owner (e.g. to offer a reader page's curation link). */
+export function isOwner(request: Request, env: Pick<Env, "APP_ENV" | "OWNER_EMAIL">) {
   const owner = env.OWNER_EMAIL?.trim().toLowerCase();
   if (!owner) return false;
   const email = request.headers.get(ACCESS_EMAIL_HEADER)?.trim().toLowerCase();

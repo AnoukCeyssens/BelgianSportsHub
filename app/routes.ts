@@ -7,10 +7,12 @@ export default [
   route("calendar", "routes/calendar.tsx"),
   route("ical/:file", "routes/ical.tsx"),
   route("championship", "routes/championship.tsx"),
+  route("championship/:competitionId", "routes/championship.$competitionId.tsx"),
   route("games", "routes/games.tsx"),
   route("curate", "routes/curate._index.tsx"),
   route("curate/run/:step", "routes/curate.run.tsx"),
   route("curate/roster-seed", "routes/curate.roster-seed.tsx"),
   route("curate/sources", "routes/curate.sources.tsx"),
   route("curate/merge-queue", "routes/curate.merge-queue.tsx"),
+  route("curate/championships/:competitionId/standards", "routes/curate.championship-standards.tsx"),
 ] satisfies RouteConfig;
