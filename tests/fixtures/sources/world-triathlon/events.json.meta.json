@@ -1,0 +1,6 @@
+{
+  "url": "https://api.triathlon.org/v1/events?start_date=2026-11-06&end_date=2026-11-28&per_page=100&order=asc",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "builtFromDocumentation": "Built by hand in the shape of the response examples at developers.triathlon.org (Event Listings, Program Listings, Program Results, Program Entries); not a recorded payload: no API key was available when the adapter was written (#42). Event, program, result and athlete IDs and names are made up. Replace with a recorded run once the key is set."
+}

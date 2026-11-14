@@ -1,0 +1,108 @@
+{
+  "code": 200,
+  "status": "success",
+  "data": {
+    "prog_id": 290001,
+    "event_id": 190001,
+    "prog_name": "Elite Men",
+    "prog_date": "2026-11-08",
+    "prog_time": "10:00:00",
+    "results": [
+      {
+        "athlete_id": 390001,
+        "athlete_title": "Tom Exemplar",
+        "athlete_slug": "tom_exemplar",
+        "athlete_first": "Tom",
+        "athlete_last": "Exemplar",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "1998",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "GBR",
+        "athlete_country_name": "",
+        "athlete_country_isoa2": "GB",
+        "athlete_categories": [
+          42
+        ],
+        "splits": [],
+        "result_id": 490001,
+        "position": 1,
+        "total_time": "00:51:02",
+        "start_num": 1
+      },
+      {
+        "athlete_id": 390002,
+        "athlete_title": "Jules Voorbeeld",
+        "athlete_slug": "jules_voorbeeld",
+        "athlete_first": "Jules",
+        "athlete_last": "Voorbeeld",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "1998",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "BEL",
+        "athlete_country_name": "",
+        "athlete_country_isoa2": "BE",
+        "athlete_categories": [
+          42
+        ],
+        "splits": [],
+        "result_id": 490002,
+        "position": 14,
+        "total_time": "00:52:10",
+        "start_num": 1
+      },
+      {
+        "athlete_id": 390003,
+        "athlete_title": "Arno Specimen",
+        "athlete_slug": "arno_specimen",
+        "athlete_first": "Arno",
+        "athlete_last": "Specimen",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "1998",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "BEL",
+        "athlete_country_name": "",
+        "athlete_country_isoa2": "BE",
+        "athlete_categories": [
+          42
+        ],
+        "splits": [],
+        "result_id": 490003,
+        "position": "DNF",
+        "total_time": null,
+        "start_num": 1
+      },
+      {
+        "athlete_id": 390004,
+        "athlete_title": "Noah Absent",
+        "athlete_slug": "noah_absent",
+        "athlete_first": "Noah",
+        "athlete_last": "Absent",
+        "athlete_country_id": 0,
+        "athlete_gender": "male",
+        "athlete_yob": "1998",
+        "validated": false,
+        "athlete_profile_image": null,
+        "athlete_noc": "BEL",
+        "athlete_country_name": "",
+        "athlete_country_isoa2": "BE",
+        "athlete_categories": [
+          42
+        ],
+        "splits": [],
+        "result_id": 490004,
+        "position": "DNS",
+        "total_time": null,
+        "start_num": 1
+      }
+    ],
+    "team": false,
+    "headers": [],
+    "headers_count": 0
+  }
+}

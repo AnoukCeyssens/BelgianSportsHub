@@ -1,0 +1,7 @@
+{
+  "url": "https://www.fivb.org/Vis2009/XmlRequest.asmx?Request=%3CRequest%20Type%3D%22GetVolleyTournamentList%22%20Fields%3D%22No%20Code%20Name%20Type%20Gender%20StartDate%20EndDate%20CountryCode%20Status%22%3E%3CFilter%20FirstDate%3D%222026-09-06%22%2F%3E%3C%2FRequest%3E",
+  "status": 200,
+  "contentType": "application/xml",
+  "recordedAt": "2026-11-14T12:04:22.832Z",
+  "trimmedByHand": "Kept 8 of the 52 tournaments: both EuroVolley draws, the NORCECA men championship, a test tournament, the 2027 World Cup (men), VNL 2027 (men), a national league and an age-group championship."
+}

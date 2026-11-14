@@ -20,8 +20,19 @@ export type SourceRun = {
    * Throws SourceBlocked when the source refuses the Worker, and a plain
    * error for anything else that is not 2xx (the job is then retried).
    */
-  fetch(url: string): Promise<Fetched>;
+  fetch(url: string, init?: FetchInit): Promise<Fetched>;
+  /**
+   * A credential the owner set as a Worker secret (e.g. World Triathlon's API
+   * key), or undefined when it is not set. Send it in a header, never in the
+   * URL: URLs are kept with every raw copy.
+   */
+  secret(name: string): string | undefined;
   rows: BelgianRows;
+};
+
+export type FetchInit = {
+  /** Extra request headers, e.g. an API key. They are not kept with the raw copy. */
+  headers?: Record<string, string>;
 };
 
 export type Fetched = {

@@ -1,6 +1,6 @@
 import { now } from "~/clock";
 import { getDb, schema } from "~/db/client";
-import { SourceBlocked, type Fetched } from "./source-adapter";
+import { SourceBlocked, type Fetched, type FetchInit } from "./source-adapter";
 
 export type RawInput = {
   source: string;
@@ -40,8 +40,13 @@ const REFUSAL_STATUSES = new Set([401, 403, 451]);
  * SourceBlocked when the source refuses the Worker (401, 403, 451 or a bot
  * challenge), and a plain error on any other non-2xx answer (the job retries).
  */
-export async function fetchAndKeep(env: Pick<Env, "DB" | "RAW">, source: string, url: string): Promise<Fetched> {
-  const res = await fetch(url, { headers: { "user-agent": USER_AGENT } });
+export async function fetchAndKeep(
+  env: Pick<Env, "DB" | "RAW">,
+  source: string,
+  url: string,
+  init: FetchInit = {},
+): Promise<Fetched> {
+  const res = await fetch(url, { headers: { ...init.headers, "user-agent": USER_AGENT } });
   if (REFUSAL_STATUSES.has(res.status) || res.headers.get("cf-mitigated") === "challenge") {
     throw new SourceBlocked(`${url} refused the Worker (${res.status})`);
   }

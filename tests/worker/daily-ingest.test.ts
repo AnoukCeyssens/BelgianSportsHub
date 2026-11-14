@@ -28,10 +28,16 @@ describe("daily ingest cron", () => {
 
     const queued = await runScheduled(DAILY_INGEST_CRON, "2026-11-16T04:00:00.000Z");
 
-    expect(queued).toEqual([
-      { kind: "fetch-source", source: "isu-speed-skating" },
-      { kind: "fetch-source", source: "weekly-due" },
-    ]);
+    // Other Automatic sources from the migrations (never fetched yet, so due) are queued too.
+    expect(queued).toEqual(
+      expect.arrayContaining([
+        { kind: "fetch-source", source: "isu-speed-skating" },
+        { kind: "fetch-source", source: "weekly-due" },
+      ]),
+    );
+    for (const source of ["weekly-not-due", "blocked", "pasted"]) {
+      expect(queued).not.toContainEqual({ kind: "fetch-source", source });
+    }
   });
 
   it("lets the owner fetch a source now, which clears a block and runs it", async () => {

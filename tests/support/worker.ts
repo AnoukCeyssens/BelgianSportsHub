@@ -14,14 +14,17 @@ export function post(path: string, form: Record<string, string> = {}) {
   return get(path, { method: "POST", body: new URLSearchParams(form) });
 }
 
-/** Deliver ingest jobs to the queue consumer; returns which messages were acked or retried. */
-export async function deliverIngestJobs(jobs: IngestJob[]) {
+/**
+ * Deliver ingest jobs to the queue consumer; returns which messages were acked
+ * or retried. `secrets` adds Worker secrets (e.g. a source's API key) for this delivery.
+ */
+export async function deliverIngestJobs(jobs: IngestJob[], secrets: Record<string, string> = {}) {
   const batch = createMessageBatch<IngestJob>(
     "bsh-ingest-dev",
     jobs.map((body, i) => ({ id: `msg-${i + 1}`, timestamp: new Date(), attempts: 1, body })),
   );
   const ctx = createExecutionContext();
-  await worker.queue(batch, env, ctx);
+  await worker.queue(batch, { ...env, ...secrets }, ctx);
   await waitOnExecutionContext(ctx);
   return getQueueResult(batch, ctx);
 }

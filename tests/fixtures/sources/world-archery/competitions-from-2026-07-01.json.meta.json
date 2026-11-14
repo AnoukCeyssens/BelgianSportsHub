@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldarchery.org/v3/COMPETITIONS/?DisciplineId=1&StartDate=2026-07-01&EndDate=2026-07-15&RBP=All",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:03:27.619Z",
+  "trimmedByHand": "Kept the 5 international competitions and 2 of the 45 national ones."
+}
