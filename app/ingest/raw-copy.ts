@@ -8,6 +8,8 @@ export type RawInput = {
   body: ReadableStream | ArrayBuffer | string;
   contentType: string | null;
   fetchedAt: Date;
+  /** The request body, when the input was asked for with a POST: kept next to it, so the raw copy says exactly what was asked. */
+  request?: { method: "POST"; contentType: string; body: string };
 };
 
 /**
@@ -24,9 +26,16 @@ async function keep(env: Pick<Env, "DB" | "RAW">, input: RawInput): Promise<{ id
   // (a seed run reads a sitemap and many profiles), so the key carries an id too.
   const id = crypto.randomUUID();
   const r2Key = `raw/${input.source}/${fetchedAt}/${id}`;
+  const request: Record<string, string> = input.request ? { method: input.request.method, requestKey: `${r2Key}.request` } : {};
+  if (input.request) {
+    await env.RAW.put(`${r2Key}.request`, input.request.body, {
+      httpMetadata: { contentType: input.request.contentType },
+      customMetadata: { url: input.url, fetchedAt, method: input.request.method },
+    });
+  }
   await env.RAW.put(r2Key, input.body, {
     httpMetadata: input.contentType ? { contentType: input.contentType } : undefined,
-    customMetadata: { url: input.url, fetchedAt },
+    customMetadata: { url: input.url, fetchedAt, ...request },
   });
   await getDb(env.DB)
     .insert(schema.rawCopy)
@@ -50,7 +59,8 @@ export async function fetchAndKeep(
   url: string,
   init: FetchInit = {},
 ): Promise<Fetched> {
-  const res = await politeFetch(url, init);
+  const request = init.form ? { method: "POST" as const, contentType: FORM, body: new URLSearchParams(init.form).toString() } : undefined;
+  const res = await politeFetch(url, init.headers, request);
   const body = await res.arrayBuffer();
   const rawCopyId = await keepRawCopy(env, {
     source,
@@ -58,6 +68,7 @@ export async function fetchAndKeep(
     body,
     contentType: res.headers.get("content-type"),
     fetchedAt: now(),
+    request,
   });
   return { rawCopyId, text: new TextDecoder().decode(body) };
 }
@@ -77,8 +88,15 @@ export async function fetchStreamAndKeep(env: Pick<Env, "DB" | "RAW">, source: s
   return { rawCopyId: kept.id, body: object.body };
 }
 
-async function politeFetch(url: string, init: FetchInit = {}): Promise<Response> {
-  const res = await fetch(url, { headers: { ...init.headers, "user-agent": USER_AGENT } });
+const FORM = "application/x-www-form-urlencoded";
+
+async function politeFetch(url: string, headers: Record<string, string> = {}, request?: RawInput["request"]): Promise<Response> {
+  const res = await fetch(
+    url,
+    request
+      ? { method: request.method, body: request.body, headers: { ...headers, "content-type": request.contentType, "user-agent": USER_AGENT } }
+      : { headers: { ...headers, "user-agent": USER_AGENT } },
+  );
   if (REFUSAL_STATUSES.has(res.status) || res.headers.get("cf-mitigated") === "challenge") {
     await res.body?.cancel();
     throw new SourceBlocked(`${url} refused the Worker (${res.status})`);

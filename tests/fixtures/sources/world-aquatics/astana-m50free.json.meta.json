@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldaquatics.com/fina/events/f0fc63a3-ad35-4f8d-8295-f68bc739b607",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T12:07:41.195Z",
+  "trimmedByHand": "Kept the final and the heats summary; dropped the individual heats."
+}
