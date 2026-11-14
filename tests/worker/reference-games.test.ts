@@ -5,6 +5,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedSource, seedTeamResult } from "../support/seed";
 import { get, post } from "../support/worker";
+import { labelled, region } from "../support/html";
 
 // Spec #20, story 119 and "Reference backfill"; ticket #46. Readers open
 // Paris 2024 and Milano-Cortina 2026 as read-only reference pages: Belgian
@@ -26,9 +27,9 @@ const page = async (path: string) => (await get(path)).text();
 
 /** The reference page's sports, each with its result lines as text. */
 function sports(html: string) {
-  return [...html.matchAll(/<section class="sport" aria-label="([^"]+)">(.*?)<\/section>/gs)].map((m) => ({
-    sport: m[1],
-    results: [...m[2].matchAll(/<tr>(.*?)<\/tr>/gs)].map((r) => text(r[1])),
+  return labelled(region(html, "Results by sport") ?? "", /[^"]+/, "section").map((s) => ({
+    sport: s.label!,
+    results: [...s.inner.matchAll(/<tr>(.*?)<\/tr>/gs)].map((r) => text(r[1])),
   }));
 }
 
@@ -56,7 +57,7 @@ describe("Reference Games", () => {
 
     expect(text(html)).toContain("Paris 2024");
     expect(text(html)).toContain("No Belgian results recorded yet.");
-    expect(html).not.toContain('class="phases"');
+    expect(region(html, "Phases")).toBeNull();
   });
 
   it("shows the Belgian results entered by hand, per sport, linked to their Athletes", async () => {
@@ -72,7 +73,7 @@ describe("Reference Games", () => {
     expect(html).toContain(`href="/athletes/${thiam}"`);
     expect(html).toContain(`href="/athletes/${nys}"`);
     // History only: no Phase bar, so no qualification, Selection or Expectations.
-    expect(html).not.toContain('class="phases"');
+    expect(region(html, "Phases")).toBeNull();
     expect(text(html)).not.toMatch(/Expectation|Qualification/);
   });
 

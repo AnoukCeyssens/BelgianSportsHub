@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntry, seedTimetable } from "../support/seed";
 import { get, post } from "../support/worker";
+import { region } from "../support/html";
 
 // Spec #20, stories 47, 49, 56, 58, 112 and 113; ticket #38. While any
 // competition with Belgian Entries is Live, the owner runs a four-step Live
@@ -21,7 +22,7 @@ function dayRows(html: string) {
   const start = html.indexOf('aria-label="Sessions"');
   if (start < 0) return [];
   const table = html.slice(start, html.indexOf("</table>", start));
-  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => `${text(m[2])}${/if-through/.test(m[1]) ? " [greyed]" : ""}`);
+  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => text(m[2]));
 }
 
 /** The medal table's rows, Belgium's marked. */
@@ -79,7 +80,7 @@ describe("Live day pass and medal table", () => {
   });
 
   it("has four steps: Today & tomorrow, Today's results, Merge queue and Source health", async () => {
-    const rail = text((await page(TODAY)).match(/<nav class="rail"[^>]*>(.*?)<\/nav>/s)![1]);
+    const rail = text(region(await page(TODAY), "Live day pass steps", "nav")!);
     expect(rail).toMatch(/^Live day pass (1|✓) Today & tomorrow .* (2|✓) Today's results .* (3|✓) Merge queue .* (4|✓) Source health /);
   });
 
@@ -132,7 +133,7 @@ describe("Live day pass and medal table", () => {
 
   it("moves a later round on once the Entry is through, and drops the rounds after it is out", async () => {
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-16`))).toEqual([
-      "12:00 Hanne Desmet Women's 500 m · Quarter-finals if through [greyed]",
+      "12:00 Hanne Desmet Women's 500 m · Quarter-finals if through",
     ]);
     const due = text(await page(RESULTS));
     expect(due).toContain("Hanne Desmet · Women's 500 m · Heats");
@@ -143,7 +144,7 @@ describe("Live day pass and medal table", () => {
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-16`))).toEqual(["12:00 Hanne Desmet Women's 500 m · Quarter-finals"]);
 
     await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: URL_ });
-    expect(dayRows(await page(`/championship/${europeans}?day=2027-01-17`))).toEqual(["15:00 Hanne Desmet Women's 500 m · Final if through [greyed]"]);
+    expect(dayRows(await page(`/championship/${europeans}?day=2027-01-17`))).toEqual(["15:00 Hanne Desmet Women's 500 m · Final if through"]);
     expect(text(await page(RESULTS))).not.toContain("Hanne Desmet · Women's");
     expect(text(await page(RESULTS))).toContain("Hanne Desmet: Women's 1000 m · Heats out");
   });

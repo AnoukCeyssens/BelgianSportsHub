@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedParticipationCuration } from "../support/seed";
 import { get, OWNER_EMAIL, post, signedInAs } from "../support/worker";
+import { elements, phasePanel, region } from "../support/html";
 
 // Spec #20, stories 41–46, 53 and 54; ticket #31: the Championship tab lists
 // the upcoming Championships with a Belgian Participation; a Championship's
@@ -26,18 +27,17 @@ function listRows(html: string) {
 
 /** The Phase bar: each step's text, whether it links somewhere, and which one is shown. */
 function phaseBar(html: string) {
-  const nav = html.match(/<nav class="phases" aria-label="Phases">(.*?)<\/nav>/s)?.[1] ?? "";
-  return [...nav.matchAll(/<(a|span)([^>]*)>(.*?)<\/\1>(?=<a|<span class|$)/gs)].map((m) => ({
-    step: text(m[3]),
-    link: m[1] === "a",
-    shown: m[2].includes('aria-current="page"'),
-  }));
+  const nav = region(html, "Phases", "nav") ?? "";
+  // Each step is a link or greyed text; "● now" inside the current one is part of its text.
+  return elements(nav, /<(?:a|span)\b[^>]*>/)
+    .filter((e) => text(e.inner) !== "● now")
+    .map((e) => ({ step: text(e.inner), link: e.tag === "a", shown: e.attributes.includes('aria-current="page"') }));
 }
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 async function worlds() {

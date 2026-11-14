@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedTeam, seedTeamResult } from "../support/seed";
 import { get, post } from "../support/worker";
+import { phasePanel, region } from "../support/html";
 
 // Spec #20, stories 25, 28–30, 34, 45, 82 and 84; ticket #32. The owner
 // curates a Qualification status per Entry per target (the next Games, the
@@ -26,8 +27,8 @@ const text = (html: string) =>
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** The Qualification phase's table: one line per potential Entry. */
@@ -40,13 +41,13 @@ function qualificationRows(html: string) {
 
 /** The Athlete or Team page's Qualification section, as text. */
 function qualificationSection(html: string) {
-  const m = html.match(/<section class="qualification"[^>]*>(.*?)<\/section>/s);
-  return m ? text(m[1]) : undefined;
+  const section = region(html, "Qualification", "section");
+  return section === null ? undefined : text(section);
 }
 
 /** Each progress bar of the Qualification section: its track and how full it is. */
 function progressBars(html: string) {
-  return [...html.matchAll(/<div class="bar[^"]*" role="progressbar" aria-label="([^"]+)" aria-valuenow="(\d+)"/g)].map((m) => `${m[1]} ${m[2]}%`);
+  return [...html.matchAll(/<div\b[^>]*\brole="progressbar" aria-label="([^"]+)" aria-valuenow="(\d+)"/g)].map((m) => `${m[1]} ${m[2]}%`);
 }
 
 /** The id of a potential Entry on the owner's qualification page, by its "<who> · <event>" heading. */

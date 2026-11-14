@@ -132,7 +132,7 @@ export function PassLayout({
         {railFoot}
       </nav>
 
-      <section className="step">
+      <section className="step" aria-label={`${index + 1}. ${step.label}`}>
         {banner}
         <h1>{`${index + 1}. ${step.label}`}</h1>
         <p className="meta">
@@ -140,7 +140,7 @@ export function PassLayout({
         </p>
         {children}
         {step.open === 0 ? <p className="donebox">✓ Nothing left in this step.</p> : null}
-        <Form method="post" className="foot">
+        <Form method="post" className="foot" aria-label="Step navigation">
           {index > 0 ? (
             <Link className="back" to={pass.path(progress.steps[index - 1].key)}>
               ← Back

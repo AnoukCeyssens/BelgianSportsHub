@@ -19,7 +19,9 @@ const page = async (path: string) => (await get(path)).text();
 function railStep(html: string, label: string) {
   const rail = html.slice(html.indexOf('aria-label="Run sheet steps"'), html.indexOf("</nav>"));
   const li = rail.match(new RegExp(`<li[^>]*>(?:(?!</li>).)*?${label}(?:(?!</li>).)*</li>`, "s"))?.[0] ?? "";
-  return { done: /class="[^"]*\bdone\b/.test(li), text: li.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() };
+  const text = li.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  // A done step shows ✓ in place of its number.
+  return { done: text.startsWith("✓"), text };
 }
 
 function sessionLog(html: string) {

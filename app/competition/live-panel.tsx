@@ -183,8 +183,11 @@ export function LiveDayPanel({ view, dayHref }: { view: LiveDayView; dayHref: (d
       ) : null}
       <nav className="days" aria-label="Days">
         {view.days.map((d) => (
-          <Link key={d.date} to={dayHref(d.date)} className={["day", d.marked ? "has" : null, d.date === view.day ? "on" : null].filter(Boolean).join(" ")}>
+          <Link key={d.date} to={dayHref(d.date)} className={["day", d.marked ? "has" : null, d.date === view.day ? "on" : null].filter(Boolean).join(" ")}
+            aria-current={d.date === view.day ? "date" : undefined}
+          >
             <span>{`Day ${d.day}`}</span> <b>{d.label}</b>
+            {d.marked ? <span className="sr-only"> · Belgian Entries</span> : null}
           </Link>
         ))}
       </nav>

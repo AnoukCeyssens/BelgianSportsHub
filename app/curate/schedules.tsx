@@ -147,7 +147,7 @@ export function SchedulesStep({ data, review }: { data: SchedulesData; review: T
       <p className="sub">Until the full session schedule is imported: the Games dates (first to last competition day) and each sport's first and last day.</p>
       {data.games.map((g) => (
         <div key={g.key}>
-          <Form method="post" className="card games-dates">
+          <Form method="post" className="card games-dates" aria-label={`${g.name} dates`}>
             <h3>{`${g.name} · ${g.city} · ${g.recorded ? days(g.recorded.startDate, g.recorded.endDate) : "dates not recorded yet"}`}</h3>
             <input type="hidden" name="games" value={g.key} />
             <div className="fields">

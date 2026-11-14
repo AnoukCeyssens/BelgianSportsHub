@@ -36,7 +36,7 @@ import type { CompetitionRow } from "./phase-inputs";
 // 2. load it in that phase's `case` of `loadPhasePanel` (batched queries; take
 //    `now` from the caller, never read the clock here);
 // 3. render it in that phase's component below, replacing the "not recorded
-//    yet" line. Keep the `<section class="phase">` wrapper: tests find it.
+//    yet" line. Keep the `<section aria-label="<Phase>">` wrapper: readers and tests find it by that name.
 // Games-only content (sport chips, medal table) takes the sport filter as an
 // extra argument rather than a second set of panels: `SportChips` (#35) holds
 // the Games' sports and the chosen chips (none chosen = All sports). Filter

@@ -5,6 +5,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedTeam } from "../support/seed";
 import { get, post } from "../support/worker";
+import { phasePanel } from "../support/html";
 
 // Spec #20, stories 78–81, 83, 85 and 86; ADR 0002; ticket #36. The owner
 // records Belgium's Quota places per Games and event (NOC-owned or named)
@@ -37,8 +38,8 @@ const entryRows = (html: string) => rows(html, "Potential Entries");
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** The id of a potential Entry on the owner's qualification page, by its "<who> · <event>" heading. */

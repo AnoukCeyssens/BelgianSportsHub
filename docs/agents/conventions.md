@@ -27,7 +27,7 @@ Set by the walking skeleton (#21). Every later ticket follows them. Vocabulary: 
 | `db/seed/dev.sql` | Idempotent hand seed for local dev and fresh copies. |
 | `tests/domain/` | Seam 2: table-driven tests of `app/domain`. |
 | `tests/worker/` | Seam 1: tests through the Worker's entry points. |
-| `tests/support/` | Test helpers: `worker.ts` (call entry points), `seed.ts` (arrange rows), `clock.ts`, `outbound-fetch.ts`, `setup.ts`. |
+| `tests/support/` | Test helpers: `worker.ts` (call entry points), `seed.ts` (arrange rows), `html.ts` (read a page by accessible name, role and text), `clock.ts`, `outbound-fetch.ts`, `setup.ts`. |
 | `tests/fixtures/sources/<source>/` | Recorded source payloads plus `<file>.meta.json`. |
 
 Imports inside `app/` use `~/…` (alias for `app/`).
@@ -54,6 +54,8 @@ Imports inside `app/` use `~/…` (alias for `app/`).
 ## Writing tests
 
 Tests only go at the two seams from spec #20. A good test sets up inputs (rows, a recorded payload, a clock), calls a seam, and checks what a reader or the owner would see (or the stored rows/R2 objects). Never assert on internal helpers, query shapes or component structure.
+
+**Find things on a page the way a reader does** (`tests/support/html.ts`): by accessible name (`region(html, "Phases", "nav")`, `labelled(html, /Selection · .+/, "section")`), role (`withRole(html, "listitem")`, `progressbar`), a fieldset's legend, a link's `aria-current` / `aria-pressed`, the shown Phase panel (`phasePanel`), a Run sheet step without its footer (`stepRegion`), or visible text (`text`). Never by CSS class. When a test cannot name what it needs, give the app an accessible name (an `aria-label` on the region or form, `aria-current`, `role="list"`, a `sr-only` note such as "· Belgian Entries") rather than matching markup.
 
 ### Seam 2: domain rules (`tests/domain/<rule>.test.ts`)
 

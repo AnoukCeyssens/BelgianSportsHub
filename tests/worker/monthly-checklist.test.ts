@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { seedChecklistItem } from "../support/seed";
 import { get, post } from "../support/worker";
+import { stepRegion } from "../support/html";
 
 // Spec #20, story 111; ticket #45: the Run sheet's last step shows only the
 // checks due this week, ticked one by one or all at once, with a count of the
@@ -16,7 +17,7 @@ const text = (html: string) => html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g,
 /** The step's content between its heading and its Back / Next footer, as text. */
 async function step() {
   const html = await (await get(STEP)).text();
-  return text(html.slice(html.indexOf("8. Monthly checklist"), html.indexOf('class="foot"')));
+  return text(stepRegion(html));
 }
 
 async function railEntry() {

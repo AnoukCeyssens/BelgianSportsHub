@@ -449,7 +449,7 @@ function Review({ review }: { review: TimetableReviewData }) {
           Apply columns
         </button>
       </Form>
-      <Form method="post" className="card timetable-review">
+      <Form method="post" className="card timetable-review" aria-label="Timetable review">
         <h3>{`${competition.name} · ${competition.days} · ${stamp.version || "no version stamp yet"}`}</h3>
         {keep.map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
