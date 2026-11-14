@@ -56,7 +56,7 @@ Table-driven with `it.each`, one row per case, a readable `name` per row, expect
 
 Runs in workerd through `@cloudflare/vitest-plugin`, with a real local D1 (all migrations applied) and a real R2, isolated per test file.
 
-- **Call an entry point** with `tests/support/worker.ts`: `get(path)` for pages, loaders and the iCal feed; `deliverIngestJobs(jobs)` for the queue consumer (returns acks and retries). Add a helper there for each new entry point (e.g. the scheduled handler, form posts).
+- **Call an entry point** with `tests/support/worker.ts`: `get(path)` for pages, loaders and the iCal feed; `post(path, form)` for actions; `deliverIngestJobs(jobs)` for one batch to the queue consumer (returns acks and retries); `runIngest(jobs)` to run jobs plus every job they queue (fan-out, e.g. the roster seed) until drained, without touching the real local queue. Add a helper there for each new entry point (e.g. the scheduled handler).
 - **Arrange state** with builders in `tests/support/seed.ts` (add one per entity as you need it).
 - **Fix the clock** with `fixClock("2026-11-14T04:00:00.000Z")`. It fakes `Date` for the test and the Worker (same isolate). Production code reads time through `now()` from `~/clock` or `new Date()`, never via timers.
 - **Stub outbound fetch** with `stubOutboundFetch([{ ...meta, body }])`. An unstubbed URL throws, so tests never hit the network.
@@ -71,6 +71,7 @@ Adapters are tested against real federation payloads.
 2. In the test: `import body from "../fixtures/sources/<source>/<file>?raw"` and `import meta from "…/<file>.meta.json"`, then `stubOutboundFetch([{ ...meta, body }])`. Binary payloads (FIS ZIPs) need a loader that yields a `Uint8Array`; the first binary adapter adds it here.
 3. Keep fixtures small: record one realistic page, not a whole season. Record by hand from a public endpoint only; never in CI; never from Olympedia, Olympics.com or Totallympics.
 4. When a source changes format, record a new fixture next to the old one; the old one stays as a regression case.
+5. A payload too big to keep whole (e.g. Team Belgium's 1 MB sitemaps) may be trimmed by hand after recording; say so in a `trimmedByHand` field of its `.meta.json`. A source whose test needs many files gets an `index.ts` next to them exporting the ready-to-stub list (see `tests/fixtures/sources/team-belgium/index.ts`).
 
 `tests/fixtures/sources/example/` is a hand-made stand-in used by the skeleton test, not a real source.
 

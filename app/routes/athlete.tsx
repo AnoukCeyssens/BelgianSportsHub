@@ -1,7 +1,8 @@
+import { Fragment } from "react";
 import { eq } from "drizzle-orm";
 import { data } from "react-router";
 import { dbFrom } from "~/context";
-import { EXTERNAL_ID_SCHEMES, schema } from "~/db/client";
+import { EXTERNAL_ID_LINKS, EXTERNAL_ID_SCHEMES, schema } from "~/db/client";
 import type { Route } from "./+types/athlete";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -24,7 +25,11 @@ function sortedExternalIds(ids: { scheme: string; value: string }[]) {
   const rank = (s: string) => (SCHEME_ORDER.includes(s) ? SCHEME_ORDER.indexOf(s) : SCHEME_ORDER.length);
   return ids
     .toSorted((a, b) => rank(a.scheme) - rank(b.scheme) || a.scheme.localeCompare(b.scheme))
-    .map((x) => ({ label: EXTERNAL_ID_SCHEMES[x.scheme as keyof typeof EXTERNAL_ID_SCHEMES] ?? x.scheme, value: x.value }));
+    .map((x) => ({
+      label: EXTERNAL_ID_SCHEMES[x.scheme as keyof typeof EXTERNAL_ID_SCHEMES] ?? x.scheme,
+      value: x.value,
+      href: EXTERNAL_ID_LINKS[x.scheme]?.replace("$1", encodeURIComponent(x.value)) ?? null,
+    }));
 }
 
 /** "19 Aug 1994" from "1994-08-19". */
@@ -37,15 +42,32 @@ function formatDate(isoDate: string) {
   });
 }
 
+/** "2014 (European Championships)": the year of the first senior international performance, and where. */
+function athleteSince(isoDate: string, competition: string | null) {
+  const year = isoDate.slice(0, 4);
+  return competition ? `${year} (${competition})` : year;
+}
+
 export default function Athlete({ loaderData }: Route.ComponentProps) {
   const { athlete, externalIds } = loaderData;
-  const facts = [athlete.sport, athlete.dateOfBirth ? `born ${formatDate(athlete.dateOfBirth)}` : null].filter(Boolean);
+  const facts = [
+    athlete.sport,
+    athlete.dateOfBirth ? `born ${formatDate(athlete.dateOfBirth)}` : null,
+    athlete.athleteSince ? `Athlete since ${athleteSince(athlete.athleteSince, athlete.athleteSinceCompetition)}` : null,
+  ].filter(Boolean);
   return (
     <>
       <h1>{athlete.name}</h1>
       <div className="meta">{facts.join(" · ")}</div>
       {externalIds.length > 0 ? (
-        <div className="sub">{externalIds.map((x) => `${x.label} ${x.value}`).join(" · ")}</div>
+        <div className="sub">
+          {externalIds.map((x, i) => (
+            <Fragment key={`${x.label}-${x.value}`}>
+              {i > 0 ? " · " : null}
+              {x.href ? <a href={x.href}>{`${x.label} ${x.value}`}</a> : `${x.label} ${x.value}`}
+            </Fragment>
+          ))}
+        </div>
       ) : null}
       {athlete.note ? <p className="note">{athlete.note}</p> : null}
 

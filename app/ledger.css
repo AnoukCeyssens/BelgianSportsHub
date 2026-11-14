@@ -31,3 +31,5 @@ td { padding: 7px 4px; border-bottom: 1px solid var(--rule-soft); vertical-align
 .tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--ink); padding-bottom: env(safe-area-inset-bottom); z-index: 10; }
 .tabs a { flex: 1; text-align: center; color: #aaa; text-decoration: none; font-weight: 600; font-size: 11px; padding: 14px 0; }
 .tabs a.on { color: var(--accent); }
+input[type="search"] { width: 100%; font: inherit; padding: 7px 8px; margin: 10px 0 0; background: #fff; border: 1px solid var(--rule); border-radius: 0; }
+button { font: inherit; font-weight: 600; padding: 7px 12px; background: var(--ink); color: var(--paper); border: 0; cursor: pointer; }
