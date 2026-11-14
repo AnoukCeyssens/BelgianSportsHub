@@ -5,7 +5,7 @@ import { belgianDate, PHASE_LABELS, QUALIFICATION_STATUS_LABELS, standardsForSpo
 import { formatDate } from "~/format";
 import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
 import { QualificationBadge, TrackMark } from "~/qualification/qualification-section";
-import { LiveDayPanel, loadLiveDay, type LiveDayView } from "./live-panel";
+import { LiveDayPanel, loadLiveDay, loadMedalTable, MedalTablePanel, type LiveDayView, type MedalTableView } from "./live-panel";
 import type { CompetitionRow } from "./phase-inputs";
 
 // What each Phase shows on a competition page (spec #20, stories 43–48;
@@ -41,7 +41,7 @@ export type PhasePanelData =
       games: boolean;
     }
   | { phase: "selection" }
-  | { phase: "live"; day: LiveDayView | null }
+  | { phase: "live"; day: LiveDayView | null; medals: MedalTableView }
   | { phase: "after" };
 
 /** A Games' sports and the chosen chips; none chosen means All sports. A Championship has none. */
@@ -74,7 +74,11 @@ export async function loadPhasePanel(
       };
     }
     case "live":
-      return { phase, day: await loadLiveDay(db, competition, now, chips.chosen, day) };
+      return {
+        phase,
+        day: await loadLiveDay(db, competition, now, chips.chosen, day),
+        medals: await loadMedalTable(db, competition, chips.chosen),
+      };
     case "selection":
     case "after":
       return { phase };
@@ -112,7 +116,12 @@ export function PhasePanel({ data, dayHref }: { data: PhasePanelData; dayHref: (
         </>
       ) : null}
       {data.phase === "selection" ? <p className="sub">No Selection recorded yet.</p> : null}
-      {data.phase === "live" ? data.day ? <LiveDayPanel view={data.day} dayHref={dayHref} /> : <p className="sub">No Sessions recorded yet.</p> : null}
+      {data.phase === "live" ? (
+        <>
+          {data.day ? <LiveDayPanel view={data.day} dayHref={dayHref} /> : <p className="sub">No Sessions recorded yet.</p>}
+          <MedalTablePanel view={data.medals} />
+        </>
+      ) : null}
       {data.phase === "after" ? <p className="sub">No outcomes compared yet.</p> : null}
     </section>
   );

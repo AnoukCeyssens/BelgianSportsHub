@@ -54,11 +54,12 @@ function healthWord(s: SourceHealthData["sources"][number]) {
   return s.health.blocked ? "blocked" : s.lastError ? "failing" : s.health.stale ? "stale" : "ok";
 }
 
-export function SourceHealthStep({ data }: { data: SourceHealthData }) {
+/** `problemsOnly` (the Live day pass) leaves out the full health table. */
+export function SourceHealthStep({ data, problemsOnly = false }: { data: SourceHealthData; problemsOnly?: boolean }) {
   const problems = data.sources.filter((s) => s.attention.open);
   return (
     <>
-      <div className="card">
+      {problemsOnly ? null : <div className="card">
         <table>
           <thead>
             <tr>
@@ -95,7 +96,7 @@ export function SourceHealthStep({ data }: { data: SourceHealthData }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
       {problems.map((s) => (
         <ProblemCard key={s.key} source={s} problem={s.attention.problem!} />
       ))}
