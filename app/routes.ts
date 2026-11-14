@@ -5,6 +5,7 @@ export default [
   route("athletes", "routes/athletes.tsx"),
   route("athletes/:athleteId", "routes/athlete.tsx"),
   route("calendar", "routes/calendar.tsx"),
+  route("ical/:file", "routes/ical.tsx"),
   route("championship", "routes/championship.tsx"),
   route("championship/:competitionId", "routes/championship.$competitionId.tsx"),
   route("games", "routes/games.tsx"),

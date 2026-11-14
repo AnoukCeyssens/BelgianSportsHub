@@ -42,6 +42,21 @@ export async function getDeployed(path: string, init?: RequestInit) {
 }
 
 /**
+ * GET through the fetch handler with Worker secrets set for this request
+ * (e.g. the iCal feed's ICAL_FEED_TOKEN); `deployed` runs it as the test copy would.
+ */
+export async function getWithSecrets(path: string, secrets: Record<string, string>, { deployed = false } = {}) {
+  const ctx = createExecutionContext();
+  const res = await worker.fetch(
+    new Request(`https://bsh.test${path}`, { redirect: "manual" }) as Request<unknown, IncomingRequestCfProperties>,
+    { ...env, ...(deployed ? { APP_ENV: "test", OWNER_EMAIL: "owner@example.com" } : {}), ...secrets } as Env,
+    ctx,
+  );
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+/**
  * Deliver ingest jobs to the queue consumer; returns which messages were acked
  * or retried. `secrets` adds Worker secrets (e.g. a source's API key) for this delivery.
  */
