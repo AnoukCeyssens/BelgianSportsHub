@@ -22,12 +22,15 @@ import {
 } from "~/domain";
 import { formatDate } from "~/format";
 import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
+import { linkAtSelection } from "~/qualification/quota-places";
 import { QualificationBadge } from "~/qualification/qualification-section";
 
 type Change = { what: string; from: string | null; to: string; needed: string | null; on: string; ranking: string | null };
 
 export type ReviewItem = {
   entryId: string;
+  /** Where the Entry competes: its Games' NOC-owned places follow Selection there. */
+  at: { competitionId: string; games: boolean; sport: string; event: string };
   title: string;
   competition: string;
   changes: Change[];
@@ -59,7 +62,10 @@ export async function loadQualificationReview(db: Db, now: Date) {
     now,
   );
   const snapshots = await snapshotsOf(db, entries);
-  const quotaPlaces = await quotaPlacesOf();
+  const quotaPlaces = await quotaPlacesAt(
+    db,
+    targets.filter((t) => t.kind === "games").map((t) => t.id),
+  );
 
   const items: ReviewItem[] = [];
   for (const entry of entries) {
@@ -98,11 +104,17 @@ export async function loadQualificationReview(db: Db, now: Date) {
       },
       entry.tracks,
       ranking,
-      quotaPlaces.filter((p) => p.competitionId === entry.competitionId && p.event.toLowerCase() === entry.event.toLowerCase()),
+      quotaPlaces.filter(
+        (p) =>
+          p.competitionId === entry.competitionId &&
+          p.sport.toLowerCase() === entry.sport.toLowerCase() &&
+          p.event.toLowerCase() === entry.event.toLowerCase(),
+      ),
     );
     const first = entry.tracks.find((t) => after(t.changedOn, entry.checkedOn));
     items.push({
       entryId: entry.id,
+      at: { competitionId: entry.competitionId, games: target.kind === "games", sport: entry.sport, event: entry.event },
       title: `${entry.who.name} · ${entry.event}`,
       competition: target.name,
       changes,
@@ -135,9 +147,24 @@ async function snapshotsOf(db: Db, entries: PotentialEntry[]): Promise<Snapshot[
     .orderBy(desc(s.asOf));
 }
 
-/** Belgium's Quota places per Games event (#36 stores them); none until then. */
-async function quotaPlacesOf(): Promise<(SuggestionQuotaPlace & { competitionId: string; event: string })[]> {
-  return [];
+/** Belgium's Quota places at these Games (ticket #36), as the suggestion reads them. */
+async function quotaPlacesAt(db: Db, gamesIds: string[]): Promise<(SuggestionQuotaPlace & { competitionId: string; sport: string; event: string })[]> {
+  if (gamesIds.length === 0) return [];
+  const q = schema.quotaPlace;
+  const rows = await db.select().from(q).where(inArray(q.competitionId, gamesIds));
+  return rows.map((p) => ({
+    competitionId: p.competitionId,
+    sport: p.sport,
+    event: p.event,
+    kind: p.kind === "named" ? "named" : "noc-owned",
+    state: p.state,
+    entryId: p.entryId,
+  }));
+}
+
+/** At the Games, NOC-owned places follow Selection in the event (#36): after any status write. */
+async function followSelection(db: Db, item: ReviewItem) {
+  if (item.at.games) await linkAtSelection(db, item.at.competitionId, item.at.sport, item.at.event);
 }
 
 const snapshotText = (s: Snapshot) => (s.points ? `#${s.position} · ${s.points} pts` : `#${s.position}`);
@@ -157,6 +184,7 @@ export async function actOnQualificationReview(db: Db, intent: string, form: For
         .update(e)
         .set({ qualificationStatus: item.suggested, qualificationSource: item.suggestedSource, qualificationCheckedOn: today })
         .where(eq(e.id, entryId));
+      await followSelection(db, item);
       return `${item.title}: ${label(item.current)} → ${label(item.suggested)}`;
     }
     case "keep-status":
@@ -168,6 +196,7 @@ export async function actOnQualificationReview(db: Db, intent: string, form: For
       if (!isQualificationStatus(status)) throw new Response("Unknown Qualification status", { status: 400 });
       if (!source) throw new Response("A status needs its source", { status: 400 });
       await db.update(e).set({ qualificationStatus: status, qualificationSource: source, qualificationCheckedOn: today }).where(eq(e.id, entryId));
+      await followSelection(db, item);
       return `${item.title}: set ${label(status)}`;
     }
     default:

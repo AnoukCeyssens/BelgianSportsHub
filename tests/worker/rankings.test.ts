@@ -297,6 +297,41 @@ describe("Qualification review (Run sheet step 5)", () => {
     expect(await reviewItems()).toEqual([]);
   });
 
+  it("suggests Eligible to three Belgians who meet the criteria for two NOC-owned places", async () => {
+    fixClock("2026-11-01T10:00:00.000Z");
+    const la = await seedCompetition(env.DB, { name: "LA 2028", sport: "Olympic Games", kind: "games", source: "owner", startDate: "2028-07-14", endDate: "2028-07-30" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "", standards: "", closesOn: "2028-05-03" });
+    const curateLa = `/curate/games/${la}/qualification`;
+    const runners: string[] = [];
+    for (const name of ["Hanne Verbruggen", "Chloé Herbiet", "Lotte Scheldeman"]) {
+      const id = await seedAthlete(env.DB, { name, sport: "Athletics" });
+      const race = await seedCompetition(env.DB, { name: `${name} marathon`, sport: "Athletics", startDate: "2026-10-18" });
+      await seedResult(env.DB, race, id, { date: "2026-10-18" });
+      await post(curateLa, { intent: "add-entry", who: `athlete:${id}`, event: "Women's marathon", status: "on-track", source: "Road to LA" });
+      runners.push((await getDb(env.DB).query.entry.findFirst({ where: eq(schema.entry.athleteId, id) }))!.id);
+    }
+    await post(curateLa, {
+      intent: "add-quota-places",
+      sport: "Athletics",
+      event: "Women's marathon",
+      kind: "noc",
+      how: "allocate",
+      count: "2",
+      earnedVia: "Entry standard",
+      entryId: "",
+      source: "World Athletics",
+    });
+
+    fixClock("2026-11-14T12:00:00.000Z");
+    for (const entryId of runners) {
+      await post(curateLa, { intent: "save-track", entryId, name: "Entry standard", needed: "2:26:50", has: "2:25:10", state: "met", better: "", source: "World Athletics" });
+    }
+
+    const items = await reviewItems();
+    expect(items).toHaveLength(3);
+    for (const item of items) expect(item).toMatch(/Women's marathon LA 2028 Entry standard: – → 2:25:10 \(need 2:26:50\) changed 14 Nov 2026 On track → Eligible /);
+  });
+
   it("lists an Entry whose ranking moved even without a track following it", async () => {
     const { entryId } = await vanhoutteAtTheEuros();
     // An earlier snapshot, read on 31 Oct: 25th.

@@ -1,9 +1,21 @@
 import { Link } from "react-router";
 import { sportColour } from "~/calendar/sport-colours";
 import type { Db } from "~/db/client";
-import { belgianDate, PHASE_LABELS, QUALIFICATION_STATUS_LABELS, standardsForSports, windowCountdown, type Phase, type QualificationStatus } from "~/domain";
+import {
+  belgianDate,
+  PHASE_LABELS,
+  QUALIFICATION_STATUS_LABELS,
+  QUOTA_PLACE_KIND_LABELS,
+  QUOTA_PLACE_STATE_LABELS,
+  QUOTA_PLACE_STATES,
+  standardsForSports,
+  windowCountdown,
+  type Phase,
+  type QualificationStatus,
+} from "~/domain";
 import { formatDate } from "~/format";
 import { potentialEntries, type PotentialEntry } from "~/qualification/entries";
+import { quotaPlacesOf, type QuotaPlaceView } from "~/qualification/quota-places";
 import { QualificationBadge, TrackMark } from "~/qualification/qualification-section";
 import { LiveDayPanel, loadLiveDay, loadMedalTable, MedalTablePanel, type LiveDayView, type MedalTableView } from "./live-panel";
 import type { CompetitionRow } from "./phase-inputs";
@@ -39,6 +51,8 @@ export type PhasePanelData =
       entries: PotentialEntry[];
       /** At the Games each Entry shows its sport's colour. */
       games: boolean;
+      /** The Games' Quota places (ticket #36, ADR 0002), next to the Entries' statuses, filtered by the chosen chips; null at a Championship (it has none). */
+      quotaPlaces: QuotaPlaceView[] | null;
     }
   | { phase: "selection" }
   | { phase: "live"; day: LiveDayView | null; medals: MedalTableView }
@@ -62,15 +76,18 @@ export async function loadPhasePanel(
     case "standards":
       return { phase, standards: standardsOf(competition, now, chips) };
     case "qualification": {
-      const entries = await potentialEntries(db, [competition.id], now);
+      const games = competition.kind === "games";
+      const [entries, places] = await Promise.all([potentialEntries(db, [competition.id], now), games ? quotaPlacesOf(db, competition.id) : null]);
       const chosen = chips.chosen.map((s) => s.toLowerCase());
+      const shown = <T extends { sport: string }>(rows: T[]) => (chosen.length > 0 ? rows.filter((r) => chosen.includes(r.sport.toLowerCase())) : rows);
       return {
         phase,
         standards: standardsOf(competition, now, chips),
         closesOn: competition.qualificationClosesOn,
         closesIn: windowCountdown(competition.qualificationClosesOn, now),
-        entries: chosen.length > 0 ? entries.filter((e) => chosen.includes(e.sport.toLowerCase())) : entries,
-        games: competition.kind === "games",
+        entries: shown(entries),
+        games,
+        quotaPlaces: places && shown(places),
       };
     }
     case "live":
@@ -113,6 +130,7 @@ export function PhasePanel({ data, dayHref }: { data: PhasePanelData; dayHref: (
             </>
           ) : null}
           <Qualification data={data} />
+          {data.quotaPlaces ? <QuotaPlaces places={data.quotaPlaces} /> : null}
         </>
       ) : null}
       {data.phase === "selection" ? <p className="sub">No Selection recorded yet.</p> : null}
@@ -220,6 +238,75 @@ function Qualification({ data }: { data: Extract<PhasePanelData, { phase: "quali
         </>
       ) : (
         <p className="sub">No Qualification statuses recorded yet.</p>
+      )}
+    </>
+  );
+}
+
+/** "2 provisional · 1 allocated": the count of each lifecycle state, in lifecycle order. */
+function placeCounts(places: QuotaPlaceView[]) {
+  return QUOTA_PLACE_STATES.map((state) => [state, places.filter((p) => p.state === state).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([state, n]) => `${n} ${QUOTA_PLACE_STATE_LABELS[state].toLowerCase()}`)
+    .join(" · ");
+}
+
+/**
+ * Spec stories 78–81 (ADR 0002): Belgium's Quota places at the Games, a
+ * separate fact from the Entries' statuses above: each place's event, whether
+ * it is NOC-owned or named, its lifecycle state, the Entry it is linked to
+ * (an NOC-owned place only from Selection), and its source and last check.
+ */
+function QuotaPlaces({ places }: { places: QuotaPlaceView[] }) {
+  return (
+    <>
+      <h3>Quota places</h3>
+      {places.length > 0 ? (
+        <>
+          <p className="meta">{placeCounts(places)}</p>
+          <table aria-label="Quota places">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Place</th>
+                <th>State</th>
+                <th>Entry</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {places.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <span className="dot" style={{ background: sportColour(p.sport) }}></span>
+                    {`${p.sport} · ${p.event}`}
+                    {p.of > 1 ? <div className="sub">{`place ${p.number} of ${p.of}`}</div> : null}
+                  </td>
+                  <td>{QUOTA_PLACE_KIND_LABELS[p.kind]}</td>
+                  <td>
+                    <span className={`badge qp-${p.state}`}>{QUOTA_PLACE_STATE_LABELS[p.state]}</span>
+                    {p.earnedVia || p.reallocated ? (
+                      <div className="sub">{[p.earnedVia ? `via ${p.earnedVia}` : null, p.reallocated ? "reallocated" : null].filter(Boolean).join(" · ")}</div>
+                    ) : null}
+                  </td>
+                  <td>
+                    {p.entry ? (
+                      <Link to={p.entry.who.kind === "team" ? `/teams/${p.entry.who.id}` : `/athletes/${p.entry.who.id}`}>{p.entry.who.name}</Link>
+                    ) : (
+                      <span className="sub">{p.kind === "noc" ? "at Selection" : "–"}</span>
+                    )}
+                  </td>
+                  <td className="sub">
+                    {/^https?:\/\//.test(p.source) ? <a href={p.source}>{p.source}</a> : p.source}
+                    {` · checked ${formatDate(p.checkedOn)}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p className="sub">No Quota places recorded yet.</p>
       )}
     </>
   );
