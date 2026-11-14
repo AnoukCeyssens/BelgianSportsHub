@@ -1,4 +1,6 @@
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { canonicalSport } from "~/domain";
 import { fixClock } from "../support/clock";
 import { get, getDeployed, post, signedInAs } from "../support/worker";
 
@@ -50,6 +52,14 @@ describe("Sources", () => {
     const html = await (await get(SOURCES)).text();
     expect(html).toContain('<a href="https://www.biathlonresults.com/">IBU biathlon (biathlonresults.com)</a>');
     expect(html).toContain('<a href="https://api.isuresults.eu/docs/">ISU speed skating (api.isuresults.eu)</a>');
+  });
+
+  it("stores every source's sport by its Olympic programme name", async () => {
+    const stored = await env.DB.prepare("SELECT key, sport FROM source").all<{ key: string; sport: string | null }>();
+    const named = stored.results.filter((s) => s.sport !== null);
+    expect(named.filter((s) => canonicalSport(s.sport!) !== s.sport)).toEqual([]);
+    // Sources spanning several sports (World Aquatics, UCI, FIG, FEI, …) leave sport empty; the rest name one each.
+    expect(named.length).toBeGreaterThan(30);
   });
 
   it("links the Run sheet's Source health step and the Sources screen to each other", async () => {
