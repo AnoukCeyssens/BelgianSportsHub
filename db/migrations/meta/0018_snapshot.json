@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "46c93463-a0ed-45c1-81b8-f4c298312fa9",
+  "id": "771f902e-e455-4a91-af9d-6a5ffeb8047e",
   "prevId": "21377093-b3d4-4673-9cf8-bf9c9f3444d9",
   "tables": {
     "active_fact": {
@@ -672,41 +672,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "selector": {
-          "name": "selector",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selection_source": {
-          "name": "selection_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selection_kind": {
-          "name": "selection_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selected_on": {
-          "name": "selected_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "selection_raw_copy_id": {
-          "name": "selection_raw_copy_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -768,18 +733,108 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "entry_round": {
+      "name": "entry_round",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
         },
-        "entry_selection_raw_copy_id_raw_copy_id_fk": {
-          "name": "entry_selection_raw_copy_id_raw_copy_id_fk",
-          "tableFrom": "entry",
-          "tableTo": "raw_copy",
+        "entry_id": {
+          "name": "entry_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round": {
+          "name": "round",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "heat": {
+          "name": "heat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lane": {
+          "name": "lane",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "opponent": {
+          "name": "opponent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "detail_checked_at": {
+          "name": "detail_checked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "entry_round_round": {
+          "name": "entry_round_round",
+          "columns": [
+            "entry_id",
+            "round"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "entry_round_entry_id_entry_id_fk": {
+          "name": "entry_round_entry_id_entry_id_fk",
+          "tableFrom": "entry_round",
+          "tableTo": "entry",
           "columnsFrom": [
-            "selection_raw_copy_id"
+            "entry_id"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -856,6 +911,100 @@
             "sport"
           ],
           "name": "games_sport_window_competition_id_sport_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "medal_standing": {
+      "name": "medal_standing",
+      "columns": {
+        "competition_id": {
+          "name": "competition_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nation": {
+          "name": "nation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gold": {
+          "name": "gold",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "silver": {
+          "name": "silver",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bronze": {
+          "name": "bronze",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pasted_at": {
+          "name": "pasted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "raw_copy_id": {
+          "name": "raw_copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "medal_standing_competition_id_competition_id_fk": {
+          "name": "medal_standing_competition_id_competition_id_fk",
+          "tableFrom": "medal_standing",
+          "tableTo": "competition",
+          "columnsFrom": [
+            "competition_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "medal_standing_raw_copy_id_raw_copy_id_fk": {
+          "name": "medal_standing_raw_copy_id_raw_copy_id_fk",
+          "tableFrom": "medal_standing",
+          "tableTo": "raw_copy",
+          "columnsFrom": [
+            "raw_copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "medal_standing_competition_id_nation_pk": {
+          "columns": [
+            "competition_id",
+            "nation"
+          ],
+          "name": "medal_standing_competition_id_nation_pk"
         }
       },
       "uniqueConstraints": {},
