@@ -99,6 +99,9 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 .legend { margin: 10px 0; }
 .chip { display: inline-block; padding: 4px 10px; border: 1px solid var(--ink); border-radius: 999px; margin: 0 4px 6px 0; font-size: 12px; white-space: nowrap; }
 .chip.champ { font-weight: 700; }
+.chips { margin: 10px 0 4px; }
+.chips a.chip { text-decoration: none; color: var(--ink); }
+.chips a.chip.on { background: var(--ink); color: var(--paper); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 td.when { width: 96px; white-space: nowrap; }
 

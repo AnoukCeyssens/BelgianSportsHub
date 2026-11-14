@@ -40,5 +40,6 @@ export {
   type SavedColumnMapping,
 } from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
-export { currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
+export { combinedPhaseInputs, currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
 export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";
+export { chosenSports, GAMES_SOURCE, standardsForSports, toggledSports, TRACKED_GAMES, type TrackedGames } from "./games";
