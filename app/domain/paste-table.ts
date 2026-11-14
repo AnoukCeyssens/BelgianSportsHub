@@ -5,7 +5,18 @@
 
 export type PastedTable = { head: string[]; rows: string[][] };
 
-export const PASTE_COLUMN_ROLES = ["ignore", "place", "name", "nation", "performance", "if-id", "date-of-birth", "event"] as const;
+export const PASTE_COLUMN_ROLES = [
+  "ignore",
+  "place",
+  "name",
+  "nation",
+  "performance",
+  "if-id",
+  "date-of-birth",
+  "event",
+  "ranking-position",
+  "ranking-points",
+] as const;
 export type PasteColumnRole = (typeof PASTE_COLUMN_ROLES)[number];
 
 /** A saved column mapping: role per header, keyed by the header in lower case. */
@@ -127,6 +138,53 @@ export function belgianPastedRows(table: PastedTable, roles: readonly PasteColum
     });
   });
   return out;
+}
+
+export type PastedRankingRow = {
+  index: number;
+  event: string | null;
+  /** Null in a nation ranking (no name column): the row is Belgium's. */
+  name: string | null;
+  ifId: string | null;
+  dateOfBirth: string | null;
+  position: number;
+  points: string | null;
+};
+
+/**
+ * The Belgian rows of a pasted ranking (#20 review, D): a table whose
+ * position column has the role `ranking-position`. Rows without a position
+ * are left out; ties ("T18", "=18") count as the position. Without a name
+ * column it is a nation ranking.
+ */
+export function belgianRankingRows(table: PastedTable, roles: readonly PasteColumnRole[]): PastedRankingRow[] {
+  const out: PastedRankingRow[] = [];
+  table.rows.forEach((row, index) => {
+    const cell = (role: PasteColumnRole) => {
+      const i = roles.indexOf(role);
+      const value = i < 0 ? "" : (row[i] ?? "").trim();
+      return value === "" ? null : value;
+    };
+    const nation = cell("nation")?.toUpperCase();
+    if (nation !== "BEL" && nation !== "BELGIUM") return;
+    const position = cell("ranking-position")?.match(/^(?:T|=)?(\d+)\.?$/i);
+    if (!position) return;
+    out.push({
+      index,
+      event: cell("event"),
+      name: roles.includes("name") ? (cell("name") ?? "") : null,
+      ifId: cell("if-id"),
+      dateOfBirth: isoDate(cell("date-of-birth")),
+      position: Number(position[1]),
+      points: cell("ranking-points"),
+    });
+  });
+  return out;
+}
+
+/** Whether a mapping reads a ranking rather than results. */
+export function isRankingMapping(roles: readonly PasteColumnRole[]): boolean {
+  return roles.includes("ranking-position");
 }
 
 /** YYYY-MM-DD from ISO or day-first (04/03/2001, 4.3.2001) dates; null otherwise. */

@@ -29,12 +29,15 @@ export {
 } from "./participation";
 export {
   belgianPastedRows,
+  belgianRankingRows,
   columnMapping,
+  isRankingMapping,
   mappingToSave,
   PASTE_COLUMN_ROLES,
   readHtmlTable,
   readPastedTable,
   type PasteColumnRole,
+  type PastedRankingRow,
   type PastedResultRow,
   type PastedTable,
   type SavedColumnMapping,

@@ -6,6 +6,11 @@
 // Belgian rows with their identity match, and confirms: the ticked rows are
 // written as Results through the same writer as Automatic sources, so
 // unmatched identities land in the merge queue (step 4) in the same session.
+// A ranking is pasted the same way (#20 review, D): a column mapped to
+// "ranking position" makes the table a ranking, and confirming stores each
+// known Belgian's position (or Belgium's, in a nation ranking) as a dated
+// ranking snapshot, so the tracks that follow it move; rankings never create
+// Athletes.
 import { and, asc, eq } from "drizzle-orm";
 import { Form, Link } from "react-router";
 import { participationsBetween } from "~/calendar/participations";
@@ -13,8 +18,10 @@ import { type Db, schema } from "~/db/client";
 import {
   BELGIAN_ZONE,
   belgianPastedRows,
+  belgianRankingRows,
   columnMapping,
   identityMatch,
+  isRankingMapping,
   mappingToSave,
   PASTE_COLUMN_ROLES,
   pasteImportDue,
@@ -49,7 +56,15 @@ const ROLE_LABEL: Record<PasteColumnRole, string> = {
   "if-id": "IF ID",
   "date-of-birth": "date of birth",
   event: "event",
+  "ranking-position": "ranking position",
+  "ranking-points": "ranking points",
 };
+
+/** The columns the review shows, per kind of table. */
+const SHOWN_RESULT_ROLES = ["event", "place", "name", "performance"] as const;
+const SHOWN_RANKING_ROLES = ["event", "ranking-position", "name", "ranking-points"] as const;
+
+type ReviewRow = { index: number; name: string; identity: IdentityPreview; cells: Partial<Record<PasteColumnRole, string | null>> };
 
 const KINDS: Record<CompetitionKind, string> = { championship: "Championship", games: "Games", circuit: "Circuit (World Cup, Grand Prix…)" };
 
@@ -95,8 +110,29 @@ export async function loadPasteImporter(env: Pick<Env, "DB" | "RAW">, db: Db, se
   const saved = columnMapping(table.head, (source.columnMapping as SavedColumnMapping | null) ?? null);
   const chosen = rolesFrom(search, table.head.length);
   const roles = chosen ?? saved.roles;
-  const rows = belgianPastedRows(table, roles);
-  const identities = await identitiesOf(env.DB, db, idSchemeOf(source), rows);
+  const ranking = isRankingMapping(roles);
+  const nationRanking = ranking && !roles.includes("name");
+  const shownRoles = (ranking ? SHOWN_RANKING_ROLES : SHOWN_RESULT_ROLES).filter((r) => roles.includes(r));
+  let rows: ReviewRow[];
+  if (ranking) {
+    const ranked = belgianRankingRows(table, roles);
+    const identities = nationRanking ? [] : await identitiesOf(env.DB, db, idSchemeOf(source), ranked.map((r) => ({ ...r, name: r.name ?? "" })));
+    rows = ranked.map((r, i) => ({
+      index: r.index,
+      name: r.name ?? "Belgium",
+      identity: nationRanking ? { kind: "nation" } : identities[i],
+      cells: { event: r.event, "ranking-position": String(r.position), name: r.name, "ranking-points": r.points },
+    }));
+  } else {
+    const results = belgianPastedRows(table, roles);
+    const identities = await identitiesOf(env.DB, db, idSchemeOf(source), results);
+    rows = results.map((r, i) => ({
+      index: r.index,
+      name: r.name,
+      identity: identities[i],
+      cells: { event: r.event, place: r.place !== null ? String(r.place) : r.status, name: r.name, performance: r.performance },
+    }));
+  }
   return {
     source: describe(source),
     read: {
@@ -108,9 +144,10 @@ export async function loadPasteImporter(env: Pick<Env, "DB" | "RAW">, db: Db, se
       mappingNote: chosen ? "as you set them" : saved.fromSaved ? "saved mapping applied" : "guessed, check them",
       rowCount: table.rows.length,
       hasNation: roles.includes("nation"),
-      hasIfId: roles.includes("if-id"),
-      shown: (["event", "place", "name", "performance"] as const).filter((r) => roles.includes(r)),
-      rows: rows.map((row, i) => ({ ...row, identity: identities[i] })),
+      hasIfId: roles.includes("if-id") || nationRanking,
+      ranking,
+      shown: shownRoles,
+      rows,
     },
   };
 }
@@ -169,6 +206,9 @@ async function read(env: Pick<Env, "DB" | "RAW">, source: SourceRow, form: FormD
 async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, form: FormData, now: Date) {
   const field = (name: string) => String(form.get(name) ?? "").trim();
   const sport = field("sport") || source.sport ? typedSport(field("sport") || source.sport!) : null;
+  const pasted = await readRawCopy(env, db, source.key, field("raw"));
+  const pastedRoles = rolesFrom(form, pasted.table.head.length) ?? columnMapping(pasted.table.head, null).roles;
+  if (isRankingMapping(pastedRoles)) return confirmRanking(env, db, source, form, now, { ...pasted, roles: pastedRoles, sport });
   // A reference Games (Paris 2024, Milano-Cortina 2026, ticket #46) is the owner's one row; any other competition is the source's.
   const reference = field("reference") ? REFERENCE_GAMES.find((g) => g.key === field("reference")) : undefined;
   if (field("reference") && !reference) throw new Response("No such reference Games", { status: 400 });
@@ -184,8 +224,8 @@ async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, 
     throw new Response(`The event day must lie within ${reference.name}`, { status: 400 });
   }
 
-  const { copy, table } = await readRawCopy(env, db, source.key, field("raw"));
-  const roles = rolesFrom(form, table.head.length) ?? columnMapping(table.head, null).roles;
+  const { copy, table } = pasted;
+  const roles = pastedRoles;
   const ticked = new Set(form.getAll("row").map(String));
   const rows = belgianPastedRows(table, roles).filter((r) => ticked.has(String(r.index)) && r.ifId !== null);
   if (rows.some((r) => !(r.event ?? field("event")))) throw new Response("Name the event", { status: 400 });
@@ -247,6 +287,61 @@ async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, 
   return { message, to: STEP_PATH };
 }
 
+/** Stores the ticked rows of a pasted ranking as ranking snapshots (#20 review, D). */
+async function confirmRanking(
+  env: Pick<Env, "DB" | "RAW">,
+  db: Db,
+  source: SourceRow,
+  form: FormData,
+  now: Date,
+  pasted: { copy: { id: string }; table: PastedTable; roles: PasteColumnRole[]; sport: string | null },
+) {
+  const field = (name: string) => String(form.get(name) ?? "").trim();
+  const { copy, table, roles, sport } = pasted;
+  const ranking = field("ranking");
+  const asOf = field("asOf");
+  if (!ranking || !/^\d{4}-\d{2}-\d{2}$/.test(asOf) || !sport) throw new Response("Name the ranking, its date (as of) and the sport", { status: 400 });
+  const ticked = new Set(form.getAll("row").map(String));
+  const rows = belgianRankingRows(table, roles).filter((r) => ticked.has(String(r.index)));
+  const nation = !roles.includes("name");
+  if (nation && rows.some((r) => !(r.event ?? field("event")))) throw new Response("Name the event", { status: 400 });
+
+  const scheme = idSchemeOf(source);
+  const people = rows.filter((r) => !nation && r.ifId !== null);
+  const identities = await identitiesOf(env.DB, db, scheme, people.map((r) => ({ ...r, name: r.name ?? "" })));
+  const writer = belgianRows(env, source.key, now);
+  let stored = 0;
+  for (const row of nation ? rows : people) {
+    const common = { ranking, sport, asOf, position: row.position, points: row.points, rawCopyId: copy.id };
+    if (nation) {
+      const teamId = await writer.team({ sport, event: row.event ?? field("event"), members: null, rawCopyId: copy.id });
+      await writer.ranking({ ...common, teamId });
+      stored++;
+      continue;
+    }
+    if (identities[people.indexOf(row)].kind !== "athlete") continue;
+    await writer.ranking({ ...common, person: { name: row.name ?? "", dateOfBirth: row.dateOfBirth, nationality: "BEL", ifId: { scheme, value: row.ifId! } } });
+    stored++;
+  }
+
+  const stamp = now.toISOString();
+  await db
+    .update(schema.source)
+    .set({
+      columnMapping: { ...(source.columnMapping ?? {}), ...mappingToSave(table.head, roles) },
+      sport,
+      lastPastedAt: stamp,
+      ...(source.tier === "assisted" ? { lastAttemptAt: stamp, lastSuccessAt: stamp, ...(writer.changes() > 0 ? { lastChangeAt: stamp } : {}) } : {}),
+    })
+    .where(eq(schema.source.key, source.key));
+  const skipped = people.length - stored;
+  const message = [
+    `${source.name}: stored ${stored} ranking position${stored === 1 ? "" : "s"}`,
+    skipped > 0 ? `, ${skipped} not an Athlete (skipped)` : "",
+  ].join("");
+  return { message, to: STEP_PATH };
+}
+
 function describe(source: SourceRow) {
   return { key: source.key, name: source.name, sport: source.sport, idScheme: idSchemeOf(source), hasMapping: source.columnMapping !== null };
 }
@@ -285,10 +380,17 @@ type IdentityPreview =
   | { kind: "athlete"; how: "IF ID" | "name + date of birth"; athlete: string }
   | { kind: "queue" }
   | { kind: "not-an-athlete" }
-  | { kind: "no-id" };
+  | { kind: "no-id" }
+  /** Belgium's own row in a nation ranking: its default Team in the event. */
+  | { kind: "nation" };
 
 /** What the writer will do with each row's person, the same way belgianRows() decides it. */
-async function identitiesOf(d1: D1Database, db: Db, scheme: string, rows: PastedResultRow[]): Promise<IdentityPreview[]> {
+async function identitiesOf(
+  d1: D1Database,
+  db: Db,
+  scheme: string,
+  rows: Pick<PastedResultRow, "name" | "ifId" | "dateOfBirth">[],
+): Promise<IdentityPreview[]> {
   let roster: KnownIdentity[] | null = null;
   const athletes = new Map((await db.select({ id: schema.athlete.id, name: schema.athlete.name }).from(schema.athlete)).map((a) => [a.id, a.name]));
   const out: IdentityPreview[] = [];
@@ -326,6 +428,8 @@ function IdentityCell({ identity }: { identity: IdentityPreview }) {
       return <span className="sub">not an Athlete (ignored)</span>;
     case "no-id":
       return <span className="bad">no IF ID: type it under Manual results</span>;
+    case "nation":
+      return <span className="ok">Belgium's Team in the event</span>;
   }
 }
 
@@ -453,7 +557,7 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
                     )}
                   </td>
                   {read.shown.map((r) => (
-                    <td key={r}>{r === "place" ? (row.place ?? row.status) : row[r]}</td>
+                    <td key={r}>{row.cells[r]}</td>
                   ))}
                   <td>
                     <IdentityCell identity={row.identity} />
@@ -462,6 +566,29 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
               ))}
             </tbody>
           </table>
+          {read.ranking ? (
+            <div className="maps">
+              <label>
+                Ranking
+                <input name="ranking" required placeholder="BWF world ranking · Men's singles" />
+              </label>
+              <label>
+                As of
+                <input type="date" name="asOf" required />
+              </label>
+              <label>
+                Sport
+                <input name="sport" required defaultValue={source.sport ?? ""} list={SPORT_LIST_ID} />
+                <SportOptions />
+              </label>
+              {read.roles.includes("event") || read.roles.includes("name") ? null : (
+                <label>
+                  Event
+                  <input name="event" required placeholder="Mixed Relay" />
+                </label>
+              )}
+            </div>
+          ) : (
           <div className="maps">
             <label>
               Reference Games
@@ -512,6 +639,7 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
               <input type="date" name="date" />
             </label>
           </div>
+          )}
           <div className="actions">
             <button type="submit" name="intent" value="confirm">
               Confirm the ticked rows
