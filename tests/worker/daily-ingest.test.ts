@@ -20,6 +20,8 @@ async function addSource(key: string, row: Partial<typeof schema.source.$inferIn
 
 describe("daily ingest cron", () => {
   it("queues one job per Automatic source whose cadence is due, and none for blocked, Assisted or not-yet-due ones", async () => {
+    // Every migrated source fetched just before the cron, so only the ones arranged below can be due.
+    await getDb(env.DB).update(schema.source).set({ lastSuccessAt: "2026-11-16T03:59:00.000Z", blockedAt: null });
     await setSource(env.DB, "isu-speed-skating", { lastSuccessAt: "2026-11-13T04:01:00.000Z", blockedAt: null });
     await addSource("weekly-due", { cadenceDays: 7, lastSuccessAt: "2026-11-09T04:05:00.000Z" });
     await addSource("weekly-not-due", { cadenceDays: 7, lastSuccessAt: "2026-11-13T04:05:00.000Z" });
