@@ -1,0 +1,128 @@
+import { env } from "cloudflare:workers";
+import { eq } from "drizzle-orm";
+import { beforeEach, describe, expect, it } from "vitest";
+import { getDb, schema } from "~/db/client";
+import { ISU_WORLDS_2026_RUN, isuWorlds2026Run } from "../fixtures/sources/isu-speed-skating";
+import type { RecordedResponse } from "../support/outbound-fetch";
+import { fixClock } from "../support/clock";
+import { stubOutboundFetch } from "../support/outbound-fetch";
+import { clearIngestedData, seedAthlete, seedEntry, setSource } from "../support/seed";
+import { deliverIngestJobs, get } from "../support/worker";
+
+// Spec #20, stories 61–63; ticket #39. Championship timetables of ISU speed
+// skating, World Athletics, World Aquatics and World Archery come in
+// automatically, version-stamped like a pasted one: a changed timetable is a
+// new version, an unchanged one is not, and only the rounds of events with a
+// Belgian Entry become Sessions.
+const SCHEDULES = "/curate/run/schedules";
+
+const text = (html: string) =>
+  html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
+const page = async (path: string) => (await get(path)).text();
+
+/** The shown day's Sessions: one line per Belgian Entry in a round. */
+function dayRows(html: string) {
+  const start = html.indexOf('aria-label="Sessions"');
+  if (start < 0) return [];
+  const table = html.slice(start, html.indexOf("</table>", start));
+  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => `${text(m[2])}${/if-through/.test(m[1]) ? " [greyed]" : ""}`);
+}
+
+/** The Schedules step's list of stored timetables, one line per competition. */
+async function storedTimetables() {
+  const html = await page(SCHEDULES);
+  const table = html.match(/<table aria-label="Stored timetables">(.*?)<\/table>/s)?.[1] ?? "";
+  return [...table.matchAll(/<tr>(.*?)<\/tr>/gs)].map((m) => text(m[1]));
+}
+
+async function competitionBy(source: string, sourceRef: string) {
+  return (await getDb(env.DB).query.competition.findFirst({ where: (c, { and, eq }) => and(eq(c.source, source), eq(c.sourceRef, sourceRef)) }))!;
+}
+
+async function sourceRow(key: string) {
+  return (await getDb(env.DB).query.source.findFirst({ where: eq(schema.source.key, key) }))!;
+}
+
+/** One run of a source at `now`, after its last success, against these recorded responses. */
+async function runSource(source: string, now: string, lastSuccessAt: string, responses: RecordedResponse[]) {
+  await setSource(env.DB, source, { lastSuccessAt, lastChangeAt: null, lastFailureAt: null, lastError: null, blockedAt: null, blockedReason: null });
+  fixClock(now);
+  stubOutboundFetch(responses);
+  const result = await deliverIngestJobs([{ kind: "fetch-source", source }]);
+  expect(result.explicitAcks, `${source} run at ${now}`).toEqual(["msg-1"]);
+  expect((await sourceRow(source)).lastError).toBeNull();
+}
+
+describe("ISU speed skating timetables (through the #23 adapter)", () => {
+  const ISU = "isu-speed-skating";
+  const runWorlds = (now: string, responses = isuWorlds2026Run) => runSource(ISU, now, ISU_WORLDS_2026_RUN.lastSuccessAt, responses);
+  let swings: string;
+
+  beforeEach(async () => {
+    await clearIngestedData(env);
+    swings = await seedAthlete(env.DB, { name: "Bart Swings", sport: "Speed skating", externalIds: [{ scheme: "isu", value: "692" }] });
+  });
+
+  it("stores a published Championship schedule as a version, and none for a schedule not published yet", async () => {
+    await runWorlds(ISU_WORLDS_2026_RUN.now);
+
+    expect(await storedTimetables()).toEqual(["ISU Speed Skating World Championships · fetched 2026-03-01 0 Sessions source Name Entries"]);
+    const europeans = await competitionBy(ISU, "2027_NED_0002");
+    expect(await getDb(env.DB).select().from(schema.timetableVersion).where(eq(schema.timetableVersion.competitionId, europeans.id))).toEqual([]);
+  });
+
+  it("keeps only the races of events with a Belgian Entry, in venue time", async () => {
+    await runWorlds(ISU_WORLDS_2026_RUN.now);
+    const worlds = await competitionBy(ISU, "2026_NED_0002");
+    await seedEntry(env.DB, { competitionId: worlds.id, sport: "Speed skating", event: "5000m Men", athleteId: swings });
+
+    await runWorlds("2026-03-02T04:00:00.000Z");
+
+    expect(await storedTimetables()).toEqual(["ISU Speed Skating World Championships · fetched 2026-03-01 1 Sessions source Name Entries"]);
+    fixClock("2026-03-07T17:00:00.000Z");
+    expect(dayRows(await page(`/championship/${worlds.id}`))).toEqual(["15:46 Bart Swings 5000m Men · Final"]);
+  });
+
+  it("a changed schedule is a new version that replaces the Sessions; an unchanged one is not", async () => {
+    await runWorlds(ISU_WORLDS_2026_RUN.now);
+    const worlds = await competitionBy(ISU, "2026_NED_0002");
+    await seedEntry(env.DB, { competitionId: worlds.id, sport: "Speed skating", event: "5000m Men", athleteId: swings });
+    const [schedule] = isuWorlds2026Run.filter((r) => r.url.endsWith("/2026_NED_0002/schedule/"));
+    const moved = { ...schedule, body: String(schedule.body).replace('"2026-03-07T14:46:00Z"', '"2026-03-07T15:00:00Z"') };
+
+    await runWorlds("2026-03-02T04:00:00.000Z", [...isuWorlds2026Run, moved]);
+    await runWorlds("2026-03-03T04:00:00.000Z", [...isuWorlds2026Run, moved]);
+
+    expect(await storedTimetables()).toEqual(["ISU Speed Skating World Championships · fetched 2026-03-02 · replaces fetched 2026-03-01 1 Sessions source Name Entries"]);
+    expect(await getDb(env.DB).select().from(schema.timetableVersion)).toHaveLength(2);
+    expect((await sourceRow(ISU)).lastChangeAt).toBeNull();
+    fixClock("2026-03-07T17:00:00.000Z");
+    expect(dayRows(await page(`/championship/${worlds.id}`))).toEqual(["16:00 Bart Swings 5000m Men · Final"]);
+  });
+
+  it("the owner names the Belgian Entries on the fetched version, which stays the same version", async () => {
+    await runWorlds(ISU_WORLDS_2026_RUN.now);
+    const worlds = await competitionBy(ISU, "2026_NED_0002");
+
+    const step = await page(SCHEDULES);
+    const link = step.match(/<a href="([^"]+)">Name Entries<\/a>/)?.[1]?.replace(/&amp;/g, "&");
+    expect(link, "a Name Entries link on the stored version").toBeDefined();
+    const review = await page(link!);
+    expect(text(review)).toContain("16 rounds read in 16 events");
+    const form = review.match(/<form[^>]*class="card timetable-review"[^>]*>(.*?)<\/form>/s)![1];
+    const hidden = [...form.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"\/>/g)].map((m): [string, string] => [m[1], m[2].replace(/&#x27;/g, "'").replace(/&amp;/g, "&")]);
+    const [eventField] = hidden.find(([, value]) => value === "5000m Men")!;
+    const ticks: [string, string][] = [[`entry.${eventField.slice("event.".length)}`, `athlete:${swings}`]];
+    const stored = await get(SCHEDULES, { method: "POST", body: new URLSearchParams([["intent", "store-timetable"], ...hidden, ...ticks]) });
+    expect(stored.status).toBe(303);
+
+    expect(await storedTimetables()).toEqual(["ISU Speed Skating World Championships · fetched 2026-03-01 1 Sessions source Name Entries"]);
+    fixClock("2026-03-07T17:00:00.000Z");
+    expect(dayRows(await page(`/championship/${worlds.id}`))).toEqual(["15:46 Bart Swings 5000m Men · Final"]);
+
+    // The next fetch of the same schedule keeps it so.
+    await runWorlds("2026-03-02T04:00:00.000Z");
+    expect(await getDb(env.DB).select().from(schema.timetableVersion)).toHaveLength(1);
+    expect(await getDb(env.DB).select().from(schema.session)).toHaveLength(1);
+  });
+});

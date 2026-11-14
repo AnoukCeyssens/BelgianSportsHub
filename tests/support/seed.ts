@@ -108,6 +108,13 @@ export async function seedTeam(d1: D1Database, t: { name: string; sport: string;
   return row.id;
 }
 
+/** A Belgian Entry in one event of a competition (an Athlete or a Team), as the Schedules step or a Selection names it. */
+export async function seedEntry(d1: D1Database, e: { competitionId: string; sport: string; event: string; athleteId?: string; teamId?: string }) {
+  await getDb(d1)
+    .insert(schema.entry)
+    .values({ ...e, athleteId: e.athleteId ?? null, teamId: e.teamId ?? null, checkedOn: "2026-01-01" });
+}
+
 /** Names an Athlete on a competition's entry list. */
 export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
   const db = getDb(d1);

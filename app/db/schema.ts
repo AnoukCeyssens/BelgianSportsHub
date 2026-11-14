@@ -445,11 +445,17 @@ export const timetableVersion = sqliteTable("timetable_version", {
   sourceUrl: text("source_url"),
   /** Role per lower-cased header, reused for the next version (and for other competitions from the same source). */
   columnMapping: text("column_mapping", { mode: "json" }).$type<Record<string, string>>(),
-  /** ISO instant the owner stored it. */
+  /** ISO instant the owner (or a source run) stored it. */
   storedAt: text("stored_at").notNull(),
   rawCopyId: text("raw_copy_id")
     .notNull()
     .references(() => rawCopy.id),
+  /**
+   * SHA-256 of the timetable as read (`timetableText`, every round, Belgian
+   * or not): a fetched timetable whose fingerprint was seen before is no new
+   * version. Null for versions stored before #39.
+   */
+  fingerprint: text("fingerprint"),
 });
 
 /**

@@ -152,6 +152,41 @@ export type TeamInput = {
   rawCopyId: string;
 };
 
+/** One event round of a fetched timetable. Times are venue-local. */
+export type TimetableRoundInput = {
+  /** YYYY-MM-DD, venue-local. */
+  date: string;
+  /** HH:mm venue-local; null when the source gives none. */
+  start: string | null;
+  end: string | null;
+  /** The organiser's Session code, when its rounds share one timed block; null otherwise (each round its own Session). */
+  session: string | null;
+  /** As the source names it ("Women's 100 Metres"); the writer matches it to the Entries the way `sameEvent` does. */
+  event: string;
+  round: string;
+};
+
+/**
+ * A Championship's timetable as the source publishes it now (spec #20,
+ * stories 61–63; ticket #39): every round, Belgian or not. The writer keeps a
+ * new version only when it differs from every version seen before, and makes
+ * Sessions of the rounds of events with a Belgian Entry.
+ */
+export type TimetableInput = {
+  /** From BelgianRows.competition(). */
+  competitionId: string;
+  /** The source's own version stamp, if it has one; otherwise the writer stamps "fetched <date>". */
+  version: string | null;
+  /** YYYY-MM-DD the source says it published this version, when it does. */
+  publishedOn: string | null;
+  /** The page or API URL a reader can check it at. */
+  sourceUrl: string;
+  /** IANA zone of the venue; the competition's when null. Without either, nothing is stored. */
+  venueZone: string | null;
+  rounds: TimetableRoundInput[];
+  rawCopyId: string;
+};
+
 /**
  * Where an adapter puts what it parsed. Only performances count as results:
  * an adapter leaves out DNS and withdrawals. Non-Belgian people are ignored
@@ -168,6 +203,8 @@ export type BelgianRows = {
   team(input: TeamInput): Promise<string>;
   /** Replaces a competition's entry list: the Belgians it names who are already Athletes. */
   entrants(competitionId: string, people: Person[], rawCopyId: string): Promise<void>;
+  /** Stores a Championship's timetable as a new version when it changed, and its Belgian Sessions. An empty timetable (not published yet) is ignored. */
+  timetable(input: TimetableInput): Promise<void>;
 };
 
 /** The source refused the Worker (e.g. 401, 403, a bot challenge): it drops to Assisted. */

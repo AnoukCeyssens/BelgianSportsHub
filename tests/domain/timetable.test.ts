@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readPastedTable, readTimetable, splitEventRound, timetableColumnMapping } from "~/domain";
+import { belgianRounds, readPastedTable, readTimetable, sameEvent, splitEventRound, timetableColumnMapping, venueZoneOf } from "~/domain";
 
 // Spec #20, stories 55, 61, 63 and 110; GLOSSARY "Session"; ticket #37. A
 // Championship timetable (or the Games' by-event schedule) pasted into the
@@ -125,5 +125,78 @@ describe("readTimetable", () => {
       { index: 1, why: "outside the competition's days" },
       { index: 2, why: "no event" },
     ]);
+  });
+});
+
+// Ticket #39: timetables fetched automatically name their events the
+// federation's way ("Women's 100 Metres"); the Entries the owner named may
+// read "Women's 100m". Only rounds of events with a Belgian Entry are kept,
+// under the Entry's own event name.
+describe("sameEvent", () => {
+  it.each([
+    { name: "identical", a: "Women's 100 Metres", b: "Women's 100 Metres", same: true },
+    { name: "case and spacing", a: "women's 100  metres", b: "Women's 100 Metres", same: true },
+    { name: "metres written m", a: "Women's 100 Metres", b: "Women's 100m", same: true },
+    { name: "m with a space", a: "Men's 1500 m", b: "Men's 1500 Metres", same: true },
+    { name: "gender word after the event", a: "100m Women", b: "Women's 100 Metres", same: true },
+    { name: "thousands separator", a: "Women's 10,000 Metres", b: "Women's 10000m", same: true },
+    { name: "the other gender", a: "Men's 100 Metres", b: "Women's 100 Metres", same: false },
+    { name: "men is not inside women", a: "100m Men", b: "100m Women", same: false },
+    { name: "hurdles are not the flat race", a: "Women's 400 Metres Hurdles", b: "Women's 400 Metres", same: false },
+    { name: "a relay is not the individual race", a: "Mixed 4x400 Metres Relay", b: "Men's 400 Metres", same: false },
+    { name: "a course in brackets counts", a: "Women's 50m Freestyle (25m)", b: "Women's 50m Freestyle", same: false },
+  ])("$name", ({ a, b, same }) => {
+    expect(sameEvent(a, b)).toBe(same);
+  });
+});
+
+describe("belgianRounds", () => {
+  const round = (event: string, round: string, sport = "Athletics") => ({ index: 0, date: "2027-09-10", start: "19:00", end: null, session: null, sport, event, round });
+
+  it.each([
+    {
+      name: "no Entry: nothing is kept",
+      rounds: [round("Women's 100 Metres", "Round 1")],
+      entries: [],
+      expected: [],
+    },
+    {
+      name: "every round of an event with an Entry, under the Entry's event name",
+      rounds: [round("Women's Heptathlon", "100 Metres Hurdles"), round("Men's 100 Metres", "Round 1"), round("Women's Heptathlon", "High Jump")],
+      entries: [{ sport: "Athletics", event: "Women's Heptathlon" }],
+      expected: [
+        ["Women's Heptathlon", "100 Metres Hurdles"],
+        ["Women's Heptathlon", "High Jump"],
+      ],
+    },
+    {
+      name: "the Entry names the event its own way",
+      rounds: [round("Women's 400 Metres Hurdles", "Round 1"), round("Women's 400 Metres", "Round 1")],
+      entries: [{ sport: "Athletics", event: "Women's 400m Hurdles" }],
+      expected: [["Women's 400m Hurdles", "Round 1"]],
+    },
+    {
+      name: "an Entry of another sport does not count",
+      rounds: [round("Men's 500m", "Final", "Speed skating")],
+      entries: [{ sport: "Short track", event: "Men's 500m" }],
+      expected: [],
+    },
+  ])("$name", ({ rounds, entries, expected }) => {
+    expect(belgianRounds(rounds, entries).map((r) => [r.event, r.round])).toEqual(expected);
+  });
+});
+
+describe("venueZoneOf", () => {
+  it.each([
+    { name: "a one-zone country", country: "CHN", city: "Beijing", expected: "Asia/Shanghai" },
+    { name: "Belgium", country: "BEL", city: "Brussels", expected: "Europe/Brussels" },
+    { name: "Hungary", country: "HUN", city: "Budapest", expected: "Europe/Budapest" },
+    { name: "a US city", country: "USA", city: "Eugene", expected: "America/Los_Angeles" },
+    { name: "Colombia", country: "COL", city: "Medellin", expected: "America/Bogota" },
+    { name: "an Australian city", country: "AUS", city: "Gold Coast", expected: "Australia/Brisbane" },
+    { name: "a US city it does not know", country: "USA", city: "Springfield", expected: null },
+    { name: "an unknown country", country: "XYZ", city: null, expected: null },
+  ])("$name", ({ country, city, expected }) => {
+    expect(venueZoneOf(country, city)).toBe(expected);
   });
 });

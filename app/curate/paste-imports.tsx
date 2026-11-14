@@ -190,7 +190,7 @@ async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, 
 
   const scheme = idSchemeOf(source);
   const identities = await identitiesOf(env.DB, db, scheme, rows);
-  const writer = belgianRows(env.DB, source.key, now);
+  const writer = belgianRows(env, source.key, now);
   const competitionRef = reference ? reference.key : `${slug(competitionName)}:${startDate}`;
   const competitionId = reference
     ? await referenceGamesRow(env, reference, now)
