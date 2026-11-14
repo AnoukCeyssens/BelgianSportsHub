@@ -68,3 +68,58 @@ export function standardsForSports(lines: readonly string[], sports: readonly st
     return sport === undefined || chosen.includes(sport);
   });
 }
+
+/**
+ * A reference Games (spec #20, story 119; ticket #46): a past Games kept as
+ * history, Belgian results only, as the baseline for the current cycles. No
+ * Phases, Expectations or qualification. Its results are entered by hand or
+ * through the paste importer and attach to the owner's row (a `competition`
+ * of kind "games", source "owner", source ref the key), created with the
+ * first result.
+ */
+export type ReferenceGames = TrackedGames & {
+  /** YYYY-MM-DD, venue-local: the first and last competition day. */
+  startDate: string;
+  endDate: string;
+  /** The organiser's results page: where its results are read, by hand. */
+  resultsUrl: string;
+};
+
+export const REFERENCE_GAMES: readonly ReferenceGames[] = [
+  {
+    key: "paris-2024",
+    name: "Paris 2024",
+    sport: "Olympic Games",
+    city: "Paris",
+    country: "FRA",
+    venueZone: "Europe/Paris",
+    series: "olympic-games",
+    startDate: "2024-07-24",
+    endDate: "2024-08-11",
+    resultsUrl: "https://www.olympics.com/en/olympic-games/paris-2024/results",
+  },
+  {
+    key: "milano-cortina-2026",
+    name: "Milano-Cortina 2026",
+    sport: "Olympic Winter Games",
+    city: "Milan and Cortina d'Ampezzo",
+    country: "ITA",
+    venueZone: "Europe/Rome",
+    series: "olympic-winter-games",
+    startDate: "2026-02-04",
+    endDate: "2026-02-22",
+    resultsUrl: "https://www.olympics.com/en/olympic-games/milano-cortina-2026/results",
+  },
+];
+
+type GamesCompetition = { kind: string; source: string; sourceRef: string; startDate: string; endDate: string };
+
+/**
+ * The reference Games a competition belongs to, or null: the owner's row for
+ * it, or Olympic Games a source published on its days (one sport's programme).
+ */
+export function referenceGamesOf(competition: GamesCompetition): ReferenceGames | null {
+  if (competition.kind !== "games") return null;
+  if (competition.source === GAMES_SOURCE) return REFERENCE_GAMES.find((g) => g.key === competition.sourceRef) ?? null;
+  return REFERENCE_GAMES.find((g) => competition.startDate <= g.endDate && competition.endDate >= g.startDate) ?? null;
+}

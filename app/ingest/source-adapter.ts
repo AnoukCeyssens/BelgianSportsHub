@@ -106,6 +106,8 @@ export type ResultInput = {
   competitionId: string;
   /** As the source titles it, e.g. "1000m Women". */
   event: string;
+  /** The event's sport, only where the competition spans several (a reference Games); the competition's sport otherwise. */
+  sport?: string | null;
   /** YYYY-MM-DD, venue-local. */
   date: string;
   /** Official classification place, or null when none was given. */
@@ -119,6 +121,8 @@ export type ResultInput = {
   | { person: Person }
   /** An Athlete the owner already named (the Manual results form): no identity matching. */
   | { athleteId: string }
+  /** A Team and the Athletes its result credits, as the owner named them (a reference Games result by hand). */
+  | { teamId: string; roster: string[] }
 );
 
 /**
