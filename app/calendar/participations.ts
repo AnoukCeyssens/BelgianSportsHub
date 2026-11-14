@@ -15,6 +15,8 @@ export type CompetitionParticipation = {
   id: string;
   name: string;
   sport: string;
+  /** Key of the source the competition came from. */
+  source: string;
   kind: "championship" | "games" | "circuit";
   startDate: string;
   endDate: string;
@@ -65,6 +67,7 @@ export async function participationsBetween(db: Db, from: string, to: string): P
       id: comp.id,
       name: comp.name,
       sport: comp.sport,
+      source: comp.source,
       kind: comp.kind as CompetitionParticipation["kind"],
       startDate: comp.startDate,
       endDate: comp.endDate,
