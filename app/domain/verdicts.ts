@@ -5,9 +5,12 @@
 //   (DNF, DNS, DSQ, eliminated before a place is given) is Missed.
 // - `verdict` compares one Expectation (a place or a place range) with the
 //   outcome: Beat (better), Met (the place, or inside the range), Missed.
-//   An Entry withdrawn before the picks lock (`withdrawnBeforeLock`) is voided;
-//   a withdrawal from the lock on (a DNS) is Missed. No Expectation (unpicked,
-//   added after the lock, no snapshot before the start) = no Verdict.
+//   A personal pick for an Entry withdrawn before the picks lock
+//   (`withdrawnBeforeLock`) is voided; an external Expectation (Seed,
+//   Gracenote) of that Entry gets its normal Verdict: no place, Missed. A
+//   withdrawal from the lock on (a DNS) is Missed for every source. No
+//   Expectation (unpicked, added after the lock, no snapshot before the
+//   start) = no Verdict.
 // - `tally` counts Beat / Met / Missed per source; `impliedCounts` gives the
 //   medal and top-8 counts a set of Expectations implies, a range counting
 //   only when it lies wholly inside the band.
@@ -21,9 +24,12 @@ export const VERDICT_LABELS: Record<Verdict, string> = { beat: "Beat", met: "Met
 /** The Entry's outcome: its official place (null: none) and whether it was withdrawn before the lock. */
 export type Outcome = { place: number | null; withdrawnBeforeLock: boolean };
 
-export function verdict(expectation: PlaceRange | null, outcome: Outcome): Verdict | null {
+/** Seeds and Gracenote are external Expectations; the owner's pick is personal (GLOSSARY "Expectation"). */
+export type ExpectationKind = "external" | "personal";
+
+export function verdict(expectation: PlaceRange | null, outcome: Outcome, kind: ExpectationKind): Verdict | null {
   if (!expectation) return null;
-  if (outcome.withdrawnBeforeLock) return "voided";
+  if (outcome.withdrawnBeforeLock && kind === "personal") return "voided";
   if (outcome.place === null || outcome.place > expectation.to) return "missed";
   return outcome.place < expectation.from ? "beat" : "met";
 }
@@ -59,4 +65,18 @@ export type DelegationCounts = { medals: number; top8: number };
 export function impliedCounts(ranges: readonly (PlaceRange | null)[]): DelegationCounts {
   const inside = (band: number) => ranges.filter((r) => r !== null && r.to <= band).length;
   return { medals: inside(3), top8: inside(8) };
+}
+
+/**
+ * Belgium's own medal and top-8 counts at a competition, from every Belgian
+ * result there (not only the Selected Entries): each Entry's official place
+ * in each event (`outcomeOf`, event names compared ignoring case) counts once.
+ */
+export function belgiumCounts(results: readonly { entry: string; event: string; place: number | null; date: string }[]): DelegationCounts {
+  const byEntryEvent = new Map<string, { place: number | null; date: string }[]>();
+  for (const r of results) {
+    const key = `${r.entry}|${r.event.toLowerCase()}`;
+    byEntryEvent.set(key, [...(byEntryEvent.get(key) ?? []), r]);
+  }
+  return impliedCounts([...byEntryEvent.values()].map((own) => outcomeOf(own)).map((place) => (place === null ? null : { from: place, to: place })));
 }

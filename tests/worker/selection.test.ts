@@ -7,6 +7,7 @@ import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedTeam, seedTeamResult, setSource } from "../support/seed";
 import { deliverIngestJobs, get, post } from "../support/worker";
+import { elements, fieldset, labelled, phasePanel } from "../support/html";
 
 // Spec #20, stories 46, 81, 85, 96 and 108; ticket #34. The owner enters a
 // Selection from a federation press release in the Run sheet's Selections &
@@ -35,8 +36,8 @@ const postFields = (path: string, fields: [string, string][]) => get(path, { met
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** A table's rows (header left out), as text. */
@@ -55,12 +56,15 @@ function calendarRow(html: string, name: string) {
 
 /** The Selection cards of the Run sheet step: heading and each candidate with whether it is ticked. */
 function selectionCards(html: string) {
-  return [...html.matchAll(/<section class="card selection" aria-label="([^"]+)"[^>]*>(.*?)<\/section>/gs)].map((m) => ({
-    card: m[1].replace(/&#x27;/g, "'"),
-    text: text(m[2]),
-    candidates: [...m[2].matchAll(/<label class="candidate">(.*?)<\/label>/gs)].map((c) => `${/checked=""/.test(c[1]) ? "☑" : "☐"} ${text(c[1])}`),
-    ids: Object.fromEntries([...m[2].matchAll(/<label class="candidate"><input[^>]*value="([^"]+)"[^>]*\/?>(.*?)<\/label>/gs)].map((c) => [text(c[2]), c[1]])),
-  }));
+  return labelled(html, /Selection · [^"]+/, "section").map((card) => {
+    const candidates = elements(fieldset(card.inner, "Potential Entries") ?? "", /<label\b[^>]*>/);
+    return {
+      card: card.label!.replace(/&#x27;/g, "'"),
+      text: text(card.inner),
+      candidates: candidates.map((c) => `${/checked=""/.test(c.inner) ? "☑" : "☐"} ${text(c.inner)}`),
+      ids: Object.fromEntries(candidates.map((c) => [text(c.inner), c.inner.match(/value="([^"]+)"/)![1]])),
+    };
+  });
 }
 
 /** An Athlete with a senior international performance in the last 12 months (Active). */
@@ -250,7 +254,7 @@ describe("Selection", () => {
     await post(schedules, { intent: "save-sport-days", games: "la-2028", sport: "Athletics", firstDay: "2028-07-15", lastDay: "2028-07-24", sourceUrl: "https://la28.example" });
     await post(schedules, { intent: "save-sport-days", games: "la-2028", sport: "Swimming", firstDay: "2028-07-15", lastDay: "2028-07-23", sourceUrl: "https://la28.example" });
     const la = (await getDb(env.DB).query.competition.findFirst({ where: eq(schema.competition.sourceRef, "la-2028") }))!.id;
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-30" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-30", closesSource: "https://example.org/qualification-window" });
     const thiam = await activeAthlete("Nafissatou Thiam", "Athletics", "2028-03-10");
     const verbeke = await activeAthlete("Lucas Verbeke", "Swimming", "2028-03-10");
     await addEntry(la, `athlete:${thiam}`, "Heptathlon", "qualified", "games");
@@ -288,7 +292,7 @@ describe("Selection", () => {
     const whole = await page(`/games/${la}`);
     expect(panel(whole)?.phase).toBe("Selection");
     expect(panel(whole)?.text).toContain("Selected by Belgian Olympic Committee · 28 Mar 2028");
-    expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon – –"]);
+    expect(rows(whole, "Selected Entries")).toEqual(["Nafissatou Thiam Heptathlon – – –"]);
     expect(panel(await page(`/games/${la}?sport=Athletics`))?.phase).toBe("Selection");
     expect(panel(await page(`/games/${la}?sport=Swimming`))?.phase).toBe("Qualification");
     // Belgium's NOC-owned place in the event links to the Selected Entry.

@@ -17,7 +17,7 @@ export default [
   route("curate/run/:step", "routes/curate.run.tsx"),
   route("curate/live/:step", "routes/curate.live.tsx"),
   route("curate/roster-seed", "routes/curate.roster-seed.tsx"),
-  route("curate/sources", "routes/curate.sources.tsx"),
+  route("curate/sources/:key?", "routes/curate.sources.tsx"),
   route("curate/merge-queue", "routes/curate.merge-queue.tsx"),
   route("curate/championships/:competitionId/standards", "routes/curate.championship-standards.tsx"),
   route("curate/games/:competitionId/standards", "routes/curate.championship-standards.tsx", { id: "games-standards" }),

@@ -13,6 +13,7 @@ import { belgianDate, GAMES_SOURCE, TRACKED_GAMES, type TrackedGames } from "~/d
 import { formatDate, formatDayRange } from "~/format";
 import { keepRawCopy } from "~/ingest/raw-copy";
 import { loadTimetables, TimetablesPart, type TimetableReviewData } from "./timetables";
+import { SPORT_LIST_ID, SportOptions, typedSport } from "./sport-field";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -70,8 +71,8 @@ export async function actOnSchedules(env: Pick<Env, "DB" | "RAW">, intent: strin
   }
 
   if (!games) throw new Response(`Record the dates of ${tracked.name} first`, { status: 400 });
-  const sport = field("sport");
-  if (!sport) throw new Response("Name the sport", { status: 400 });
+  if (!field("sport")) throw new Response("Name the sport", { status: 400 });
+  const sport = typedSport(field("sport"));
 
   if (intent === "save-sport-days") {
     const { firstDay, lastDay, sourceUrl } = typedDays(field);
@@ -146,7 +147,7 @@ export function SchedulesStep({ data, review }: { data: SchedulesData; review: T
       <p className="sub">Until the full session schedule is imported: the Games dates (first to last competition day) and each sport's first and last day.</p>
       {data.games.map((g) => (
         <div key={g.key}>
-          <Form method="post" className="card games-dates">
+          <Form method="post" className="card games-dates" aria-label={`${g.name} dates`}>
             <h3>{`${g.name} · ${g.city} · ${g.recorded ? days(g.recorded.startDate, g.recorded.endDate) : "dates not recorded yet"}`}</h3>
             <input type="hidden" name="games" value={g.key} />
             <div className="fields">
@@ -213,7 +214,8 @@ function SportDays({ games, sports }: { games: string; sports: SchedulesData["ga
         <div className="fields">
           <label>
             Sport
-            <input name="sport" required placeholder="e.g. Athletics" />
+            <input name="sport" required placeholder="e.g. Athletics" list={SPORT_LIST_ID} />
+            <SportOptions />
           </label>
           <label>
             First day

@@ -16,6 +16,7 @@
 // from the final it reached (Final B is 7th to 12th, the bronze medal race 3rd
 // and 4th), and a boat knocked out earlier is "eliminated" with its last time.
 // No entry lists are read, so there is no Upcoming.
+import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://world-rowing-api.soticcloud.net/stats/api";
@@ -79,6 +80,7 @@ export const worldRowing: SourceAdapter = {
         country: c.venue?.country?.CountryCode ?? null,
         venueZone: null,
         sourceRef: c.id,
+        series: seriesKey({ source: "world-rowing", name: c.DisplayName, kind, sport: SPORT, city: c.venue?.RegionCity || null }),
         rawCopyId: c.rawCopyId,
       });
       if (startDate > today) continue;

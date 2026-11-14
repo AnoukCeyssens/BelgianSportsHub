@@ -14,6 +14,7 @@
 // competitions (e.g. "... Mixed Teams", is_teams 1) that its competition list
 // does not return, and their competitors list gives no team place. Belgium has
 // fielded no mixed team at the Games or the Worlds since 2024.
+import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://data.ijf.org/api/get_json";
@@ -100,6 +101,7 @@ export const ijfJudo: SourceAdapter = {
         country: c.country_short || null,
         venueZone: c.timezone || null,
         sourceRef: c.id_competition,
+        series: seriesKey({ source: "ijf", name: c.name, kind, sport: SPORT, city: c.city || null }),
         rawCopyId: c.rawCopyId,
       });
       if (startDate > horizon) continue;
@@ -118,7 +120,7 @@ export const ijfJudo: SourceAdapter = {
             await run.rows.result({
               competitionId,
               person: person(j),
-              event: `${category.gender === "male" ? "Men" : "Women"} ${category.category} kg`,
+              event: eventName(category),
               date: j.date_from,
               place,
               status: place === null ? "eliminated" : "finished",
@@ -130,8 +132,13 @@ export const ijfJudo: SourceAdapter = {
         }
       }
       if (endDate >= today) {
-        const entered = categories.flatMap((category) => Object.values(category.persons)).filter(isBelgian);
-        await run.rows.entrants(competitionId, entered.map(person), fetched.rawCopyId);
+        // Each judoka in the weight class the list names them in, as the results name it.
+        const entered = categories.flatMap((category) =>
+          Object.values(category.persons)
+            .filter(isBelgian)
+            .map((j) => ({ ...person(j), events: [eventName(category)] })),
+        );
+        await run.rows.entrants(competitionId, entered, fetched.rawCopyId);
       }
     }
   },
@@ -170,4 +177,9 @@ function isoDate(instant: Date): string {
 
 function addDays(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** "Men -73 kg": a weight class as the results and the entry list name it. */
+function eventName(category: { gender: string; category: string }): string {
+  return `${category.gender === "male" ? "Men" : "Women"} ${category.category} kg`;
 }

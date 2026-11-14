@@ -207,7 +207,7 @@ describe("ISU speed skating source", () => {
     expect(source.blockedAt).toBeNull();
   });
 
-  it("leaves out national events such as Olympic trials, and records the Games as the Games", async () => {
+  it("leaves out national events such as Olympic trials, and files the Games under the reference Games it is", async () => {
     await setSource(env.DB, ISU, { lastSuccessAt: ISU_JANUARY_2026_RUN.lastSuccessAt });
     fixClock(ISU_JANUARY_2026_RUN.now);
     stubOutboundFetch(isuJanuary2026Run);
@@ -218,7 +218,7 @@ describe("ISU speed skating source", () => {
     const competitions = await getDb(env.DB)
       .select({ name: schema.competition.name, kind: schema.competition.kind, zone: schema.competition.venueZone, series: schema.competition.series })
       .from(schema.competition);
-    expect(competitions).toEqual([{ name: "Olympic Games Milano Cortina", kind: "games", zone: "Europe/Rome", series: "olympic-games" }]);
+    expect(competitions).toEqual([{ name: "Milano-Cortina 2026", kind: "games", zone: "Europe/Rome", series: "olympic-winter-games" }]);
   });
 
   it("flags a source that refuses the Worker as blocked (dropped to Assisted), without retrying it", async () => {

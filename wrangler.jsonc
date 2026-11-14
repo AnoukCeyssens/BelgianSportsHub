@@ -10,6 +10,8 @@
 //   - "bsh.example.com"        → the real custom domain
 //   - "REPLACE_WITH_*_D1_ID"   → ids printed by `wrangler d1 create`
 //   - "owner@example.com"      → the owner's Cloudflare Access email (OWNER_EMAIL)
+//   - "REPLACE_WITH_TEAM.cloudflareaccess.com" → the Zero Trust team domain (ACCESS_TEAM_DOMAIN)
+//   - "REPLACE_WITH_*_ACCESS_AUD" → the Access application's AUD tag for that copy (ACCESS_AUD)
 //
 // Secrets (never in this file; `wrangler secret put <NAME> --env test|live`):
 //   - ICAL_FEED_TOKEN          → the iCal feed's token (/ical/<token>.ics); unset = feed off
@@ -28,7 +30,9 @@
   // offline.html and offline-curation.html by those exact URLs.
   "assets": { "html_handling": "none" },
   // OWNER_EMAIL: the one Cloudflare Access identity allowed into /curate (app/owner.ts).
-  "vars": { "APP_ENV": "dev", "OWNER_EMAIL": "owner@localhost" },
+  // ACCESS_TEAM_DOMAIN / ACCESS_AUD: the Access application whose JWT (Cf-Access-Jwt-Assertion)
+  // the owner gate verifies on deployed copies; empty in dev, which has no Access in front.
+  "vars": { "APP_ENV": "dev", "OWNER_EMAIL": "owner@localhost", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -49,7 +53,12 @@
       "workers_dev": false,
       "preview_urls": false,
       "routes": [{ "pattern": "test.bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
-      "vars": { "APP_ENV": "test", "OWNER_EMAIL": "owner@example.com" }, // PLACEHOLDER owner email
+      "vars": {
+        "APP_ENV": "test",
+        "OWNER_EMAIL": "owner@example.com", // PLACEHOLDER owner email
+        "ACCESS_TEAM_DOMAIN": "REPLACE_WITH_TEAM.cloudflareaccess.com", // PLACEHOLDER Zero Trust team domain
+        "ACCESS_AUD": "REPLACE_WITH_TEST_ACCESS_AUD", // PLACEHOLDER AUD tag of the test copy's Access application
+      },
       "triggers": { "crons": [] },
       "d1_databases": [
         {
@@ -71,7 +80,12 @@
       "workers_dev": false,
       "preview_urls": false,
       "routes": [{ "pattern": "bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
-      "vars": { "APP_ENV": "live", "OWNER_EMAIL": "owner@example.com" }, // PLACEHOLDER owner email
+      "vars": {
+        "APP_ENV": "live",
+        "OWNER_EMAIL": "owner@example.com", // PLACEHOLDER owner email
+        "ACCESS_TEAM_DOMAIN": "REPLACE_WITH_TEAM.cloudflareaccess.com", // PLACEHOLDER Zero Trust team domain
+        "ACCESS_AUD": "REPLACE_WITH_LIVE_ACCESS_AUD", // PLACEHOLDER AUD tag of the live copy's Access application
+      },
       // Daily ingest (the scheduled handler queues one job per due source) and the
       // weekly D1 export to R2 under backups/, last 12 kept (app/backup/weekly-backup.ts).
       "triggers": { "crons": ["0 4 * * *", "0 3 * * 1"] },

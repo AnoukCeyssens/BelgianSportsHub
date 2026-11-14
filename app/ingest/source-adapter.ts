@@ -6,6 +6,8 @@
 // every row to its raw copy). runSource() in ./source-run.ts does the rest.
 // Register each adapter in ./sources/index.ts under its Source row's key.
 
+import type { ExternalIdScheme } from "~/db/schema";
+
 export type SourceAdapter = {
   run(run: SourceRun): Promise<void>;
   /**
@@ -101,9 +103,17 @@ export type Person = {
   dateOfBirth: string | null;
   /** IOC code of the sporting nationality the source lists. */
   nationality: string;
-  /** The person's ID at this source's federation, e.g. { scheme: "isu", value: "692" }. */
-  ifId: { scheme: string; value: string };
+  /** The person's ID at this source's federation, e.g. { scheme: "isu", value: "692" }: a labelled scheme (EXTERNAL_ID_SCHEMES). */
+  ifId: { scheme: ExternalIdScheme; value: string };
 };
+
+/**
+ * A person on a competition's entry list, with the events the list names
+ * them in where the source says (World Archery's categories, IJF's weight
+ * classes), named as the source's results name them. Without events, the list
+ * selects an Athlete's Entry only when it is their one Entry there.
+ */
+export type Entrant = Person & { events?: readonly string[] };
 
 /** DNS is never a performance: adapters leave it out; only the Manual results form records one. */
 export type ResultStatus = "finished" | "eliminated" | "DNF" | "DSQ" | "DNS";
@@ -113,7 +123,11 @@ export type ResultInput = {
   competitionId: string;
   /** As the source titles it, e.g. "1000m Women". */
   event: string;
-  /** The event's sport, only where the competition spans several (a reference Games); the competition's sport otherwise. */
+  /**
+   * The event's sport where the competition spans several (the Games: a source
+   * whose Olympic Games holds several sports names each result's); left out,
+   * it is the source competition's sport. Stored only where it differs.
+   */
   sport?: string | null;
   /** YYYY-MM-DD, venue-local. */
   date: string;
@@ -230,8 +244,8 @@ export type BelgianRows = {
    * moves the tracks that follow this ranking to the new position.
    */
   ranking(input: RankingInput): Promise<void>;
-  /** Replaces a competition's entry list: the Belgians it names who are already Athletes. */
-  entrants(competitionId: string, people: Person[], rawCopyId: string): Promise<void>;
+  /** Replaces a competition's entry list: the Belgians it names who are already Athletes (with their events, where the list names them). */
+  entrants(competitionId: string, people: Entrant[], rawCopyId: string): Promise<void>;
   /** Stores a Championship's timetable as a new version when it changed, and its Belgian Sessions. An empty timetable (not published yet) is ignored. */
   timetable(input: TimetableInput): Promise<void>;
 };

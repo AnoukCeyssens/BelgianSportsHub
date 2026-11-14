@@ -17,12 +17,25 @@
 // Championships, the Games and the UCI's named top series (the men's and
 // women's WorldTour) come in; the rest arrives through the UCI rankings
 // (#33). Track, mountain bike and BMX keep their Championships, the Games and
-// their World Cups. DataRide gives no rider ID, only name and date of birth,
-// so the IF ID is the two together. No entry lists, so no Upcoming.
+// their World Cups. DataRide's results give no rider ID, only name and date of
+// birth, so their IF ID is a derived key of the two (scheme "uci-derived",
+// never shown as an ID). No entry lists, so no Upcoming.
+//
+// Rankings (#33; #20 review, D): once a week, on the first run after Tuesday
+// noon UTC (the UCI computes its rankings on Tuesdays), the road UCI World
+// Ranking of the current season for Men Elite and Women Elite: the season
+// (one GET), the season's ranking list per category (one POST), then the
+// individual ranking filtered to Belgium (each Belgian rider's position, an
+// Athlete matched by name and date of birth) and the nation ranking filtered
+// to Belgium (Belgium's default Team in the category's road race). The other
+// disciplines' rankings are not fetched yet. DataRide's ranking rows do carry
+// the rider's UCI ID (`UciId`), unlike its results grids: a ranking row's
+// person has it (scheme "uci"), so matching the rider on name and date of
+// birth remembers the real UCI ID on the Athlete.
+import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://dataride.uci.ch";
-const SPORT = "Cycling";
 const FIRST_RUN_LOOKBACK_DAYS = 365;
 const CALENDAR_HORIZON_DAYS = 14;
 /** DataRide states dates as midnight in its own zone. */
@@ -31,6 +44,8 @@ const DATARIDE_ZONE = "Europe/Zurich";
 type Discipline = {
   id: number;
   name: string;
+  /** The Olympic sport (app/domain/sports.ts): each UCI discipline is its own. */
+  sport: string;
   /** The competition classes that count (UCI class codes). */
   classes: Record<string, CompetitionKind>;
   /** The Olympic race types (DataRide race type codes), team events included. */
@@ -48,19 +63,21 @@ const DISCIPLINES: Discipline[] = [
   {
     id: 10,
     name: "Road",
+    sport: "Cycling road",
     classes: { ...CHAMPIONSHIPS, "1.UWT": "circuit", "2.UWT": "circuit", "1.WWT": "circuit", "2.WWT": "circuit" },
     raceTypes: new Set(["IRR", "ITT"]),
   },
-  { id: 9, name: "Track", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["SP", "KE", "OM", ...TEAM_RACE_TYPES]) },
+  { id: 9, name: "Track", sport: "Cycling track", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["SP", "KE", "OM", ...TEAM_RACE_TYPES]) },
   {
     id: 7,
     name: "Mountain bike",
+    sport: "Cycling mountain bike",
     classes: { ...CHAMPIONSHIPS, CDM: "circuit" },
     raceTypes: new Set(["XCO"]),
     competition: /XCO/,
   },
-  { id: 1, name: "BMX racing", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BMX-IND"]) },
-  { id: 13, name: "BMX freestyle", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BFR-PRK"]) },
+  { id: 1, name: "BMX racing", sport: "Cycling BMX racing", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BMX-IND"]) },
+  { id: 13, name: "BMX freestyle", sport: "Cycling BMX freestyle", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BFR-PRK"]) },
 ];
 
 const SENIOR = new Set(["Men Elite", "Women Elite"]);
@@ -91,6 +108,7 @@ type Result = {
 
 export const uciCycling: SourceAdapter = {
   async run(run) {
+    if (rankingsComputedSince(run)) await roadRankings(run);
     const today = isoDate(run.now);
     const windowStart = run.since ? addDays(isoDate(run.since), -1) : addDays(today, -FIRST_RUN_LOOKBACK_DAYS);
     const horizon = addDays(today, CALENDAR_HORIZON_DAYS);
@@ -104,7 +122,7 @@ export const uciCycling: SourceAdapter = {
         if (endDate < windowStart || startDate > horizon) continue;
         const competitionId = await run.rows.competition({
           name: c.CompetitionName,
-          sport: SPORT,
+          sport: discipline.sport,
           kind,
           startDate,
           endDate,
@@ -112,6 +130,7 @@ export const uciCycling: SourceAdapter = {
           country: c.CountryIsoCode3 || null,
           venueZone: null,
           sourceRef: `${discipline.id}/${c.CompetitionId}`,
+          series: uciSeries(discipline, c, kind),
           rawCopyId: c.rawCopyId,
         });
         if (startDate > today) continue;
@@ -120,6 +139,105 @@ export const uciCycling: SourceAdapter = {
     }
   },
 };
+
+/** UCI rankings are computed on Tuesdays: fetch them on the first run after Tuesday noon (UTC), or on the first run ever. */
+function rankingsComputedSince(run: SourceRun): boolean {
+  if (!run.since) return true;
+  const day = run.now.getUTCDay();
+  const tuesday = new Date(Date.UTC(run.now.getUTCFullYear(), run.now.getUTCMonth(), run.now.getUTCDate() - ((day + 5) % 7), 12));
+  return run.since < tuesday && run.now >= tuesday;
+}
+
+const ROAD = DISCIPLINES[0];
+/** DataRide's category ids for the senior road rankings, and the event a nation ranking's places are for. */
+const RANKING_CATEGORIES = [
+  { id: 22, name: "Men Elite", raceEvent: "Road race Men Elite" },
+  { id: 23, name: "Women Elite", raceEvent: "Road race Women Elite" },
+];
+/** DataRide's country id for Belgium (`/iframe/GetCountries/`). */
+const BELGIUM_COUNTRY_ID = "21";
+const INDIVIDUAL_RANKING = 1;
+const NATION_RANKING = 3;
+
+type RankingListGroup = { GroupName: string; Rankings: { Id: number; MomentId: number; RankingTypeId: number }[] };
+type RankedObject = {
+  Rank: number;
+  /** The rider's UCI ID (11 digits); null on nation rows. */
+  UciId?: number | null;
+  DisplayName: string;
+  NationName: string | null;
+  BirthDate: string | null;
+  Points: number | null;
+  ComputationDate: string;
+};
+
+async function roadRankings(run: SourceRun) {
+  const today = isoDate(run.now);
+  const seasons = await run.fetch(`${SITE}/iframe/GetDisciplineSeasons/?disciplineId=${ROAD.id}`);
+  const season = (JSON.parse(seasons.text) as Season[]).find((s) => dataRideDate(s.StartDate) <= today && dataRideDate(s.EndDate) >= today);
+  if (!season) return;
+  for (const category of RANKING_CATEGORIES) {
+    const listed = await run.fetch(`${SITE}/iframe/RankingsDiscipline/`, {
+      form: {
+        disciplineId: String(ROAD.id),
+        ...page(40),
+        ...filters([
+          ["RaceTypeId", "0"],
+          ["CategoryId", String(category.id)],
+          ["SeasonId", String(season.Id)],
+        ]),
+      },
+    });
+    const world = (JSON.parse(listed.text) as RankingListGroup[]).find((g) => g.GroupName === "World Ranking");
+    for (const ranking of world?.Rankings ?? []) {
+      if (ranking.RankingTypeId !== INDIVIDUAL_RANKING && ranking.RankingTypeId !== NATION_RANKING) continue;
+      const fetched = await run.fetch(`${SITE}/iframe/ObjectRankings/`, {
+        form: {
+          rankingId: String(ranking.Id),
+          disciplineId: String(ROAD.id),
+          rankingTypeId: String(ranking.RankingTypeId),
+          ...page(1000),
+          ...filters([
+            ["RaceTypeId", "0"],
+            ["CategoryId", String(category.id)],
+            ["SeasonId", String(season.Id)],
+            ["MomentId", String(ranking.MomentId)],
+            ["CountryId", BELGIUM_COUNTRY_ID],
+            ["IndividualName", ""],
+            ["TeamName", ""],
+          ]),
+        },
+      });
+      for (const r of (JSON.parse(fetched.text) as { data: RankedObject[] }).data) {
+        if (r.NationName?.trim() !== "BEL") continue;
+        const common = {
+          sport: ROAD.sport,
+          asOf: dataRideDate(r.ComputationDate),
+          position: r.Rank,
+          points: r.Points === null ? null : String(r.Points),
+          rawCopyId: fetched.rawCopyId,
+        };
+        if (ranking.RankingTypeId === NATION_RANKING) {
+          const teamId = await run.rows.team({ sport: ROAD.sport, event: category.raceEvent, members: null, rawCopyId: fetched.rawCopyId });
+          await run.rows.ranking({ ...common, ranking: `UCI road world ranking · Nations ${category.name}`, teamId });
+        } else {
+          await run.rows.ranking({ ...common, ranking: `UCI road world ranking · ${category.name}`, person: person({ ...r, RankNumber: r.Rank, ResultValue: null, Irm: null }, r.UciId) });
+        }
+      }
+    }
+  }
+}
+
+/** A Kendo grid's filter, as the DataRide pages send it. */
+function filters(fields: [string, string][]): Record<string, string> {
+  return Object.fromEntries([
+    ["filter[logic]", "and"],
+    ...fields.flatMap(([field, value], i) => [
+      [`filter[filters][${i}][field]`, field],
+      [`filter[filters][${i}][value]`, value],
+    ]),
+  ]);
+}
 
 async function competitions(run: SourceRun, discipline: Discipline, from: string, to: string) {
   const fetched = await run.fetch(`${SITE}/iframe/GetRestrictedResultsDisciplineSeasons/?disciplineId=${discipline.id}`);
@@ -185,7 +303,7 @@ async function results(run: SourceRun, discipline: Discipline, c: Competition, c
           performance: status === "finished" ? first.ResultValue?.trim() || null : null,
           sourceRef: `${discipline.id}/${c.CompetitionId}/${event.EventId}/BEL`,
           rawCopyId: fetched.rawCopyId,
-          roster: t.rows.map(person),
+          roster: t.rows.map((r) => person(r)),
         });
       }
       continue;
@@ -231,6 +349,18 @@ function teams(rows: Result[]) {
   return found;
 }
 
+/**
+ * The series of a UCI competition, per discipline: the Worlds are the class
+ * (CM) whatever their sponsor and host; anything else is its name, a World
+ * Cup leg without its round number (which changes from season to season)
+ * and with its host country instead (DataRide names no city).
+ */
+function uciSeries(discipline: Discipline, c: Competition, kind: CompetitionKind): string {
+  if (kind !== "games" && c.ClassCode === "CM") return `uci-cycling:${discipline.id}:world-championships`;
+  const name = c.CompetitionName.replace(/\s*-?\s*\bround\s*\d+\b/i, "");
+  return seriesKey({ source: `uci-cycling:${discipline.id}`, name, kind, sport: discipline.sport, city: c.ClassCode === "CDM" ? c.CountryIsoCode3 : null });
+}
+
 /** Kendo grid paging, as the DataRide pages send it. */
 function page(size: number): Record<string, string> {
   return { take: String(size), skip: "0", page: "1", pageSize: String(size) };
@@ -244,14 +374,20 @@ function statusOf(r: Result): ResultStatus | null {
   return r.RankNumber === null ? null : "finished";
 }
 
-/** "VAN AERT Wout", born 1994-09-15: DataRide has no rider ID, so name and date of birth stand in for one. */
-function person(r: Result): Person {
+/**
+ * "VAN AERT Wout", born 1994-09-15. With the rider's UCI ID (ranking rows),
+ * that is the IF ID; DataRide's results have none, so name and date of birth
+ * stand in for one as a derived key ("uci-derived").
+ */
+function person(r: Result, uciId?: number | null): Person {
   const dateOfBirth = r.BirthDate ? dataRideDate(r.BirthDate) : null;
   return {
     name: r.DisplayName.trim(),
     dateOfBirth,
     nationality: "BEL",
-    ifId: { scheme: "uci", value: `${r.DisplayName.trim().toUpperCase()} ${dateOfBirth ?? "?"}` },
+    ifId: uciId
+      ? { scheme: "uci", value: String(uciId) }
+      : { scheme: "uci-derived", value: `${r.DisplayName.trim().toUpperCase()} ${dateOfBirth ?? "?"}` },
   };
 }
 

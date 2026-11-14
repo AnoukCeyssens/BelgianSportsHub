@@ -5,6 +5,7 @@ import { getDb, schema } from "~/db/client";
 import { FIS_ALPINE_RUN, FIS_SNOWBOARD_RUN, fisAlpineRun, fisSnowboardRun } from "../fixtures/sources/fis-points-lists";
 import { ARCHERY_FIRST_RUN, ARCHERY_JULY_2026_RUN, archeryFirstRun, archeryJuly2026Run } from "../fixtures/sources/world-archery";
 import { OWGR_RUN, owgrRun } from "../fixtures/sources/owgr-golf";
+import { UCI_RANKINGS_RUN, uciRankingsRun } from "../fixtures/sources/uci/rankings";
 import { ISU_TEAM_PURSUIT_RUN, ISU_WORLD_CUP_1_RUN, isuTeamPursuitRun, isuWorldCup1Run } from "../fixtures/sources/isu-speed-skating";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
@@ -81,6 +82,7 @@ async function speedSkatingEuros() {
     url: "https://isu.org/euros-2027",
     standards: "1000m: World Cup top 20",
     closesOn: "2026-12-14",
+    closesSource: "https://isu.org/euros-2027/qualification",
   });
   return id;
 }
@@ -182,6 +184,61 @@ describe("Rankings ingest (ISU World Cup standings)", () => {
     expect(ranked!.teamId).toBe(women!.id);
     const results = await db.select().from(schema.result).where(eq(schema.result.teamId, women!.id));
     expect(results).toHaveLength(1);
+  });
+
+  it("holds the Quota places a nation ranking earns at the next Games, adjusting to the count rather than adding", async () => {
+    await setSource(env.DB, ISU, { lastSuccessAt: ISU_TEAM_PURSUIT_RUN.lastSuccessAt });
+    fixClock(ISU_TEAM_PURSUIT_RUN.now);
+    stubOutboundFetch(isuTeamPursuitRun);
+    await deliverIngestJobs([job]);
+    const db = getDb(env.DB);
+    const alps = await seedCompetition(env.DB, {
+      name: "French Alps 2030",
+      sport: "Olympic Winter Games",
+      kind: "games",
+      source: "owner",
+      sourceRef: "french-alps-2030",
+      series: "olympic-winter-games",
+      startDate: "2030-02-01",
+      endDate: "2030-02-17",
+      venueZone: "Europe/Paris",
+    });
+    const women = (await db.query.team.findFirst({ where: eq(schema.team.event, "Team Pursuit Women") }))!;
+    const qualification = `/curate/games/${alps}/qualification`;
+    await post(qualification, { intent: "add-entry", who: `team:${women.id}`, event: "Team Pursuit Women", status: "on-track", source: "ISU Communication 2711" });
+    const entryId = (await db.query.entry.findFirst({ where: eq(schema.entry.teamId, women.id) }))!.id;
+    const track = async (needed: string) => {
+      const saved = await db.query.qualificationTrack.findFirst({ where: eq(schema.qualificationTrack.entryId, entryId) });
+      return post(qualification, {
+        intent: "save-track",
+        entryId,
+        trackId: saved?.id ?? "",
+        name: "SOQC nation ranking",
+        needed,
+        has: "–",
+        state: "pending",
+        better: "",
+        source: "",
+        ranking: `${ISU}|ISU World Cup Team Pursuit Women`,
+      });
+    };
+    const places = async () =>
+      (await db.select().from(schema.quotaPlace)).map((p) => ({ event: p.event, kind: p.kind, state: p.state, earnedVia: p.earnedVia, source: p.source }));
+
+    // 9th, inside the Top 12: one NOC-owned place, Provisional, from the ranking.
+    await track("Top 12 nations");
+    const held = { event: "Team Pursuit Women", kind: "noc", state: "provisional", earnedVia: "ISU World Cup Team Pursuit Women", source: "ISU World Cup Team Pursuit Women · 17 Nov 2025" };
+    expect(await places()).toEqual([held]);
+
+    // The same standings again: still one place.
+    await setSource(env.DB, ISU, { lastSuccessAt: ISU_TEAM_PURSUIT_RUN.lastSuccessAt });
+    stubOutboundFetch(isuTeamPursuitRun);
+    await deliverIngestJobs([job]);
+    expect(await places()).toEqual([held]);
+
+    // Outside the places the track now names: the Provisional place goes.
+    await track("Top 8 nations");
+    expect(await places()).toEqual([]);
   });
 
   it("moves a ranking-linked track to the new position, stamping a change only when there is one", async () => {
@@ -303,7 +360,7 @@ describe("Qualification review (Run sheet step 5)", () => {
   it("suggests Eligible to three Belgians who meet the criteria for two NOC-owned places", async () => {
     fixClock("2026-11-01T10:00:00.000Z");
     const la = await seedCompetition(env.DB, { name: "LA 2028", sport: "Olympic Games", kind: "games", source: "owner", startDate: "2028-07-14", endDate: "2028-07-30" });
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "", standards: "", closesOn: "2028-05-03" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "https://example.org/standards", standards: "", closesOn: "2028-05-03", closesSource: "https://example.org/qualification-window" });
     const curateLa = `/curate/games/${la}/qualification`;
     const runners: string[] = [];
     for (const name of ["Hanne Verbruggen", "Chloé Herbiet", "Lotte Scheldeman"]) {
@@ -454,5 +511,55 @@ describe("Rankings ingest (OWGR golf, a ranking-only source)", () => {
       cadenceDays: 7,
       lastChangeAt: OWGR_RUN.now,
     });
+  });
+});
+
+describe("Rankings ingest (UCI road world ranking, DataRide)", () => {
+  beforeEach(async () => {
+    await clearIngestedData(env);
+  });
+
+  async function runAfterTuesday() {
+    await setSource(env.DB, "uci-cycling", { lastSuccessAt: UCI_RANKINGS_RUN.lastSuccessAt, blockedAt: null, blockedReason: null });
+    fixClock(UCI_RANKINGS_RUN.now);
+    stubOutboundFetch(uciRankingsRun);
+    return deliverIngestJobs([{ kind: "fetch-source", source: "uci-cycling" }]);
+  }
+
+  it("stores the week's road world ranking of each known Belgian rider and of Belgium, as of its computation", async () => {
+    // Matched on name + date of birth; Philipsen and Bossuyt are not Athletes here, so they are left out.
+    await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling road", dateOfBirth: "2000-01-25" });
+    await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling road", dateOfBirth: "1995-11-10" });
+
+    const result = await runAfterTuesday();
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    expect((await snapshots()).map(({ who, ranking, position, points, asOf }) => `${who}: ${ranking} #${position} (${points}) ${asOf}`)).toEqual([
+      "Remco Evenepoel: UCI road world ranking · Men Elite #2 (7191.61) 2026-11-10",
+      "Belgium · Road race Men Elite: UCI road world ranking · Nations Men Elite #1 (23246.56) 2026-11-10",
+      "Belgium · Road race Women Elite: UCI road world ranking · Nations Women Elite #8 (7850) 2026-11-10",
+      "Lotte Kopecky: UCI road world ranking · Women Elite #7 (3690) 2026-11-10",
+    ]);
+    expect(await getDb(env.DB).$count(schema.mergeQueueItem)).toBe(0);
+  });
+
+  it("remembers the rider's real UCI ID from the ranking and shows it on the Athlete page", async () => {
+    const evenepoel = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling road", dateOfBirth: "2000-01-25" });
+
+    await runAfterTuesday();
+
+    const page = await (await get(`/athletes/${evenepoel}`)).text();
+    expect(page).toContain("UCI ID 10058736615");
+  });
+
+  it("reads the rankings once a week: a Thursday run after Wednesday's fetches none", async () => {
+    await setSource(env.DB, "uci-cycling", { lastSuccessAt: "2026-11-11T04:00:00.000Z", blockedAt: null, blockedReason: null });
+    fixClock("2026-11-12T04:00:00.000Z");
+    stubOutboundFetch(uciRankingsRun.filter((r) => r.url.includes("GetRestrictedResultsDisciplineSeasons")));
+
+    const result = await deliverIngestJobs([{ kind: "fetch-source", source: "uci-cycling" }]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    expect(await snapshots()).toEqual([]);
   });
 });

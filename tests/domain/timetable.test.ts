@@ -46,7 +46,7 @@ describe("timetableColumnMapping", () => {
   });
 });
 
-const EUROPEANS = { startDate: "2027-01-15", endDate: "2027-01-17", sport: "Short track" };
+const EUROPEANS = { startDate: "2027-01-15", endDate: "2027-01-17", sport: "Short track speed skating" };
 
 const shortTrack = readPastedTable(
   [
@@ -62,10 +62,10 @@ describe("readTimetable", () => {
   it("reads one event round per row, each its own Session, the year from the competition", () => {
     expect(readTimetable(shortTrack, ["date", "start", "round"], EUROPEANS)).toEqual({
       rounds: [
-        { index: 0, date: "2027-01-15", start: "13:00", end: null, session: null, sport: "Short track", event: "Women's 500 m", round: "Heats" },
-        { index: 1, date: "2027-01-15", start: "15:30", end: null, session: null, sport: "Short track", event: "Women's 1000 m", round: "Heats" },
-        { index: 2, date: "2027-01-16", start: "12:00", end: null, session: null, sport: "Short track", event: "Women's 500 m", round: "Quarter-finals" },
-        { index: 3, date: "2027-01-17", start: "15:50", end: null, session: null, sport: "Short track", event: "Mixed relay", round: "Final" },
+        { index: 0, date: "2027-01-15", start: "13:00", end: null, session: null, sport: "Short track speed skating", event: "Women's 500 m", round: "Heats" },
+        { index: 1, date: "2027-01-15", start: "15:30", end: null, session: null, sport: "Short track speed skating", event: "Women's 1000 m", round: "Heats" },
+        { index: 2, date: "2027-01-16", start: "12:00", end: null, session: null, sport: "Short track speed skating", event: "Women's 500 m", round: "Quarter-finals" },
+        { index: 3, date: "2027-01-17", start: "15:50", end: null, session: null, sport: "Short track speed skating", event: "Mixed relay", round: "Final" },
       ],
       skipped: [],
     });
@@ -102,7 +102,7 @@ describe("readTimetable", () => {
 
   it("a Championship over New Year takes the year that puts the day inside its dates", () => {
     const table = { head: ["Date", "Event"], rows: [["31 Dec", "Men's 500 m heats"], ["2 Jan", "Men's 500 m final"]] };
-    expect(readTimetable(table, ["date", "round"], { startDate: "2026-12-30", endDate: "2027-01-03", sport: "Short track" }).rounds.map((r) => r.date)).toEqual([
+    expect(readTimetable(table, ["date", "round"], { startDate: "2026-12-30", endDate: "2027-01-03", sport: "Short track speed skating" }).rounds.map((r) => r.date)).toEqual([
       "2026-12-31",
       "2027-01-02",
     ]);
@@ -178,7 +178,7 @@ describe("belgianRounds", () => {
     {
       name: "an Entry of another sport does not count",
       rounds: [round("Men's 500m", "Final", "Speed skating")],
-      entries: [{ sport: "Short track", event: "Men's 500m" }],
+      entries: [{ sport: "Short track speed skating", event: "Men's 500m" }],
       expected: [],
     },
   ])("$name", ({ rounds, entries, expected }) => {

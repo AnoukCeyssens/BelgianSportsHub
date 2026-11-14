@@ -25,7 +25,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     next: TRACKED_GAMES.find((g) => g.series === games.series)?.name ?? null,
     others: REFERENCE_GAMES.filter((g) => g.key !== games.key).map((g) => ({ key: g.key, name: g.name })),
     sports: (await referenceResults(dbFrom(context), games)).map((s) => ({ ...s, colour: sportColour(s.sport) })),
-    owner: isOwner(request, context.get(cloudflareContext).env),
+    owner: await isOwner(request, context.get(cloudflareContext).env),
   };
 }
 
@@ -45,6 +45,8 @@ export default function Reference({ loaderData }: Route.ComponentProps) {
         ))}
       </p>
       {sports.length === 0 ? <p className="sub">No Belgian results recorded yet.</p> : null}
+      {sports.length > 0 ? (
+        <div aria-label="Results by sport">
       {sports.map((s) => (
         <section key={s.sport} className="sport" aria-label={s.sport}>
           <h2>
@@ -72,6 +74,8 @@ export default function Reference({ loaderData }: Route.ComponentProps) {
           </table>
         </section>
       ))}
+        </div>
+      ) : null}
       {owner ? (
         <p className="sub">
           <Link to={`/curate/reference/${games.key}`}>Enter a result by hand</Link>

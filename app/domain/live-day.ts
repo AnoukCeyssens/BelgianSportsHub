@@ -26,6 +26,19 @@ export type EntryProgress = { rounds: readonly RoundProgress[]; result: EventRes
 
 const POOL = /^(pool|group|preliminar)/i;
 
+/**
+ * Combined events, whose "rounds" are disciplines every Entry contests, not
+ * elimination rounds: decathlon, heptathlon, (indoor) pentathlon, the track
+ * omnium, Nordic combined (Gundersen) and alpine combined. Modern pentathlon
+ * has semi-finals, so it is not one.
+ */
+const COMBINED = /\b(decathlon|heptathlon|(?<!modern )pentathlon|omnium|gundersen|combined)\b/i;
+
+/** Whether an event is a combined event (its disciplines are not elimination rounds). */
+export function isCombinedEvent(event: string): boolean {
+  return COMBINED.test(event);
+}
+
 const NO_PROGRESS: EntryProgress = { rounds: [], result: null };
 
 /**
@@ -35,10 +48,11 @@ const NO_PROGRESS: EntryProgress = { rounds: [], result: null };
  * or start list shows the Entry reached them, and drop once it is out: after
  * the round it was eliminated in, or after the date of a final
  * classification that is not a finish. A finished classification means every
- * round up to its date was reached.
+ * round up to its date was reached. In a combined event (`isCombinedEvent`)
+ * every discipline is scheduled: there is nothing to get through.
  */
 export function roundsFor<R extends { round: string; date: string }>(
-  entry: { firstRound: string | null },
+  entry: { firstRound: string | null; event?: string },
   rounds: readonly R[],
   progress: EntryProgress = NO_PROGRESS,
 ): (R & { state: RoundState; outcome: RoundOutcome | null })[] {
@@ -65,6 +79,9 @@ export function roundsFor<R extends { round: string; date: string }>(
     for (const r of attached) if (r.date <= result.date) reached = Math.max(reached, step(r.round));
   }
   const kept = attached.filter((r) => step(r.round) <= outAfter && (!result || r.date <= result.date));
+  if (entry.event !== undefined && isCombinedEvent(entry.event)) {
+    return kept.map((r) => ({ ...r, state: "scheduled" as const, outcome: outcomes.get(r.round) ?? null }));
+  }
   return kept.map((r) => {
     const i = step(r.round);
     // A pool match stays TBD until its draw is known or the pool is behind the Entry.

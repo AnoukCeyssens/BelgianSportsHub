@@ -5,7 +5,7 @@ import { getDb, schema } from "~/db/client";
 import { ARCHERY_FIRST_RUN, ARCHERY_JULY_2026_RUN, archeryFirstRun, archeryJuly2026Run } from "../fixtures/sources/world-archery";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
-import { clearIngestedData, seedAthlete, setSource } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedEntry, seedTeam, setSource } from "../support/seed";
 import { deliverIngestJobs, get } from "../support/worker";
 
 // Spec #20, Ingest; ticket #42: World Archery's public API as an Automatic
@@ -142,6 +142,27 @@ describe("World Archery source", () => {
     // Para series and para games in the same weeks are neither results nor entry lists.
     const competitions = await getDb(env.DB).select({ name: schema.competition.name }).from(schema.competition);
     expect(competitions).toEqual([{ name: "Madrid 2026 Hyundai Archery World Cup stage 4" }]);
+  });
+
+  it("selects an archer from the entry list in the event it names, not in his other events", async () => {
+    const fraipont = await seedAthlete(env.DB, { name: "Julien Fraipont", sport: "Archery", externalIds: [{ scheme: "world-archery", value: "6827" }] });
+    await julyRun();
+    const db = getDb(env.DB);
+    const [madrid] = await db.select().from(schema.competition);
+    const compound = await seedEntry(env.DB, { competitionId: madrid.id, sport: "Archery", event: "Compound Men", athleteId: fraipont });
+    const recurve = await seedEntry(env.DB, { competitionId: madrid.id, sport: "Archery", event: "Recurve Men", athleteId: fraipont });
+    // Belgium's compound team, whose roster has credited him before: the list names him only individually.
+    const team = await seedTeam(env.DB, { name: "Belgium · Compound Men Team", sport: "Archery", event: "Compound Men Team" });
+    await db.insert(schema.rosterMember).values({ teamId: team, competitionId: madrid.id, athleteId: fraipont, rawCopyId: madrid.rawCopyId });
+    const teamEntry = await seedEntry(env.DB, { competitionId: madrid.id, sport: "Archery", event: "Compound Men Team", teamId: team });
+
+    // The next day's run reads the same entry list.
+    await julyRun();
+
+    const status = async (id: string) => (await db.query.entry.findFirst({ where: eq(schema.entry.id, id) }))?.qualificationStatus;
+    expect(await status(compound)).toBe("selected");
+    expect(await status(recurve)).toBe("not-selected");
+    expect(await status(teamEntry)).toBeNull();
   });
 
   it("keeps every fetch as received in R2, links rows to their raw copy and stamps the source's health", async () => {

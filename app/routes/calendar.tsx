@@ -75,8 +75,10 @@ export default function Calendar({ loaderData }: Route.ComponentProps) {
               {Number(d.date.slice(8))}
             </div>
           ))}
+          <div role="list" aria-label="Competitions" className="bars">
           {w.bars.map((b) => (
             <div
+              role="listitem"
               className={["ev", b.item.kind === "circuit" ? null : "champ", b.continuesBefore ? "cl" : null, b.continuesAfter ? "cr" : null]
                 .filter(Boolean)
                 .join(" ")}
@@ -84,9 +86,11 @@ export default function Calendar({ loaderData }: Route.ComponentProps) {
               style={{ background: b.item.colour, gridColumn: `${b.fromCol + 1} / ${b.toCol + 2}`, gridRow: b.lane + 2 }}
               key={b.item.id}
             >
-              {`${b.continuesBefore ? "← " : ""}${b.item.name}`}
+              {b.continuesBefore ? "← " : ""}
+              {b.item.kind === "circuit" ? b.item.name : <strong>{b.item.name}</strong>}
             </div>
           ))}
+          </div>
         </div>
       ))}
 

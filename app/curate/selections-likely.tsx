@@ -2,11 +2,13 @@
 // the likely Participations of the coming six weeks the owner has not checked
 // this week, each with why it is likely; confirm, keep or drop it, or add one
 // by hand. Selections from press releases come first (#34, app/curate/selections.tsx).
+// Every decision names the page it was based on (#20 review): an entry list,
+// a federation post.
 import { eq } from "drizzle-orm";
 import { Form } from "react-router";
 import { participationsBetween, REASON_TEXT } from "~/calendar/participations";
 import { type Db, schema } from "~/db/client";
-import { BELGIAN_ZONE, LIKELY_REVIEW_WEEKS, needsLikelyReview } from "~/domain";
+import { BELGIAN_ZONE, LIKELY_REVIEW_WEEKS, needsLikelyReview, sameSport } from "~/domain";
 import { formatDate, formatDayRange } from "~/format";
 import { loadDueSelections, SelectionCard, type SelectionItem } from "./selections";
 
@@ -38,26 +40,28 @@ export async function actOnLikely(db: Db, intent: string, form: FormData, now: D
   const competitionId = String(form.get("competition"));
   const competition = await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) });
   if (!competition) throw new Response(`No competition ${competitionId}`, { status: 404 });
+  if (intent !== "add" && !(intent in DECISIONS)) throw new Response(`Unknown action ${intent}`, { status: 400 });
+  const sourceUrl = String(form.get("sourceUrl") ?? "").trim();
+  if (!/^https?:\/\/\S+$/.test(sourceUrl)) throw new Response("Give the web address this decision is based on (an entry list, a federation post)", { status: 400 });
   const at = now.toISOString();
   const table = schema.participationCuration;
   if (intent === "add") {
     await db
       .insert(table)
-      .values({ competitionId, addedAt: at, checkedAt: at })
-      .onConflictDoUpdate({ target: table.competitionId, set: { addedAt: at, decision: null, checkedAt: at } });
+      .values({ competitionId, addedAt: at, sourceUrl, checkedAt: at })
+      .onConflictDoUpdate({ target: table.competitionId, set: { addedAt: at, decision: null, sourceUrl, checkedAt: at } });
     return `${competition.name}: added as a likely Participation`;
   }
-  if (!(intent in DECISIONS)) throw new Response(`Unknown action ${intent}`, { status: 400 });
   const [decision, logged] = DECISIONS[intent as keyof typeof DECISIONS];
   await db
     .insert(table)
-    .values({ competitionId, decision, checkedAt: at })
-    .onConflictDoUpdate({ target: table.competitionId, set: { decision, checkedAt: at } });
+    .values({ competitionId, decision, sourceUrl, checkedAt: at })
+    .onConflictDoUpdate({ target: table.competitionId, set: { decision, sourceUrl, checkedAt: at } });
   return `${competition.name}: ${logged}`;
 }
 
 export function SelectionsLikelyStep({ data, review }: { data: SelectionsLikelyData; review: SelectionItem | null }) {
-  const same = (s: SelectionItem) => review !== null && s.competition.id === review.competition.id && s.sport.toLowerCase() === review.sport.toLowerCase();
+  const same = (s: SelectionItem) => review !== null && s.competition.id === review.competition.id && sameSport(s.sport, review.sport);
   return (
     <>
       {review ? <SelectionCard item={review} opened /> : null}
@@ -88,6 +92,7 @@ export function SelectionsLikelyStep({ data, review }: { data: SelectionsLikelyD
                   <td>
                     <Form method="post" className="actions">
                       <input type="hidden" name="competition" value={c.id} />
+                      <input type="url" name="sourceUrl" required placeholder="Source URL" aria-label={`Source for ${c.name}`} />
                       <button type="submit" name="intent" value="confirm" className="secondary">
                         Confirm
                       </button>
@@ -114,6 +119,7 @@ export function SelectionsLikelyStep({ data, review }: { data: SelectionsLikelyD
                 ))}
               </select>
             </label>
+            <input type="url" name="sourceUrl" required placeholder="Source URL" aria-label="Source for the added Participation" />
             <button type="submit" name="intent" value="add" className="secondary">
               + Add
             </button>

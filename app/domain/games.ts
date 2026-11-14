@@ -4,6 +4,7 @@
 // sheet's Schedules step until the full session schedule is imported; this is
 // only what the step needs to create them. A recorded Games is a `competition`
 // of kind "games" from source "owner" whose source ref is the key below.
+import { sameSport } from "./sports";
 
 export type TrackedGames = {
   key: string;
@@ -44,8 +45,8 @@ export const TRACKED_GAMES: readonly TrackedGames[] = [
 
 /** The chosen sport chips from `?sport=A,B`: known sports only, in the Games' order; empty means All sports. */
 export function chosenSports(asked: string | null, sports: readonly string[]): string[] {
-  const wanted = new Set((asked ?? "").split(",").map((s) => s.trim()));
-  return sports.filter((s) => wanted.has(s));
+  const wanted = (asked ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "");
+  return sports.filter((s) => wanted.some((w) => sameSport(w, s)));
 }
 
 /** The `?sport=` value after toggling one chip; null for All sports. */

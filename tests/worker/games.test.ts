@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData } from "../support/seed";
 import { get, OWNER_EMAIL, post, signedInAs } from "../support/worker";
+import { labelled, links, phaseBar as sharedPhaseBar, phasePanel, region } from "../support/html";
 
 // Spec #20, stories 41–43, 49, 50 and 60; ticket #35. The Games tab shows LA
 // 2028 (and French Alps 2030) with the Championship phase mechanics. The
@@ -21,24 +22,18 @@ const text = (html: string) =>
 
 /** The Phase bar's steps, as text ("Live ● now"). */
 function phaseBar(html: string) {
-  const nav = html.match(/<nav class="phases" aria-label="Phases">(.*?)<\/nav>/s)?.[1] ?? "";
-  return [...nav.matchAll(/<(a|span)([^>]*)>(.*?)<\/\1>(?=<a|<span class|$)/gs)].map((m) => text(m[3]));
+  return sharedPhaseBar(html);
 }
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** The sport chips: each chip's text, whether it is on, and where it leads. */
 function chips(html: string) {
-  const nav = html.match(/<nav class="chips" aria-label="Sports">(.*?)<\/nav>/s)?.[1] ?? "";
-  return [...nav.matchAll(/<a([^>]*)>(.*?)<\/a>/gs)].map((m) => ({
-    chip: text(m[2]),
-    on: /class="chip on"/.test(m[1]),
-    href: m[1].match(/href="([^"]*)"/)?.[1].replace(/&amp;/g, "&"),
-  }));
+  return links(region(html, "Sports", "nav") ?? "").map((l) => ({ chip: l.text, on: l.pressed, href: l.href ?? undefined }));
 }
 
 /** The per-sport table: one "sport · days · phase" line per sport. */
@@ -51,7 +46,7 @@ function sportRows(html: string) {
 
 /** The Schedules step's Games forms, as text. */
 function gamesForms(html: string) {
-  return [...html.matchAll(/<form[^>]*class="card games-dates"[^>]*>(.*?)<\/form>/gs)].map((m) => text(m[1]));
+  return labelled(html, /[^"]+ dates/, "form").map((f) => text(f.inner));
 }
 
 const saveGamesDates = (games: string, firstDay: string, lastDay: string) =>
@@ -128,6 +123,17 @@ describe("Games", () => {
     expect(refused.status).toBe(400);
   });
 
+  it("stores a sport by its Olympic programme name, and refuses a name that is no sport", async () => {
+    await saveGamesDates("la-2028", "2028-07-12", "2028-07-30");
+
+    await saveSportDays("la-2028", "athletics (track & field)", "2028-07-15", "2028-07-24");
+    await saveSportDays("la-2028", "Road cycling", "2028-07-14", "2028-07-16");
+    const refused = await saveSportDays("la-2028", "Aquatics", "2028-07-13", "2028-07-20");
+
+    expect(refused.status).toBe(400);
+    expect(sportRows(await page(`/games/${await gamesId("la-2028")}`))).toEqual(["Athletics 15–24 Jul Standards", "Cycling road 14–16 Jul Standards"]);
+  });
+
   it("shows French Alps 2030 in Standards with only the expected publication date", async () => {
     await saveGamesDates("la-2028", "2028-07-12", "2028-07-30");
     await saveGamesDates("french-alps-2030", "2030-02-01", "2030-02-17");
@@ -137,13 +143,13 @@ describe("Games", () => {
     expect(tab).toContain(`href="/games/${alps}"`);
 
     expect(await page(`/games/${alps}`, signedInAs(OWNER_EMAIL))).toContain(`href="/curate/games/${alps}/standards"`);
-    const recorded = await post(`/curate/games/${alps}/standards`, { expectedOn: "2027-12-01", publishedOn: "", url: "", standards: "" });
+    const recorded = await post(`/curate/games/${alps}/standards`, { expectedOn: "2027-12-01", expectedSource: "https://example.org/calendar", publishedOn: "", url: "", standards: "" });
     expect(recorded.headers.get("Location")).toBe(`/games/${alps}`);
 
     const html = await page(`/games/${alps}`);
     expect(text(html)).toContain("French Alps 2030");
     expect(phaseBar(html)[0]).toBe("Standards ● now");
-    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 1 Dec 2027." });
+    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 1 Dec 2027 · source · checked 14 Nov 2026." });
   });
 
   it("offers combinable sport chips, All sports by default", async () => {

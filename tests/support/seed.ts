@@ -165,9 +165,9 @@ export async function seedResult(d1: D1Database, competitionId: string, athleteI
 export async function seedParticipationCuration(
   d1: D1Database,
   competitionId: string,
-  row: { addedAt?: string; decision?: "confirmed" | "kept" | "dropped"; checkedAt: string },
+  row: { addedAt?: string; decision?: "confirmed" | "kept" | "dropped"; checkedAt: string; sourceUrl?: string },
 ) {
-  await getDb(d1).insert(schema.participationCuration).values({ competitionId, ...row });
+  await getDb(d1).insert(schema.participationCuration).values({ competitionId, sourceUrl: "https://example.org/participation", ...row });
 }
 
 /**

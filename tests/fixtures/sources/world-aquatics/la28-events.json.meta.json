@@ -1,0 +1,7 @@
+{
+  "url": "https://api.worldaquatics.com/fina/competitions/9028/events",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2028-07-22T04:00:00.000Z",
+  "builtByHand": "Built by hand for a Games that has not happened yet (LA 2028), in the shape of the recorded Paris World Cup and Astana fixtures; made-up names, IDs and places."
+}

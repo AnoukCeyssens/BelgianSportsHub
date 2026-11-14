@@ -17,6 +17,7 @@
 // it went out in, and its roster everyone the day's races credit (heats-only
 // runners included).
 // Entry lists are not published in structured form, so there is no Upcoming.
+import { seriesKey } from "~/domain";
 import type { CompetitionInput, CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 export const SITE = "https://worldathletics.org";
@@ -177,6 +178,7 @@ export function competitionInput(c: CalendarEvent & { rawCopyId: string }, kind:
     country: venue.country,
     venueZone: null,
     sourceRef: String(c.id),
+    series: seriesKey({ source: "world-athletics", name: c.name, kind, sport: SPORT, city: venue.city }),
     rawCopyId: c.rawCopyId,
   };
 }

@@ -104,7 +104,7 @@ export function ManualResultsStep({ data }: { data: ManualResultsData }) {
   return (
     <>
       {data.items.map((item) => (
-        <Form method="post" className="card manual" key={`${item.competitionId}-${item.athleteId}`}>
+        <Form method="post" className="card manual" key={`${item.competitionId}-${item.athleteId}`} aria-label={`Manual result · ${item.athlete} · ${item.competition}`}>
           <h3>{`${item.athlete} · ${item.competition}`}</h3>
           <p className="sub">{`${dates(item.startDate, item.endDate)} · ${item.source}`}</p>
           <input type="hidden" name="competition" value={item.competitionId} />

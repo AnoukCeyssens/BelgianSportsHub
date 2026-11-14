@@ -14,10 +14,17 @@
 //    held since the window start, Belgian rows only; the start list of each
 //    individual race still to come.
 // Senior relays (mixed relay) go to Belgium's relay Team (ADR 0001), with the
-// team members the result credits as its roster. Rankings need the key and
-// the ranking ids first (#33, conventions.md "Rankings").
+// team members the result credits as its roster.
+// 4. once a week, on the first run after Monday noon UTC (the rankings are
+//    published weekly): the Rankings Listing, then each senior world or
+//    Olympic qualification ranking (not para, junior, U23, youth or age
+//    group), Belgian rows only: one ranking snapshot per Belgian known as an
+//    Athlete by World Triathlon ID (rankings never create Athletes). Built
+//    against the documented shapes (#20 review, D); the fixtures are hand-made
+//    until a run with the key is recorded.
 // The API gives only a year of birth, so a Belgian not yet known by World
 // Triathlon ID waits in the merge queue.
+import { seriesKey } from "~/domain";
 import { SourceBlocked, type CompetitionKind, type Person, type ResultStatus, type SourceAdapter, type SourceRun } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 
@@ -50,6 +57,13 @@ type EventPage = { current_page: number; last_page: number; data: TriEvent[] };
 type Program = { prog_id: number; prog_name: string; prog_date: string; results: boolean; team: boolean };
 type TriAthlete = { athlete_id: number; athlete_title: string; athlete_noc: string };
 type TriResult = TriAthlete & { result_id: number; position: number | string | null; total_time: string | null };
+type RankingListing = { ranking_id: number; ranking_name: string; ranking_category_name: string; published_date: string };
+type Ranked = TriAthlete & { rank: number; total: number | null };
+type RankingDetail = { ranking_name: string; published: string; rankings: Ranked[] };
+/** Senior world and Olympic qualification rankings, by category name; not para, junior, U23, youth or age-group ones. */
+const RANKING_CATEGORY = /World Rankings?|Olympic/i;
+const NOT_SENIOR_RANKING = /Para|PT\d|Junior|U23|Youth|Age.?Group/i;
+
 type TriTeamResult = {
   team_noc: string;
   team_members: TriAthlete[];
@@ -84,6 +98,7 @@ export const worldTriathlon: SourceAdapter = {
         country: event.event_country_noc,
         venueZone: null,
         sourceRef: String(event.event_id),
+        series: seriesKey({ source: "world-triathlon", name: event.event_title, kind, sport: SPORT, city: event.event_venue }),
         rawCopyId: event.rawCopyId,
       });
 
@@ -109,8 +124,43 @@ export const worldTriathlon: SourceAdapter = {
         }
       }
     }
+    if (rankingsPublishedSince(run)) await rankings(run, get);
   },
 };
+
+/** Rankings are published weekly: fetch them on the first run after Monday noon (UTC), or on the first run ever. */
+function rankingsPublishedSince(run: SourceRun): boolean {
+  if (!run.since) return true;
+  const day = run.now.getUTCDay();
+  const monday = new Date(Date.UTC(run.now.getUTCFullYear(), run.now.getUTCMonth(), run.now.getUTCDate() - ((day + 6) % 7), 12));
+  return run.since < monday && run.now >= monday;
+}
+
+async function rankings(
+  run: SourceRun,
+  get: <T>(url: string) => Promise<{ body: { data: T } & Record<string, unknown>; rawCopyId: string }>,
+) {
+  const listed = await get<RankingListing[]>(`${API}/rankings`);
+  const wanted = listed.body.data.filter(
+    (r) => RANKING_CATEGORY.test(r.ranking_category_name) && !NOT_SENIOR_RANKING.test(`${r.ranking_category_name} ${r.ranking_name}`),
+  );
+  for (const listing of wanted) {
+    const { body, rawCopyId } = await get<RankingDetail>(`${API}/rankings/${listing.ranking_id}`);
+    for (const r of body.data.rankings) {
+      // Nation rows (no athlete) are not documented yet: left out.
+      if (r.athlete_noc !== "BEL" || !r.athlete_id) continue;
+      await run.rows.ranking({
+        ranking: `World Triathlon ${body.data.ranking_name}`,
+        sport: SPORT,
+        asOf: body.data.published.slice(0, 10),
+        position: r.rank,
+        points: r.total === null ? null : String(r.total),
+        person: person(r),
+        rawCopyId,
+      });
+    }
+  }
+}
 
 async function events(
   get: <T>(url: string) => Promise<{ body: { data: T } & Record<string, unknown>; rawCopyId: string }>,

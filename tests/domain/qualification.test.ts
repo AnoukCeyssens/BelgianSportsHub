@@ -32,24 +32,6 @@ describe("trackProgress: how far along its progress bar a Qualification track is
   });
 });
 
-describe("olympicCycleOf: which Olympic cycle a sport follows", () => {
-  it.each([
-    { sport: "Athletics", expected: "summer" },
-    { sport: "Hockey", expected: "summer" },
-    { sport: "Speed skating", expected: "winter" },
-    { sport: "Short track", expected: "winter" },
-    { sport: "Short track speed skating", expected: "winter" },
-    { sport: "Alpine skiing", expected: "winter" },
-    { sport: "Snowboard", expected: "winter" },
-    { sport: "Biathlon", expected: "winter" },
-    { sport: "Ice hockey", expected: "winter" },
-    { sport: "Ski mountaineering", expected: "winter" },
-    { sport: "Figure skating", expected: "winter" },
-  ])("$sport: $expected", ({ sport, expected }) => {
-    expect(olympicCycleOf(sport)).toBe(expected);
-  });
-});
-
 describe("inContention: whether a status keeps a Belgian Entry in the race (likely Participation)", () => {
   it.each([
     { status: "not-in-contention", expected: false },

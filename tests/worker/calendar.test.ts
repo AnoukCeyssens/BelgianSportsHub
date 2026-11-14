@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedParticipationCuration, seedResult } from "../support/seed";
+import { region, withRole } from "../support/html";
 import { get } from "../support/worker";
 
 // Spec #20, stories 35–38, 40 and 53; ticket #29: the Calendar tab.
@@ -17,11 +18,16 @@ function listed(html: string, name: string) {
   return row;
 }
 
-/** The grid's week starting on `monday` ("23 Nov"), as its bars' labels. */
+/** The grid's week starting on `monday` ("23 Nov"), as its competitions' labels. */
 function week(html: string, monday: string) {
-  const m = html.match(new RegExp(`<div class="week" aria-label="Week of ${monday}">(.*?)(?=<div class="week"|<div class="legend")`, "s"));
-  if (!m) return undefined;
-  return [...m[1].matchAll(/<div class="ev[^"]*"[^>]*>(.*?)<\/div>/gs)].map((b) => text(b[1]));
+  const days = region(html, `Week of ${monday}`);
+  if (days === null) return undefined;
+  return withRole(region(days, "Competitions") ?? "", "listitem").map((b) => text(b.inner));
+}
+
+/** The background colour a competition's bar is drawn in. */
+function colourOf(html: string, name: string) {
+  return withRole(html, "listitem").find((b) => text(b.inner).replace(/^← /, "") === name)?.attributes.match(/background:([^;"]+)/)?.[1];
 }
 
 describe("Calendar", () => {
@@ -32,7 +38,7 @@ describe("Calendar", () => {
 
   it("lists this month's competitions with a Belgian Participation, saying whether it is confirmed or likely", async () => {
     const tas = await seedAthlete(env.DB, { name: "Sandrine Tas", sport: "Speed skating" });
-    const desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
+    const desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
 
     const calgary = await seedCompetition(env.DB, {
       name: "Speed Skating World Cup, Calgary",
@@ -46,7 +52,7 @@ describe("Calendar", () => {
     // Hanne Desmet skated last year's Montréal leg: this year's is likely.
     const montreal2025 = await seedCompetition(env.DB, {
       name: "Short Track World Tour, Montréal",
-      sport: "Short track",
+      sport: "Short track speed skating",
       startDate: "2025-11-14",
       endDate: "2025-11-16",
       series: "isu-st:world-tour:montreal",
@@ -54,7 +60,7 @@ describe("Calendar", () => {
     await seedResult(env.DB, montreal2025, desmet, { date: "2025-11-15" });
     await seedCompetition(env.DB, {
       name: "Short Track World Tour, Montréal",
-      sport: "Short track",
+      sport: "Short track speed skating",
       startDate: "2026-11-13",
       endDate: "2026-11-15",
       series: "isu-st:world-tour:montreal",
@@ -70,7 +76,7 @@ describe("Calendar", () => {
 
     expect(html).toContain("November 2026");
     expect(listed(html, "Calgary")).toBe("20–22 Nov Speed Skating World Cup, Calgary Speed skating · Confirmed · Sandrine Tas");
-    expect(listed(html, "Montréal")).toBe("13–15 Nov Short Track World Tour, Montréal Short track · Likely: Belgian Entry at the previous edition");
+    expect(listed(html, "Montréal")).toBe("13–15 Nov Short Track World Tour, Montréal Short track speed skating · Likely: Belgian Entry at the previous edition");
     expect(listed(html, "Wuxi")).toBe("27–29 Nov WT Grand Slam, Wuxi Taekwondo · Likely: added by hand");
     expect(listed(html, "Gurgl")).toBeUndefined();
   });
@@ -89,7 +95,8 @@ describe("Calendar", () => {
     expect(html).toContain("December 2026");
     expect(listed(html, "European Short Course")).toBe("1–6 Dec European Short Course Swimming Championships Swimming · No Belgian Participation known yet");
     expect(html).toMatch(/<b>European Short Course Swimming Championships<\/b>/);
-    expect(html).toMatch(/class="ev champ[^"]*"[^>]*>European Short Course Swimming Championships/);
+    // In the grid too, the Championship's name is set in bold.
+    expect(withRole(html, "listitem").map((b) => b.inner)).toContain("<strong>European Short Course Swimming Championships</strong>");
   });
 
   it("treats Europeans and Worlds, indoor and outdoor, short and long course as separate Championships", async () => {
@@ -159,7 +166,7 @@ describe("Calendar", () => {
     for (const [name, sport, day] of [
       ["Speed Skating World Cup, Obihiro", "Speed skating", "2026-11-20"],
       ["Speed Skating World Cup, Stavanger", "Speed skating", "2026-11-27"],
-      ["Short Track World Tour, Seoul", "Short track", "2026-11-27"],
+      ["Short Track World Tour, Seoul", "Short track speed skating", "2026-11-27"],
     ]) {
       const id = await seedCompetition(env.DB, { name, sport, startDate: day });
       await seedEntrant(env.DB, id, athlete);
@@ -167,13 +174,13 @@ describe("Calendar", () => {
 
     const html = await page("/calendar");
 
-    const colour = (name: string) => html.match(new RegExp(`class="ev[^"]*" title="${name}" style="background:([^;"]+)`))?.[1];
+    const colour = (name: string) => colourOf(html, name);
     expect(colour("Speed Skating World Cup, Obihiro")).toBeDefined();
     expect(colour("Speed Skating World Cup, Obihiro")).toBe(colour("Speed Skating World Cup, Stavanger"));
     expect(colour("Short Track World Tour, Seoul")).not.toBe(colour("Speed Skating World Cup, Obihiro"));
     const legend = html.slice(html.indexOf('aria-label="Legend"'));
     expect(legend).toMatch(new RegExp(`background:${colour("Speed Skating World Cup, Obihiro")}[^>]*></span>Speed skating`));
-    expect(legend).toMatch(new RegExp(`background:${colour("Short Track World Tour, Seoul")}[^>]*></span>Short track`));
+    expect(legend).toMatch(new RegExp(`background:${colour("Short Track World Tour, Seoul")}[^>]*></span>Short track speed skating`));
   });
 
   it("moves between months with the arrows", async () => {

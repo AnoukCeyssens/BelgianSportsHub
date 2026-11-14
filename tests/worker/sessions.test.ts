@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedTeam } from "../support/seed";
 import { get, post } from "../support/worker";
+import { links, phasePanel, region } from "../support/html";
 
 // Spec #20, stories 47, 55–57, 59, 61, 63 and 110; GLOSSARY "Session";
 // ticket #37. The owner pastes a timetable version in the Run sheet's
@@ -25,17 +26,17 @@ function postForm(path: string, fields: [string, string][]) {
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** The day picker: each day's text, whether it is marked (Belgian Entries) and whether it is shown. */
 function dayPicker(html: string) {
-  const nav = html.match(/<nav class="days" aria-label="Days">(.*?)<\/nav>/s)?.[1] ?? "";
-  return [...nav.matchAll(/<a([^>]*)>(.*?)<\/a>/gs)].map((m) => ({
-    day: text(m[2]),
-    marked: /class="[^"]*\bhas\b/.test(m[1]),
-    on: /class="[^"]*\bon\b/.test(m[1]),
+  // A marked day says so to screen readers ("· Belgian Entries"); the shown day is the current one.
+  return links(region(html, "Days", "nav") ?? "").map((l) => ({
+    day: l.text.replace(/ · Belgian Entries$/, ""),
+    marked: l.text.endsWith("· Belgian Entries"),
+    on: l.current,
   }));
 }
 
@@ -44,7 +45,7 @@ function dayRows(html: string) {
   const start = html.indexOf('aria-label="Sessions"');
   if (start < 0) return [];
   const table = html.slice(start, html.indexOf("</table>", start));
-  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => `${text(m[2])}${/if-through/.test(m[1]) ? " [greyed]" : ""}`);
+  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => text(m[2]));
 }
 
 const SHORT_TRACK_V1 = [
@@ -68,7 +69,7 @@ async function storeTimetable(competitionId: string, t: Stored) {
   const read = await post(SCHEDULES, { intent: "read-timetable", ...fields, text: t.text });
   expect(read.status).toBe(303);
   const review = await page(read.headers.get("location")!);
-  const form = review.match(/<form[^>]*class="card timetable-review"[^>]*>(.*?)<\/form>/s)?.[1];
+  const form = region(review, "Timetable review", "form") ?? undefined;
   expect(form, "the review form").toBeDefined();
   const hidden = [...form!.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"\/>/g)].map((m): [string, string] => [m[1], m[2].replace(/&#x27;/g, "'").replace(/&amp;/g, "&")]);
   const events = hidden.filter(([name]) => name.startsWith("event."));
@@ -97,16 +98,16 @@ describe("Sessions and the Live day view", () => {
     await clearIngestedData(env);
     europeans = await seedCompetition(env.DB, {
       name: "European Short Track Championships 2027",
-      sport: "Short track",
+      sport: "Short track speed skating",
       kind: "championship",
       startDate: "2027-01-15",
       endDate: "2027-01-17",
       city: "Gdańsk",
       venueZone: "Europe/Warsaw",
     });
-    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
-    vanRuijven = await seedAthlete(env.DB, { name: "Tineke den Dulk", sport: "Short track" });
-    relay = await seedAthlete(env.DB, { name: "Stijn Desmet", sport: "Short track" });
+    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
+    vanRuijven = await seedAthlete(env.DB, { name: "Tineke den Dulk", sport: "Short track speed skating" });
+    relay = await seedAthlete(env.DB, { name: "Stijn Desmet", sport: "Short track speed skating" });
     await seedAthlete(env.DB, { name: "Nafissatou Thiam", sport: "Athletics" });
   });
 
@@ -165,7 +166,7 @@ describe("Sessions and the Live day view", () => {
       { day: "Day 2 Sat 16 Jan", marked: true, on: true },
       { day: "Day 3 Sun 17 Jan", marked: true, on: false },
     ]);
-    expect(dayRows(html)).toEqual(["12:00 Hanne Desmet Women's 500 m · Quarter-finals if through [greyed]"]);
+    expect(dayRows(html)).toEqual(["12:00 Hanne Desmet Women's 500 m · Quarter-finals if through"]);
 
     const day1 = await page(`/championship/${europeans}?day=2027-01-15`);
     expect(dayRows(day1)).toEqual(["13:00 Hanne Desmet Women's 500 m · Heats", "15:30 Tineke den Dulk Women's 1000 m · Heats"]);
@@ -257,7 +258,7 @@ describe("Sessions at the Games", () => {
     expect(dayRows(await page(`/games/${la}?day=2028-07-16`))).toEqual(["03:30 Mon · 18:30 LA ATH03 Nafissatou Thiam Women's Heptathlon · Day 1"]);
     expect(dayRows(await page(`/games/${la}?day=2028-07-13`))).toEqual(["18:00 · 09:00 LA HOC01 Red Lions Men's · Pool (2 Matches) match TBD"]);
     expect(dayRows(await page(`/games/${la}?day=2028-07-24`))).toEqual([
-      "18:00 · 09:00 LA HOC23 Red Lions Men's · Quarterfinal (2 Matches) if through [greyed]",
+      "18:00 · 09:00 LA HOC23 Red Lions Men's · Quarterfinal (2 Matches) if through",
     ]);
   });
 

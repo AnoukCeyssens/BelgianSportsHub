@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedParticipationCuration } from "../support/seed";
 import { get, OWNER_EMAIL, post, signedInAs } from "../support/worker";
+import { elements, phasePanel, region } from "../support/html";
 
 // Spec #20, stories 41–46, 53 and 54; ticket #31: the Championship tab lists
 // the upcoming Championships with a Belgian Participation; a Championship's
@@ -26,18 +27,17 @@ function listRows(html: string) {
 
 /** The Phase bar: each step's text, whether it links somewhere, and which one is shown. */
 function phaseBar(html: string) {
-  const nav = html.match(/<nav class="phases" aria-label="Phases">(.*?)<\/nav>/s)?.[1] ?? "";
-  return [...nav.matchAll(/<(a|span)([^>]*)>(.*?)<\/\1>(?=<a|<span class|$)/gs)].map((m) => ({
-    step: text(m[3]),
-    link: m[1] === "a",
-    shown: m[2].includes('aria-current="page"'),
-  }));
+  const nav = region(html, "Phases", "nav") ?? "";
+  // Each step is a link or greyed text; "● now" inside the current one is part of its text.
+  return elements(nav, /<(?:a|span)\b[^>]*>/)
+    .filter((e) => text(e.inner) !== "● now")
+    .map((e) => ({ step: text(e.inner), link: e.tag === "a", shown: e.attributes.includes('aria-current="page"') }));
 }
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 async function worlds() {
@@ -74,13 +74,13 @@ describe("Championship tab", () => {
     // Going on right now, with a Belgian named.
     const shortTrack = await seedCompetition(env.DB, {
       name: "European Short Track Championships",
-      sport: "Short track",
+      sport: "Short track speed skating",
       kind: "championship",
       startDate: "2026-11-13",
       endDate: "2026-11-15",
       venueZone: "Europe/Warsaw",
     });
-    await seedEntrant(env.DB, shortTrack, await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" }));
+    await seedEntrant(env.DB, shortTrack, await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" }));
 
     // Not listed: no Belgian Participation, already over, not a Championship.
     await seedCompetition(env.DB, { name: "World Swimming Championships (25 m)", sport: "Swimming", kind: "championship", startDate: "2026-12-10", endDate: "2026-12-14" });
@@ -92,7 +92,7 @@ describe("Championship tab", () => {
     const html = await page("/championship");
 
     expect(listRows(html)).toEqual([
-      "13–15 Nov European Short Track Championships Short track · Confirmed · Hanne Desmet · Live",
+      "13–15 Nov European Short Track Championships Short track speed skating · Confirmed · Hanne Desmet · Live",
       "1–6 Dec European Short Course Swimming Championships Swimming · Confirmed · Lucas Henveaux · Standards",
       "11–19 Sept 2027 World Athletics Championships, Beijing Athletics · Likely: added by hand · Standards",
     ]);
@@ -113,10 +113,11 @@ describe("Championship tab", () => {
     ]);
     expect(panel(html)).toEqual({ phase: "Standards", text: "Publication date of the standards not known yet." });
 
-    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", publishedOn: "", url: "", standards: "" });
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
 
     html = await page(`/championship/${beijing}`);
-    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 15 Jan 2027." });
+    expect(panel(html)).toEqual({ phase: "Standards", text: "Standards expected 15 Jan 2027 · source · checked 14 Nov 2026." });
+    expect(html).toContain('href="https://worldathletics.org/calendar-note"');
   });
 
   it("moves to Qualification once the owner records the published standards, which stay visible", async () => {
@@ -124,6 +125,7 @@ describe("Championship tab", () => {
 
     const saved = await post(`/curate/championships/${beijing}/standards`, {
       expectedOn: "2026-10-01",
+      expectedSource: "https://worldathletics.org/calendar-note",
       publishedOn: "2026-10-03",
       url: "https://worldathletics.org/beijing27-entry-standards",
       standards: "Heptathlon: 6 500 pts or World Ranking top 24\nMen 400 m: 44.85 or World Ranking top 48",
@@ -147,9 +149,31 @@ describe("Championship tab", () => {
     expect(panel(html)).toEqual({
       phase: "Standards",
       text:
-        "Published 3 Oct 2026 · source Heptathlon: 6 500 pts or World Ranking top 24 Men 400 m: 44.85 or World Ranking top 48",
+        "Published 3 Oct 2026 · source · checked 14 Nov 2026 Heptathlon: 6 500 pts or World Ranking top 24 Men 400 m: 44.85 or World Ranking top 48",
     });
     expect(html).toContain('href="https://worldathletics.org/beijing27-entry-standards"');
+  });
+
+  it("refuses a standards date without the source it was read on", async () => {
+    const beijing = await worlds();
+    const standards = (form: Record<string, string>) => post(`/curate/championships/${beijing}/standards`, { expectedOn: "", publishedOn: "", url: "", standards: "", closesOn: "", ...form });
+
+    expect((await standards({ expectedOn: "2027-01-15" })).status).toBe(400);
+    expect((await standards({ publishedOn: "2026-10-03", standards: "Heptathlon: 6 500 pts" })).status).toBe(400);
+    expect((await standards({ closesOn: "2027-08-24" })).status).toBe(400);
+    expect((await standards({ closesOn: "2027-08-24", closesSource: "not a link" })).status).toBe(400);
+
+    expect(panel(await page(`/championship/${beijing}`))).toEqual({ phase: "Standards", text: "Publication date of the standards not known yet." });
+  });
+
+  it("stamps each recorded date checked on the day the owner saves it again", async () => {
+    const beijing = await worlds();
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
+
+    fixClock("2026-12-02T12:00:00.000Z");
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
+
+    expect(panel(await page(`/championship/${beijing}`))?.text).toBe("Standards expected 15 Jan 2027 · source · checked 2 Dec 2026.");
   });
 
   it("never opens a later phase than the current one", async () => {
@@ -191,12 +215,13 @@ describe("Championship tab", () => {
 
   it("shows the owner's standards form filled with what is recorded", async () => {
     const beijing = await worlds();
-    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", publishedOn: "", url: "", standards: "" });
+    await post(`/curate/championships/${beijing}/standards`, { expectedOn: "2027-01-15", expectedSource: "https://worldathletics.org/calendar-note", publishedOn: "", url: "", standards: "" });
 
     const html = await page(`/curate/championships/${beijing}/standards`);
 
     expect(text(html)).toContain("World Athletics Championships, Beijing");
     expect(html).toMatch(/name="expectedOn"[^>]*value="2027-01-15"/);
+    expect(html).toMatch(/name="expectedSource"[^>]*value="https:\/\/worldathletics.org\/calendar-note"/);
   });
 
   it("has no page for a competition that is not a Championship", async () => {

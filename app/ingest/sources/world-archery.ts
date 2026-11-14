@@ -17,6 +17,7 @@
 // Senior recurve and compound only (the Olympic and LA28 divisions); para,
 // youth and masters categories are left out. The API gives no date of birth,
 // so a Belgian not yet known by World Archery ID waits in the merge queue.
+import { seriesKey } from "~/domain";
 import type { CompetitionInput, CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 
@@ -139,6 +140,7 @@ async function results(run: SourceRun, from: string, today: string) {
         country: r.Country || null,
         venueZone: null,
         sourceRef: String(r.Id),
+        series: archerySeries(r.Name, kind),
         rawCopyId: fetched.rawCopyId,
       });
       competitionIds.set(r.Id, competitionId);
@@ -176,6 +178,7 @@ async function teamResults(run: SourceRun, from: string, today: string) {
       country: r.Country || null,
       venueZone: null,
       sourceRef: String(r.Id),
+      series: archerySeries(r.Name, kind),
       rawCopyId: fetched.rawCopyId,
     });
     await run.rows.teamResult({
@@ -203,7 +206,8 @@ async function entryLists(run: SourceRun, today: string) {
     const entries =await run.fetch(`${API}/ENTRIES/?CompId=${c.ID}&Noc=BEL&RBP=All`);
     const people = (JSON.parse(entries.text) as Page<Entry>).items
       .filter((e) => e.Athlete.NOC === "BEL" && e.CatInd.some((cat) => cat.Code in EVENT_BY_CATEGORY))
-      .map((e) => person(e.Athlete));
+      // Each archer in the individual events the list names them in, as the results name them.
+      .map((e) => ({ ...person(e.Athlete), events: e.CatInd.flatMap((cat) => (EVENT_BY_CATEGORY[cat.Code] ? [EVENT_BY_CATEGORY[cat.Code]] : [])) }));
     await run.rows.entrants(competitionId, people, entries.rawCopyId);
   }
 }
@@ -220,8 +224,19 @@ export function competitionInput(c: WaCompetition, kind: CompetitionKind, rawCop
     country: c.Country || null,
     venueZone: null,
     sourceRef: String(c.ID),
+    series: archerySeries(c.Name, kind),
     rawCopyId,
   };
+}
+
+/**
+ * The series of a World Archery competition, from its name only (the results
+ * rows carry no venue, and every writer of a competition must agree): a World
+ * Cup stage keeps the host city its name starts with, not its stage number
+ * (which changes from season to season).
+ */
+export function archerySeries(name: string, kind: CompetitionKind): string {
+  return seriesKey({ source: "world-archery", name: name.replace(/\bstage\s*\d+\b/i, ""), kind, sport: SPORT, city: null });
 }
 
 /** The outdoor competitions held between two dates. */

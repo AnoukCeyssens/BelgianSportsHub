@@ -5,6 +5,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedSource } from "../support/seed";
 import { get, post } from "../support/worker";
+import { labelled, stepRegion } from "../support/html";
 
 // Spec #20, story 105; ticket #26: the Run sheet's Manual results step. One
 // form per due manual result: a Belgian Athlete entered at a competition of a
@@ -23,8 +24,7 @@ function sessionLog(html: string) {
 
 /** The forms of the step, one per due manual result, as text. */
 function forms(html: string) {
-  const step = html.slice(html.indexOf("3. Manual results"), html.indexOf('class="foot"'));
-  return [...step.matchAll(/<form[^>]*class="card manual"[^>]*>(.*?)<\/form>/gs)].map((m) => text(m[1]));
+  return labelled(stepRegion(html), /Manual result · [^"]+/, "form").map((f) => text(f.inner));
 }
 
 describe("Manual results step", () => {

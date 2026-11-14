@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  placesEarned,
+  quotaPlaceAdjustment,
   quotaPlaceLinkable,
   quotaPlaceTransition,
   type QualificationStatus,
@@ -62,5 +64,47 @@ describe("quotaPlaceLinkable: when a place meets its Entry (story 81)", () => {
     { name: "an NOC-owned place does not link to a Not selected Entry", kind: "noc", status: "not-selected", expected: false },
   ] as { name: string; kind: QuotaPlaceKind; status: QualificationStatus | null; expected: boolean }[])("$name", ({ kind, status, expected }) => {
     expect(quotaPlaceLinkable(kind, status)).toBe(expected);
+  });
+});
+
+// Spec #20, story 80; #20 review (D): a nation ranking that earns n places
+// holds n Provisional places in its event, whatever was recorded before.
+describe("placesEarned: how many places a nation ranking position earns, by what the track needs", () => {
+  it.each([
+    { name: "inside the Top N: one place for the event", needed: "Top 8 nations", position: 6, expected: 1 },
+    { name: "outside the Top N: none", needed: "Top 8 nations", position: 9, expected: 0 },
+    { name: "on the line", needed: "top-8", position: 8, expected: 1 },
+    { name: "several places per nation inside the Top N", needed: "Top 12 nations: 3 places", position: 4, expected: 3 },
+    { name: "bands: the best band the position is inside", needed: "Top 4: 3 places · top 10: 2 places · top 16: 1 place", position: 7, expected: 2 },
+    { name: "bands: inside the last band only", needed: "Top 4: 3 places · top 10: 2 places · top 16: 1 place", position: 16, expected: 1 },
+    { name: "bands: outside them all", needed: "Top 4: 3 places · top 10: 2 places · top 16: 1 place", position: 17, expected: 0 },
+    { name: "names no places: nothing to say", needed: "Named by BOIC", position: 3, expected: null },
+  ])("$name", ({ needed, position, expected }) => {
+    expect(placesEarned(needed, position)).toBe(expected);
+  });
+});
+
+describe("quotaPlaceAdjustment: keeping an event's places at what the ranking earns", () => {
+  const RANKING = "ISU World Cup Team Pursuit Men";
+  const p = (id: string, state: QuotaPlaceState, extra: { linked?: boolean; reallocated?: boolean; earnedVia?: string | null } = {}) => ({
+    id,
+    state,
+    linked: extra.linked ?? false,
+    reallocated: extra.reallocated ?? false,
+    earnedVia: extra.earnedVia === undefined ? RANKING : extra.earnedVia,
+  });
+  it.each([
+    { name: "none recorded, one earned: hold one", places: [], earned: 1, expected: { hold: 1, remove: [] } },
+    { name: "already holding what it earns: nothing", places: [p("a", "provisional")], earned: 1, expected: { hold: 0, remove: [] } },
+    { name: "a re-fetch of the same list adds nothing", places: [p("a", "provisional"), p("b", "provisional")], earned: 2, expected: { hold: 0, remove: [] } },
+    { name: "earns one more", places: [p("a", "allocated")], earned: 2, expected: { hold: 1, remove: [] } },
+    { name: "drops out: its Provisional places go, last first", places: [p("a", "provisional"), p("b", "provisional")], earned: 0, expected: { hold: 0, remove: ["b", "a"] } },
+    { name: "an Allocated place is never removed", places: [p("a", "allocated"), p("b", "provisional")], earned: 0, expected: { hold: 0, remove: ["b"] } },
+    { name: "a linked Provisional place stays", places: [p("a", "provisional", { linked: true })], earned: 0, expected: { hold: 0, remove: [] } },
+    { name: "a reallocated place stays", places: [p("a", "provisional", { reallocated: true })], earned: 0, expected: { hold: 0, remove: [] } },
+    { name: "a place earned some other way stays", places: [p("a", "provisional", { earnedVia: "Continental qualifier" })], earned: 0, expected: { hold: 0, remove: [] } },
+    { name: "declined and lost places do not count", places: [p("a", "lost"), p("b", "declined")], earned: 1, expected: { hold: 1, remove: [] } },
+  ])("$name", ({ places, earned, expected }) => {
+    expect(quotaPlaceAdjustment(places, earned, RANKING)).toEqual(expected);
   });
 });

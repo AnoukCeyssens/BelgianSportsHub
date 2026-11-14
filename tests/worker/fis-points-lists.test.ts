@@ -61,7 +61,7 @@ describe("FIS points-list sources", () => {
 
   it("are four Automatic sources fetched weekly, the cadence being data on their Source rows", async () => {
     const rows = await getDb(env.DB).select().from(schema.source);
-    const fis = rows.filter((r) => r.key.startsWith("fis-"));
+    const fis = rows.filter((r) => r.key.startsWith("fis-") && r.tier === "automatic");
     expect(fis.map((r) => [r.key, r.tier, r.cadenceDays]).sort()).toEqual(FIS_SOURCES.map((key) => [key, "automatic", 7]));
 
     // Alpine last succeeded a week ago and is due; snowboard succeeded yesterday and waits.

@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntry, seedTimetable } from "../support/seed";
 import { get, post } from "../support/worker";
+import { region } from "../support/html";
 
 // Spec #20, stories 47, 49, 56, 58, 112 and 113; ticket #38. While any
 // competition with Belgian Entries is Live, the owner runs a four-step Live
@@ -21,7 +22,7 @@ function dayRows(html: string) {
   const start = html.indexOf('aria-label="Sessions"');
   if (start < 0) return [];
   const table = html.slice(start, html.indexOf("</table>", start));
-  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => `${text(m[2])}${/if-through/.test(m[1]) ? " [greyed]" : ""}`);
+  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => text(m[2]));
 }
 
 /** The medal table's rows, Belgium's marked. */
@@ -35,6 +36,7 @@ function medalRows(html: string) {
 const TODAY = "/curate/live/today-tomorrow";
 const RESULTS = "/curate/live/todays-results";
 const URL_ = "https://isu.example/results/500m.pdf";
+const START_LIST = "https://isu.example/startlists/500m-heats.pdf";
 
 describe("Live day pass and medal table", () => {
   let europeans: string;
@@ -50,22 +52,22 @@ describe("Live day pass and medal table", () => {
     await clearIngestedData(env);
     europeans = await seedCompetition(env.DB, {
       name: "European Short Track Championships 2027",
-      sport: "Short track",
+      sport: "Short track speed skating",
       kind: "championship",
       startDate: "2027-01-15",
       endDate: "2027-01-17",
       city: "Gdańsk",
       venueZone: "Europe/Warsaw",
     });
-    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
-    w500 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track", event: "Women's 500 m", athleteId: desmet });
-    w1000 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track", event: "Women's 1000 m", athleteId: desmet });
+    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
+    w500 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track speed skating", event: "Women's 500 m", athleteId: desmet });
+    w1000 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track speed skating", event: "Women's 1000 m", athleteId: desmet });
     await seedTimetable(env.DB, europeans, "Europe/Warsaw", [
-      { sport: "Short track", date: "2027-01-15", start: "13:00", rounds: [["Women's 500 m", "Heats"]] },
-      { sport: "Short track", date: "2027-01-15", start: "15:30", rounds: [["Women's 1000 m", "Heats"]] },
-      { sport: "Short track", date: "2027-01-16", start: "12:00", rounds: [["Women's 500 m", "Quarter-finals"]] },
-      { sport: "Short track", date: "2027-01-17", start: "13:00", rounds: [["Women's 1000 m", "Quarter-finals"]] },
-      { sport: "Short track", date: "2027-01-17", start: "15:00", rounds: [["Women's 500 m", "Final"]] },
+      { sport: "Short track speed skating", date: "2027-01-15", start: "13:00", rounds: [["Women's 500 m", "Heats"]] },
+      { sport: "Short track speed skating", date: "2027-01-15", start: "15:30", rounds: [["Women's 1000 m", "Heats"]] },
+      { sport: "Short track speed skating", date: "2027-01-16", start: "12:00", rounds: [["Women's 500 m", "Quarter-finals"]] },
+      { sport: "Short track speed skating", date: "2027-01-17", start: "13:00", rounds: [["Women's 1000 m", "Quarter-finals"]] },
+      { sport: "Short track speed skating", date: "2027-01-17", start: "15:00", rounds: [["Women's 500 m", "Final"]] },
     ]);
   });
 
@@ -78,7 +80,7 @@ describe("Live day pass and medal table", () => {
   });
 
   it("has four steps: Today & tomorrow, Today's results, Merge queue and Source health", async () => {
-    const rail = text((await page(TODAY)).match(/<nav class="rail"[^>]*>(.*?)<\/nav>/s)![1]);
+    const rail = text(region(await page(TODAY), "Live day pass steps", "nav")!);
     expect(rail).toMatch(/^Live day pass (1|✓) Today & tomorrow .* (2|✓) Today's results .* (3|✓) Merge queue .* (4|✓) Source health /);
   });
 
@@ -90,7 +92,7 @@ describe("Live day pass and medal table", () => {
     expect(step).not.toContain("Final");
     expect(step).toContain("Today & tomorrow ~10 min · 3 open");
 
-    const saved = await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "4", opponent: "", start: "13:24" });
+    const saved = await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "4", opponent: "", start: "13:24", sourceUrl: START_LIST });
     expect(saved.status).toBe(303);
     expect(text(await page(TODAY))).toContain("Today & tomorrow ~10 min · 2 open");
     expect(text(await page(TODAY))).toContain("Hanne Desmet · Women's 500 m · Heats: heat 2 · lane 4 · 13:24");
@@ -102,28 +104,55 @@ describe("Live day pass and medal table", () => {
     ]);
   });
 
+  it("refuses heat detail or a round's outcome without the page it was read on, and keeps that page with it", async () => {
+    expect((await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "", opponent: "", start: "" })).status).toBe(400);
+    expect((await post(RESULTS, { intent: "through", entry: w500, round: "Heats" })).status).toBe(400);
+    expect((await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: "" })).status).toBe(400);
+    expect(text(await page(TODAY))).toContain("Today & tomorrow ~10 min · 3 open");
+
+    await post(TODAY, { intent: "save-detail", entry: w500, round: "Heats", heat: "2", lane: "4", opponent: "", start: "", sourceUrl: START_LIST });
+    expect(await page(TODAY)).toContain(`href="${START_LIST}"`);
+    fixClock("2027-01-15T19:00:00.000Z");
+    await post(RESULTS, { intent: "through", entry: w500, round: "Heats", sourceUrl: URL_ });
+
+    const [round] = await getDb(env.DB).select().from(schema.entryRound);
+    expect({
+      detailSource: round.detailSource,
+      detailCheckedAt: round.detailCheckedAt,
+      outcome: round.outcome,
+      outcomeSource: round.outcomeSource,
+      outcomeCheckedAt: round.outcomeCheckedAt,
+    }).toEqual({
+      detailSource: START_LIST,
+      detailCheckedAt: "2027-01-15T18:00:00.000Z",
+      outcome: "advanced",
+      outcomeSource: URL_,
+      outcomeCheckedAt: "2027-01-15T19:00:00.000Z",
+    });
+  });
+
   it("moves a later round on once the Entry is through, and drops the rounds after it is out", async () => {
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-16`))).toEqual([
-      "12:00 Hanne Desmet Women's 500 m · Quarter-finals if through [greyed]",
+      "12:00 Hanne Desmet Women's 500 m · Quarter-finals if through",
     ]);
     const due = text(await page(RESULTS));
     expect(due).toContain("Hanne Desmet · Women's 500 m · Heats");
     expect(due).toContain("Hanne Desmet · Women's 1000 m · Heats");
 
-    expect((await post(RESULTS, { intent: "through", entry: w500, round: "Heats" })).status).toBe(303);
+    expect((await post(RESULTS, { intent: "through", entry: w500, round: "Heats", sourceUrl: URL_ })).status).toBe(303);
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-15`))[0]).toBe("13:00 Hanne Desmet Women's 500 m · Heats through");
     expect(dayRows(await page(`/championship/${europeans}?day=2027-01-16`))).toEqual(["12:00 Hanne Desmet Women's 500 m · Quarter-finals"]);
 
-    await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: "" });
-    expect(dayRows(await page(`/championship/${europeans}?day=2027-01-17`))).toEqual(["15:00 Hanne Desmet Women's 500 m · Final if through [greyed]"]);
+    await post(RESULTS, { intent: "out", entry: w1000, round: "Heats", place: "", performance: "", sourceUrl: URL_ });
+    expect(dayRows(await page(`/championship/${europeans}?day=2027-01-17`))).toEqual(["15:00 Hanne Desmet Women's 500 m · Final if through"]);
     expect(text(await page(RESULTS))).not.toContain("Hanne Desmet · Women's");
     expect(text(await page(RESULTS))).toContain("Hanne Desmet: Women's 1000 m · Heats out");
   });
 
   it("shows a final result on its round and counts it in the medal table, Belgium highlighted", async () => {
-    await post(RESULTS, { intent: "through", entry: w500, round: "Heats" });
+    await post(RESULTS, { intent: "through", entry: w500, round: "Heats", sourceUrl: URL_ });
     fixClock("2027-01-16T18:00:00.000Z");
-    await post(RESULTS, { intent: "through", entry: w500, round: "Quarter-finals" });
+    await post(RESULTS, { intent: "through", entry: w500, round: "Quarter-finals", sourceUrl: URL_ });
     fixClock("2027-01-17T17:00:00.000Z");
     expect(text(await page(RESULTS))).toContain("Hanne Desmet · Women's 500 m · Final");
     const final = await post(RESULTS, { intent: "final", entry: w500, round: "Final", place: "2", performance: "43.10", sourceUrl: URL_ });
@@ -148,17 +177,17 @@ describe("Live day pass and medal table", () => {
     fixClock("2026-11-14T12:00:00.000Z");
     const owner = { sourceUrl: "https://la28.example/schedule" };
     await post("/curate/run/schedules", { intent: "save-games-dates", games: "la-2028", firstDay: "2028-07-12", lastDay: "2028-07-30", ...owner });
-    for (const sport of ["Athletics", "Cycling Road"]) {
+    for (const sport of ["Athletics", "Cycling road"]) {
       await post("/curate/run/schedules", { intent: "save-sport-days", games: "la-2028", sport, firstDay: "2028-07-14", lastDay: "2028-07-30", ...owner });
     }
     const la = (await getDb(env.DB).query.competition.findFirst({ where: (c, { eq }) => eq(c.kind, "games") }))!.id;
     const thiam = await seedAthlete(env.DB, { name: "Nafissatou Thiam", sport: "Athletics" });
-    const evenepoel = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling Road" });
+    const evenepoel = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling road" });
     const hept = await seedEntry(env.DB, { competitionId: la, sport: "Athletics", event: "Women's Heptathlon", athleteId: thiam });
-    const road = await seedEntry(env.DB, { competitionId: la, sport: "Cycling Road", event: "Men's Road Race", athleteId: evenepoel });
+    const road = await seedEntry(env.DB, { competitionId: la, sport: "Cycling road", event: "Men's Road Race", athleteId: evenepoel });
     await seedTimetable(env.DB, la, "America/Los_Angeles", [
       { sport: "Athletics", date: "2028-07-16", start: "18:30", rounds: [["Women's Heptathlon", "Final"]] },
-      { sport: "Cycling Road", date: "2028-07-15", start: "09:00", rounds: [["Men's Road Race", "Final"]] },
+      { sport: "Cycling road", date: "2028-07-15", start: "09:00", rounds: [["Men's Road Race", "Final"]] },
     ]);
 
     fixClock("2028-07-17T12:00:00.000Z");

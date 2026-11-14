@@ -33,6 +33,9 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const current = currentPhase(inputs, at);
   const search = new URL(request.url).searchParams;
   const shown = phaseToShow(search.get("phase"), current);
+  // Decided server-side: only the owner's HTML carries the pick forms.
+  const owner = await isOwner(request, context.get(cloudflareContext).env);
+  const here = `/championship/${competition.id}${search.size > 0 ? `?${search}` : ""}`;
   return {
     id: competition.id,
     name: competition.name,
@@ -42,8 +45,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     endDate: competition.endDate,
     current,
     shown,
-    panel: await loadPhasePanel(db, competition, shown, at, undefined, search.get("day")),
-    owner: isOwner(request, context.get(cloudflareContext).env),
+    panel: await loadPhasePanel(db, competition, shown, at, undefined, search.get("day"), owner ? { returnTo: here } : null),
+    owner,
   };
 }
 

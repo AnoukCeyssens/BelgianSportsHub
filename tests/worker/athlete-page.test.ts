@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { seedAthlete } from "../support/seed";
 import { get } from "../support/worker";
+import { region } from "../support/html";
 
 describe("Athlete tab", () => {
   it("shows a hand-seeded Athlete from D1 with name, sport, date of birth and external IDs", async () => {
@@ -42,7 +43,7 @@ describe("Athlete tab", () => {
 
   it("puts the four reader tabs along the bottom, Athlete first", async () => {
     const html = await (await get("/athletes")).text();
-    const tabs = [...html.matchAll(/<nav class="tabs"[^>]*>(.*?)<\/nav>/gs)][0]?.[1] ?? "";
+    const tabs = region(html, "Sections", "nav") ?? "";
     expect([...tabs.matchAll(/>([^<]+)<\/a>/g)].map((m) => m[1])).toEqual(["Athlete", "Calendar", "Championship", "Games"]);
   });
 

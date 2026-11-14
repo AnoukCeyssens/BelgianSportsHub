@@ -18,6 +18,7 @@
 // and the like are left out (GLOSSARY "Senior international performance").
 // A list holds every race of the season so far, so each run rewrites the same
 // rows; sourceRefs keep them from duplicating. FIS lists carry no entry lists.
+import { seriesKey, seriesSlug } from "~/domain";
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 import { zipEntries } from "../zip-stream";
 
@@ -184,19 +185,36 @@ async function writeBelgianRows(run: SourceRun, discipline: Discipline, list: Po
 async function writeCompetition(run: SourceRun, discipline: Discipline, list: PointsList, eventId: string, rawCopyId: string) {
   const event = list.events.get(eventId);
   if (!event) throw new Error(`FIS event ${eventId} missing from the list`);
-  const kinds = [...list.races.values()].filter((r) => r.Eventid === eventId).map((r) => KIND_BY_CATEGORY[r.Catcode]);
+  const categories = [...list.races.values()].filter((r) => r.Eventid === eventId).map((r) => r.Catcode);
+  const kinds = categories.map((c) => KIND_BY_CATEGORY[c]);
+  const name = event.Eventname && event.Eventname !== event.Name ? `${event.Name} – ${event.Eventname}` : event.Name;
+  const kind = KIND_RANK.find((k) => kinds.includes(k))!;
+  const category = categories.find((c) => KIND_BY_CATEGORY[c] === kind)!;
   return run.rows.competition({
-    name: event.Eventname && event.Eventname !== event.Name ? `${event.Name} – ${event.Eventname}` : event.Name,
+    name,
     sport: discipline.sport,
-    kind: KIND_RANK.find((k) => kinds.includes(k))!,
+    kind,
     startDate: event.Startdate,
     endDate: event.Enddate,
     city: event.Place || null,
     country: event.Nationcodeplace || null,
     venueZone: event.Timezone || null,
     sourceRef: `${event.Sectorcode}/${eventId}`,
+    series: fisSeries(event.Sectorcode, category, kind, discipline.sport, event.Place),
     rawCopyId,
   });
+}
+
+/**
+ * The series of a FIS event, sponsor-free: the Games; a World Championship
+ * by its category ("fis:al:wsc"); a World Cup or continental cup leg by its
+ * category and venue ("fis:al:wc:soelden").
+ */
+function fisSeries(sector: string, category: string, kind: CompetitionKind, sport: string, place: string): string {
+  const source = `fis:${sector.toLowerCase()}:${category.toLowerCase()}`;
+  if (kind === "games") return seriesKey({ source, name: "", kind, sport });
+  if (kind === "championship") return source;
+  return `${source}:${seriesSlug(place)}`;
 }
 
 /** FIS result statuses: QLF is a classified finish; DNS is not a performance. */

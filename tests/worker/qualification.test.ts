@@ -4,6 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedTeam, seedTeamResult } from "../support/seed";
 import { get, post } from "../support/worker";
+import { phasePanel, region } from "../support/html";
 
 // Spec #20, stories 25, 28–30, 34, 45, 82 and 84; ticket #32. The owner
 // curates a Qualification status per Entry per target (the next Games, the
@@ -26,8 +27,8 @@ const text = (html: string) =>
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** The Qualification phase's table: one line per potential Entry. */
@@ -40,13 +41,13 @@ function qualificationRows(html: string) {
 
 /** The Athlete or Team page's Qualification section, as text. */
 function qualificationSection(html: string) {
-  const m = html.match(/<section class="qualification"[^>]*>(.*?)<\/section>/s);
-  return m ? text(m[1]) : undefined;
+  const section = region(html, "Qualification", "section");
+  return section === null ? undefined : text(section);
 }
 
 /** Each progress bar of the Qualification section: its track and how full it is. */
 function progressBars(html: string) {
-  return [...html.matchAll(/<div class="bar[^"]*" role="progressbar" aria-label="([^"]+)" aria-valuenow="(\d+)"/g)].map((m) => `${m[1]} ${m[2]}%`);
+  return [...html.matchAll(/<div\b[^>]*\brole="progressbar" aria-label="([^"]+)" aria-valuenow="(\d+)"/g)].map((m) => `${m[1]} ${m[2]}%`);
 }
 
 /** The id of a potential Entry on the owner's qualification page, by its "<who> · <event>" heading. */
@@ -74,6 +75,7 @@ async function worlds() {
     url: "https://worldathletics.org/beijing27/standards",
     standards: "Heptathlon: 6 500 pts or World Ranking top 24",
     closesOn: "2027-08-24",
+    closesSource: "https://worldathletics.org/beijing27/qualification-period",
   });
   return id;
 }
@@ -120,7 +122,7 @@ describe("Qualification status and tracks", () => {
 
     const html = await page(`/championship/${beijing}`);
     expect(panel(html)?.phase).toBe("Qualification");
-    expect(panel(html)?.text).toContain("Qualification window closes 24 Aug 2027 · 283 days left");
+    expect(panel(html)?.text).toContain("Qualification window closes 24 Aug 2027 · 283 days left · source · checked 14 Nov 2026");
     expect(panel(html)?.text).toContain("1 qualified · 1 at risk");
     expect(qualificationRows(html)).toEqual([
       "Elise Vanderelst Women's 1500 m ✗ Entry standard need 4:01.50 · has 4:04.10 … Federation selection need Belgian Athletics, Aug 2027 · has Pending At risk",
@@ -172,7 +174,7 @@ describe("Qualification status and tracks", () => {
       endDate: "2028-07-30",
       venueZone: "America/Los_Angeles",
     });
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-11" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-11", closesSource: "https://example.org/qualification-window" });
     const indoors = await seedCompetition(env.DB, { name: "European Athletics Indoor Championships", sport: "Athletics", kind: "championship", startDate: "2027-03-05", endDate: "2027-03-07" });
     const beijing = await worlds();
     const thiam = await activeAthlete("Nafissatou Thiam");
@@ -248,7 +250,7 @@ describe("Qualification status and tracks", () => {
 
   it("filters the Games' Qualification phase by sport chip", async () => {
     const la = await seedCompetition(env.DB, { name: "LA 2028", sport: "Olympic Games", kind: "games", source: "owner", startDate: "2028-07-14", endDate: "2028-07-30" });
-    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-11" });
+    await post(`/curate/games/${la}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-11", closesSource: "https://example.org/qualification-window" });
     const db = getDb(env.DB);
     for (const sport of ["Athletics", "Hockey"]) {
       await db.insert(schema.gamesSportWindow).values({ competitionId: la, sport, firstDay: "2028-07-15", lastDay: "2028-07-24", sourceUrl: "https://la28.example", checkedOn: "2026-11-14" });

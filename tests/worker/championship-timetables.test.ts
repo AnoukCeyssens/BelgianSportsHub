@@ -10,6 +10,7 @@ import { fixClock } from "../support/clock";
 import { stubOutboundFetch, type RecordedResponse } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, seedCompetition, seedEntry, seedTeam, setSource } from "../support/seed";
 import { deliverIngestJobs, get } from "../support/worker";
+import { region } from "../support/html";
 
 // Spec #20, stories 61–63; ticket #39. Championship timetables of ISU speed
 // skating, World Athletics, World Aquatics and World Archery come in
@@ -27,7 +28,7 @@ function dayRows(html: string) {
   const start = html.indexOf('aria-label="Sessions"');
   if (start < 0) return [];
   const table = html.slice(start, html.indexOf("</table>", start));
-  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => `${text(m[2])}${/if-through/.test(m[1]) ? " [greyed]" : ""}`);
+  return [...table.matchAll(/<tr([^>]*)>(.*?)<\/tr>/gs)].map((m) => text(m[2]));
 }
 
 /** The Schedules step's list of stored timetables, one line per competition. */
@@ -111,7 +112,7 @@ describe("ISU speed skating timetables (through the #23 adapter)", () => {
     expect(link, "a Name Entries link on the stored version").toBeDefined();
     const review = await page(link!);
     expect(text(review)).toContain("16 rounds read in 16 events");
-    const form = review.match(/<form[^>]*class="card timetable-review"[^>]*>(.*?)<\/form>/s)![1];
+    const form = region(review, "Timetable review", "form")!;
     const hidden = [...form.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)"\/>/g)].map((m): [string, string] => [m[1], m[2].replace(/&#x27;/g, "'").replace(/&amp;/g, "&")]);
     const [eventField] = hidden.find(([, value]) => value === "5000m Men")!;
     const ticks: [string, string][] = [[`entry.${eventField.slice("event.".length)}`, `athlete:${swings}`]];
@@ -177,24 +178,24 @@ describe("World Aquatics timetables", () => {
     await clearIngestedData(env);
     beijing = await seedCompetition(env.DB, {
       name: "World Aquatics Swimming Championships (25m) 2026",
-      sport: "Aquatics",
+      sport: "Swimming",
       source: "world-aquatics",
-      sourceRef: "5052",
+      sourceRef: "5052/SW",
       kind: "championship",
       startDate: "2026-12-01",
       endDate: "2026-12-06",
       city: "Beijing",
     });
-    const roos = await seedAthlete(env.DB, { name: "Roos Vanotterdijk", sport: "Aquatics" });
+    const roos = await seedAthlete(env.DB, { name: "Roos Vanotterdijk", sport: "Swimming" });
     // Named as the World Aquatics results source names short-course events.
-    await seedEntry(env.DB, { competitionId: beijing, sport: "Aquatics", event: "Women's 50m Freestyle (25m)", athleteId: roos });
+    await seedEntry(env.DB, { competitionId: beijing, sport: "Swimming", event: "Women's 50m Freestyle (25m)", athleteId: roos });
   });
 
   it("fetches the short-course Worlds' schedule, and none for Worlds without one yet", async () => {
     await runSource(SOURCE, AQUATICS_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", aquaticsTimetableRun);
 
     expect(await storedTimetables()).toEqual(["World Aquatics Swimming Championships (25m) 2026 · fetched 2026-11-14 3 Sessions source Name Entries"]);
-    const budapest = await competitionBy("world-aquatics", "5546");
+    const budapest = await competitionBy("world-aquatics", "5546/SW");
     expect(budapest.kind).toBe("championship");
     expect(await getDb(env.DB).select().from(schema.timetableVersion).where(eq(schema.timetableVersion.competitionId, budapest.id))).toEqual([]);
   });
@@ -205,7 +206,7 @@ describe("World Aquatics timetables", () => {
     fixClock("2026-12-05T12:00:00.000Z"); // 20:00 in Beijing
     expect(dayRows(await page(`/championship/${beijing}`))).toEqual([
       "03:00 · 10:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Heats",
-      "12:00 · 19:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Semifinal if through [greyed]",
+      "12:00 · 19:00 Beijing Roos Vanotterdijk Women's 50m Freestyle (25m) · Semifinal if through",
     ]);
   });
 });
@@ -249,9 +250,9 @@ describe("World Archery timetables", () => {
       "20:30 · 13:30 Medellin Ana Example Recurve Women · Qualification round",
     ]);
     expect(dayRows(await page(`/championship/${medellin}?day=2027-09-26`))).toEqual([
-      "21:00 · 14:00 Medellin Ana Example Recurve Women · Semifinal if through [greyed]",
-      "22:00 · 15:00 Medellin Ana Example Recurve Women · Bronze medal match if through [greyed]",
-      "22:00 · 15:00 Medellin Ana Example Recurve Women · Gold medal match if through [greyed]",
+      "21:00 · 14:00 Medellin Ana Example Recurve Women · Semifinal if through",
+      "22:00 · 15:00 Medellin Ana Example Recurve Women · Bronze medal match if through",
+      "22:00 · 15:00 Medellin Ana Example Recurve Women · Gold medal match if through",
     ]);
   });
 });

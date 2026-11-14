@@ -176,6 +176,41 @@
       "when": 1794670164957,
       "tag": "0024_verdicts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794671380346,
+      "tag": "0025_sport_vocabulary",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794672862630,
+      "tag": "0026_assisted_and_manual_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1794673484253,
+      "tag": "0027_curated_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1794674869113,
+      "tag": "0028_games_results_on_owner_row",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1794674869686,
+      "tag": "0029_uci_derived_ids",
+      "breakpoints": true
     }
   ]
 }

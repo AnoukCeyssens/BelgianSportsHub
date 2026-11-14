@@ -29,12 +29,15 @@ export {
 } from "./participation";
 export {
   belgianPastedRows,
+  belgianRankingRows,
   columnMapping,
+  isRankingMapping,
   mappingToSave,
   PASTE_COLUMN_ROLES,
   readHtmlTable,
   readPastedTable,
   type PasteColumnRole,
+  type PastedRankingRow,
   type PastedResultRow,
   type PastedTable,
   type SavedColumnMapping,
@@ -71,6 +74,7 @@ export {
 export { venueZoneOf } from "./venue-zone";
 export {
   dayToShow,
+  isCombinedEvent,
   liveDays,
   roundsFor,
   venueLabel,
@@ -87,7 +91,6 @@ export {
   inContention,
   isQualificationStatus,
   meetsCriteria,
-  olympicCycleOf,
   rankedTrack,
   rankingPlaces,
   suggestStatus,
@@ -113,10 +116,12 @@ export {
   isQuotaPlaceEvent,
   isQuotaPlaceState,
   NEW_QUOTA_PLACE_EVENTS,
+  placesEarned,
   QUOTA_PLACE_EVENTS,
   QUOTA_PLACE_KIND_LABELS,
   QUOTA_PLACE_STATE_LABELS,
   QUOTA_PLACE_STATES,
+  quotaPlaceAdjustment,
   quotaPlaceEnded,
   quotaPlaceLinkable,
   quotaPlaceTransition,
@@ -125,10 +130,13 @@ export {
   type QuotaPlaceMove,
   type QuotaPlaceNow,
   type QuotaPlaceState,
+  type RankedQuotaPlace,
 } from "./quota-places";
 export {
   BOIC,
   entryListSelection,
+  type EntryListEntry,
+  type ListedEntrant,
   namesFoundIn,
   SELECTION_LOOKAHEAD_WEEKS,
   selectionDue,
@@ -159,6 +167,7 @@ export {
   type Shortcut,
 } from "./expectations";
 export {
+  belgiumCounts,
   impliedCounts,
   outcomeOf,
   tally,
@@ -167,7 +176,10 @@ export {
   VERDICTS,
   withdrawnBeforeLock,
   type DelegationCounts,
+  type ExpectationKind,
   type Outcome,
   type Tally,
   type Verdict,
 } from "./verdicts";
+export { canonicalSport, olympicCycleOf, requireSport, sameSport, SPORTS, type SportDefinition } from "./sports";
+export { seriesKey, seriesSlug, type CompetitionKindName, type SeriesInput } from "./series";

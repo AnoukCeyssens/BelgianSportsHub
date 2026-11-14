@@ -13,7 +13,7 @@ const requestHandler = createRequestHandler(() => import("virtual:react-router/s
 // message (queue).
 export default {
   async fetch(request, env, ctx) {
-    const refused = refuseNonOwnerCuration(request, env);
+    const refused = await refuseNonOwnerCuration(request, env);
     if (refused) return refused;
     const context = new RouterContextProvider();
     context.set(cloudflareContext, { env, ctx });

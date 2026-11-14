@@ -5,6 +5,7 @@
 // listing its rounds ("Women's 100m Semifinal / Men's 400m Hurdles Round 1",
 // the Games' by-event schedule). Times are venue-local wall-clock times.
 import { columnMapping, type PastedTable } from "./paste-table";
+import { sameSport } from "./sports";
 
 export const TIMETABLE_COLUMN_ROLES = ["ignore", "date", "start", "end", "session", "sport", "event", "round"] as const;
 export type TimetableColumnRole = (typeof TIMETABLE_COLUMN_ROLES)[number];
@@ -178,7 +179,7 @@ export function belgianRounds<R extends { sport: string; event: string }>(
   entries: readonly { sport: string; event: string }[],
 ): R[] {
   return rounds.flatMap((r) => {
-    const entry = entries.find((e) => e.sport.toLowerCase() === r.sport.toLowerCase() && sameEvent(e.event, r.event));
+    const entry = entries.find((e) => sameSport(e.sport, r.sport) && sameEvent(e.event, r.event));
     return entry ? [{ ...r, event: entry.event }] : [];
   });
 }

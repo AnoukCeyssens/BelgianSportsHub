@@ -26,7 +26,12 @@ export const athlete = sqliteTable("athlete", {
   rawCopyId: text("raw_copy_id").references(() => rawCopy.id),
 });
 
-/** Known external ID schemes, in display order. */
+/**
+ * Known external ID schemes, in display order: every scheme an adapter, the
+ * paste importer (a Source row's `id_scheme`) or the roster seed writes. An
+ * adapter's `Person.ifId.scheme` is typed by these keys, and the owner's
+ * Sources screen and paste importer refuse a scheme without a label.
+ */
 export const EXTERNAL_ID_SCHEMES = {
   "team-belgium": "Team Belgium",
   "world-athletics": "World Athletics",
@@ -40,15 +45,67 @@ export const EXTERNAL_ID_SCHEMES = {
   ijf: "IJF",
   fie: "FIE",
   "world-rowing": "World Rowing",
+  uci: "UCI ID",
+  "uci-derived": "UCI (name + date of birth)",
   owgr: "OWGR",
+  bwf: "BWF",
+  wbsc: "WBSC",
+  fiba: "FIBA",
+  "fiba-3x3": "FIBA 3x3",
+  "world-boxing": "World Boxing",
+  "paddle-worldwide": "Paddle Worldwide",
+  icc: "ICC",
+  fei: "FEI",
+  ifaf: "IFAF",
+  fifa: "FIFA",
+  fig: "FIG",
+  ehf: "EHF",
+  fih: "FIH",
+  "world-lacrosse": "World Lacrosse",
+  uipm: "UIPM",
+  "world-rugby": "World Rugby",
+  "world-sailing": "World Sailing",
+  issf: "ISSF",
+  "world-skate": "World Skate",
+  "world-climbing": "World Climbing",
+  psa: "PSA",
+  isa: "ISA",
+  ittf: "ITTF",
+  "world-taekwondo": "World Taekwondo",
+  itf: "ITF",
+  iwf: "IWF",
+  uww: "UWW",
+  ibu: "IBU",
+  ismf: "ISMF",
+  ibsf: "IBSF",
+  fil: "FIL",
+  wcf: "WCF",
+  iihf: "IIHF",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;
 
-/** Where each external ID links to; `$1` is the ID. */
-export const EXTERNAL_ID_LINKS: Record<string, string> = {
+export type ExternalIdScheme = keyof typeof EXTERNAL_ID_SCHEMES;
+
+/** Whether a stored scheme is one of the known, labelled schemes. */
+export function isExternalIdScheme(scheme: string): scheme is ExternalIdScheme {
+  return Object.hasOwn(EXTERNAL_ID_SCHEMES, scheme);
+}
+
+/**
+ * Matching keys a source makes up because it publishes no ID (UCI DataRide's
+ * results: name + date of birth). They match identities but are no ID a reader
+ * can look up, so the Athlete page does not show them.
+ */
+export const DERIVED_ID_SCHEMES: ReadonlySet<ExternalIdScheme> = new Set(["uci-derived"]);
+
+/** Where each external ID links to; `$1` is the ID. Only stable public pages keyed by the stored ID. */
+export const EXTERNAL_ID_LINKS: Partial<Record<ExternalIdScheme, string>> = {
   "team-belgium": "https://www.teambelgium.be/atleten/$1",
   "world-athletics": "https://worldathletics.org/athletes/_/$1",
+  ijf: "https://www.ijf.org/judoka/$1",
+  fie: "https://fie.org/athletes/$1",
+  "world-triathlon": "https://triathlon.org/athletes/profile/$1",
   olympedia: "https://www.olympedia.org/athletes/$1",
   wikidata: "https://www.wikidata.org/wiki/$1",
 };
@@ -123,6 +180,10 @@ export const source = sqliteTable("source", {
   columnMapping: text("column_mapping", { mode: "json" }).$type<Record<string, string>>(),
   /** When a paste for this source was last confirmed (the Paste imports step's cadence). */
   lastPastedAt: text("last_pasted_at"),
+  /** Where the owner reads it (results page, database, API root). */
+  url: text("url"),
+  /** How to use it: access quirks, PDFs, what it covers. */
+  notes: text("notes"),
 });
 
 /**
@@ -206,17 +267,25 @@ export const competition = sqliteTable(
      * the Games: when the qualification system or entry standards are
      * expected (YYYY-MM-DD) and, once out, when they were published (Belgian
      * date), where, and what they say (one line per event or track).
+     * Every curated value carries its source (URL) and the Belgian date the
+     * owner last checked it (#20 review): the expected date its own source,
+     * the published standards `standardsUrl`.
      */
     standardsExpectedOn: text("standards_expected_on"),
+    standardsExpectedSource: text("standards_expected_source"),
+    standardsExpectedCheckedOn: text("standards_expected_checked_on"),
     standardsPublishedOn: text("standards_published_on"),
     standardsUrl: text("standards_url"),
     standardsText: text("standards_text"),
+    standardsCheckedOn: text("standards_checked_on"),
     /**
      * YYYY-MM-DD the qualification window closes for this target (ticket
      * #32; LA28: 11 Jun 2028, its last qualification event), curated with the
      * standards. The Athlete page counts down to it.
      */
     qualificationClosesOn: text("qualification_closes_on"),
+    qualificationClosesSource: text("qualification_closes_source"),
+    qualificationClosesCheckedOn: text("qualification_closes_checked_on"),
     source: text("source").notNull(),
     /** The source's own ID for this competition. */
     sourceRef: text("source_ref").notNull(),
@@ -401,8 +470,12 @@ export const participationCuration = sqliteTable("participation_curation", {
   addedAt: text("added_at"),
   /** "confirmed" | "kept" | "dropped"; null when only added. */
   decision: text("decision"),
-  /** Where the owner saw it (e.g. an entry list or a federation post), when given. */
-  sourceUrl: text("source_url"),
+  /**
+   * Where the owner saw it (e.g. an entry list or a federation post). Rows
+   * from before the #20 review were backfilled with "unrecorded (before the
+   * #20 review)".
+   */
+  sourceUrl: text("source_url").notNull(),
   /** ISO instant of the owner's last check. */
   checkedAt: text("checked_at").notNull(),
 });
@@ -568,6 +641,11 @@ export const entryRound = sqliteTable(
     startsAt: text("starts_at"),
     /** ISO instant the owner last looked for heat or match detail (saved, or none published). */
     detailCheckedAt: text("detail_checked_at"),
+    /** The start list the detail was read on (URL); null when none was published. */
+    detailSource: text("detail_source"),
+    /** The results page the outcome was read on (URL), and the ISO instant it was recorded. */
+    outcomeSource: text("outcome_source"),
+    outcomeCheckedAt: text("outcome_checked_at"),
     /** ISO instant of the owner's last change. */
     updatedAt: text("updated_at").notNull(),
   },

@@ -19,7 +19,9 @@ const page = async (path: string) => (await get(path)).text();
 function railStep(html: string, label: string) {
   const rail = html.slice(html.indexOf('aria-label="Run sheet steps"'), html.indexOf("</nav>"));
   const li = rail.match(new RegExp(`<li[^>]*>(?:(?!</li>).)*?${label}(?:(?!</li>).)*</li>`, "s"))?.[0] ?? "";
-  return { done: /class="[^"]*\bdone\b/.test(li), text: li.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() };
+  const text = li.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  // A done step shows ✓ in place of its number.
+  return { done: text.startsWith("✓"), text };
 }
 
 function sessionLog(html: string) {
@@ -60,8 +62,8 @@ describe("Run sheet", () => {
       lastError: "HTTP 500",
     });
     // A Belgian is entered at a UCI race this week, so the blocked (Assisted) UCI source is due for a paste.
-    const race = await seedCompetition(env.DB, { name: "UCI Track Nations Cup", sport: "Track cycling", source: "uci", startDate: "2026-11-13", endDate: "2026-11-15" });
-    await seedEntrant(env.DB, race, await seedAthlete(env.DB, { name: "Lindsay De Vylder", sport: "Track cycling" }));
+    const race = await seedCompetition(env.DB, { name: "UCI Track Nations Cup", sport: "Cycling track", source: "uci", startDate: "2026-11-13", endDate: "2026-11-15" });
+    await seedEntrant(env.DB, race, await seedAthlete(env.DB, { name: "Lindsay De Vylder", sport: "Cycling track" }));
   }
 
   it("opens on the first step, Source health", async () => {

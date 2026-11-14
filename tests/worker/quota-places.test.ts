@@ -5,6 +5,7 @@ import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedResult, seedTeam } from "../support/seed";
 import { get, post } from "../support/worker";
+import { phasePanel } from "../support/html";
 
 // Spec #20, stories 78–81, 83, 85 and 86; ADR 0002; ticket #36. The owner
 // records Belgium's Quota places per Games and event (NOC-owned or named)
@@ -37,8 +38,8 @@ const entryRows = (html: string) => rows(html, "Potential Entries");
 
 /** The shown phase's panel, as text. */
 function panel(html: string) {
-  const m = html.match(/<section class="phase" aria-label="([^"]+)">(.*?)<\/section>/s);
-  return m ? { phase: m[1], text: text(m[2]) } : undefined;
+  const shown = phasePanel(html);
+  return shown ? { phase: shown.phase, text: text(shown.html) } : undefined;
 }
 
 /** The id of a potential Entry on the owner's qualification page, by its "<who> · <event>" heading. */
@@ -65,7 +66,7 @@ async function la2028() {
     endDate: "2028-07-30",
     venueZone: "America/Los_Angeles",
   });
-  await post(`/curate/games/${id}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "", standards: "", closesOn: "2028-06-11" });
+  await post(`/curate/games/${id}/standards`, { expectedOn: "", publishedOn: "2026-11-10", url: "https://example.org/standards", standards: "", closesOn: "2028-06-11", closesSource: "https://example.org/qualification-window" });
   return id;
 }
 
@@ -124,7 +125,7 @@ describe("Quota places", () => {
     const la = await la2028();
     await post(curate(la), {
       intent: "add-quota-places",
-      sport: "Equestrian",
+      sport: "Equestrian eventing",
       event: "Team eventing",
       kind: "noc",
       how: "hold",
@@ -134,7 +135,7 @@ describe("Quota places", () => {
       source: "Equestrian federation news, 10 Nov",
     });
     expect(quotaRows(await page(`/games/${la}`))).toEqual([
-      "Equestrian · Team eventing NOC-owned Provisional via FEI Olympic ranking at Selection Equestrian federation news, 10 Nov · checked 14 Nov 2026",
+      "Equestrian eventing · Team eventing NOC-owned Provisional via FEI Olympic ranking at Selection Equestrian federation news, 10 Nov · checked 14 Nov 2026",
     ]);
 
     // Moving a place needs a source; illegal moves are refused.
@@ -146,7 +147,7 @@ describe("Quota places", () => {
     const moved = await post(curate(la), { intent: "move-quota-place", placeId: place, event: "allocate", source: "https://inside.fei.org/olympic-allocation" });
     expect(moved.status).toBe(303);
     expect(quotaRows(await page(`/games/${la}`))).toEqual([
-      "Equestrian · Team eventing NOC-owned Allocated via FEI Olympic ranking at Selection https://inside.fei.org/olympic-allocation · checked 2 Dec 2026",
+      "Equestrian eventing · Team eventing NOC-owned Allocated via FEI Olympic ranking at Selection https://inside.fei.org/olympic-allocation · checked 2 Dec 2026",
     ]);
   });
 
@@ -268,7 +269,7 @@ describe("Quota places", () => {
 
   it("gives Championships no Quota places", async () => {
     const worlds = await seedCompetition(env.DB, { name: "World Rowing Championships", sport: "Rowing", kind: "championship", startDate: "2027-09-01", endDate: "2027-09-08" });
-    await post(`/curate/championships/${worlds}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "", standards: "", closesOn: "2027-08-01" });
+    await post(`/curate/championships/${worlds}/standards`, { expectedOn: "", publishedOn: "2026-11-01", url: "https://example.org/standards", standards: "", closesOn: "2027-08-01", closesSource: "https://example.org/qualification-window" });
 
     const refused = await post(curate(worlds, "championships"), {
       intent: "add-quota-places",

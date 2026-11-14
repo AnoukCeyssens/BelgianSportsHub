@@ -14,6 +14,7 @@
 //    for the team events (Belgium's default Team), as of the run's day.
 // Team results (team pursuit, team sprint) go to Belgium's Team for the event,
 // with the skaters the result credits as its roster.
+import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://api.isuresults.eu";
@@ -249,7 +250,7 @@ function competitionKind(event: IsuEvent): CompetitionKind | null {
  * → "isu:european-championships").
  */
 function series(event: IsuEvent, kind: CompetitionKind): string | null {
-  if (kind === "games") return "olympic-games";
+  if (kind === "games") return seriesKey({ source: "isu", name: event.name, kind, sport: SPORT });
   if (kind === "circuit") return event.track ? `isu:${event.tags.includes("final") ? "world-cup-final" : "world-cup"}:${slug(event.track.city)}` : null;
   return `isu:${slug(event.name.replace(/\bISU\b|\bSpeed Skating\b/gi, ""))}`;
 }

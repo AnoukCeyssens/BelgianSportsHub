@@ -11,7 +11,9 @@ import { get, post, signedInAs } from "../support/worker";
 // against the counts the Expectations imply (and the BOIC target at the
 // Games), Belgium's best results and the final medal table. Each source is
 // compared with its last snapshot before the start. A pick for an Entry
-// withdrawn before the lock is voided; a DNS after it is Missed.
+// withdrawn before the lock is voided, while its Seed is Missed (no place); a
+// DNS after the lock is Missed. Belgium's own counts come from every Belgian
+// result at the competition, Selected Entry or not.
 const NOW = "2026-11-14T12:00:00.000Z";
 
 const page = async (path: string, init?: RequestInit) => (await get(path, init)).text();
@@ -80,6 +82,7 @@ describe("After: Verdicts, tallies and implied counts", () => {
       vanhoutte: await activeAthlete("Roos Vanhoutte", "Swimming"),
       gaspard: await activeAthlete("Florine Gaspard", "Swimming"),
       ndebele: await activeAthlete("Kobe Ndebele", "Swimming"),
+      dumont: await activeAthlete("Valentine Dumont", "Swimming"),
     };
     await addEntry(lublin, "championships", athletes.verbeke, "Men's 1500 m freestyle");
     await addEntry(lublin, "championships", athletes.vanhoutte, "Women's 200 m backstroke");
@@ -119,6 +122,10 @@ describe("After: Verdicts, tallies and implied counts", () => {
     // Equal 5th (a shared place counts as its best) against a 5th–8th pick: Met.
     await seedResult(env.DB, lublin, athletes.verbeke, { event: "Men's 1500 m freestyle", date: "2026-12-06", place: 5 });
     await seedResult(env.DB, lublin, athletes.ndebele, { event: "Men's 100 m freestyle", date: "2026-12-05", place: 3 });
+    // A Belgian with no Entry recorded (added late by the federation) still counts in Belgium's totals:
+    // silver in the final, after winning her heat the day before (only the final classification counts).
+    await seedResult(env.DB, lublin, athletes.dumont, { event: "Women's 200 m freestyle", date: "2026-12-06", place: 1 });
+    await seedResult(env.DB, lublin, athletes.dumont, { event: "Women's 200 m freestyle", date: "2026-12-07", place: 2 });
 
     fixClock("2026-12-10T12:00:00.000Z");
     const after = await page(`/championship/${lublin}`);
@@ -127,11 +134,12 @@ describe("After: Verdicts, tallies and implied counts", () => {
       "Florine Gaspard Women's 50 m freestyle – 1st–8th Missed Withdrawn",
       "Kobe Ndebele Men's 100 m freestyle 12th Beat – 3rd",
       "Lucas Verbeke Men's 1500 m freestyle 4th Missed 5th–8th Met 5th",
-      "Roos Vanhoutte Women's 200 m backstroke 2nd Voided 1st–3rd Voided Withdrawn",
+      // Withdrawn before the lock: her pick is voided, her Seed Missed (no place).
+      "Roos Vanhoutte Women's 200 m backstroke 2nd Missed 1st–3rd Voided Withdrawn",
     ]);
-    expect(rows(after, "Tally")).toEqual(["Seed 1 0 1", "My pick 0 1 1"]);
+    expect(rows(after, "Tally")).toEqual(["Seed 1 0 2", "My pick 0 1 1"]);
     // A Championship has no BOIC target or Gracenote: Belgium against the Seed- and pick-implied counts only.
-    expect(rows(after, "Medals and top 8")).toEqual(["Belgium 1 2", "Implied by Seeds 0 1", "Implied by my picks 0 2"]);
+    expect(rows(after, "Medals and top 8")).toEqual(["Belgium 2 3", "Implied by Seeds 1 2", "Implied by my picks 0 2"]);
     expect(rows(after, "Best results")).toEqual(["B Kobe Ndebele Men's 100 m freestyle", "5th Lucas Verbeke Men's 1500 m freestyle"]);
     expect(text(after)).toContain("Final medal table");
 
@@ -204,6 +212,9 @@ describe("After: Verdicts, tallies and implied counts", () => {
     const swimming = await page(`/games/${la}?sport=Swimming`);
     expect(rows(swimming, "Expectations vs outcome")).toEqual([]);
     expect(rows(swimming, "Medals and top 8")).not.toContain("BOIC target 8 25");
+    // Belgium's counts follow the chips too: no Belgian swimming result, both athletics places.
+    expect(rows(swimming, "Medals and top 8")).toContain("Belgium 0 0");
+    expect(rows(await page(`/games/${la}?sport=Athletics`), "Medals and top 8")).toContain("Belgium 1 2");
   });
 
   it("lets only the owner enter Gracenote picks and the BOIC target, at the Games only", async () => {

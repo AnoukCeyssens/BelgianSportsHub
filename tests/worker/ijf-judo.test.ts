@@ -51,6 +51,12 @@ describe("IJF judo source", () => {
     expect(results).toContain("13 Nov");
   });
 
+  it("links a judoka's IJF ID to her IJF page", async () => {
+    const petit = await seedAthlete(env.DB, { name: "Lois Petit", sport: "Judo", externalIds: [{ scheme: "ijf", value: "19939" }] });
+
+    expect(await athletePage(petit)).toContain('<a href="https://www.ijf.org/judoka/19939">IJF 19939</a>');
+  });
+
   it("waits for a weight category to be decided before writing its results", async () => {
     const marinx = await seedAthlete(env.DB, { name: "Ray Marinx", sport: "Judo", externalIds: [{ scheme: "ijf", value: "51352" }] });
 

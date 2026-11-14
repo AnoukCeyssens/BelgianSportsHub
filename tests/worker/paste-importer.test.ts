@@ -75,13 +75,13 @@ describe("Paste imports step", () => {
     await db.delete(schema.runSheetLog);
     await db.delete(schema.runSheetSession);
     await db.delete(schema.source);
-    await seedSource(env.DB, SOURCE, { name: "ISU short track", tier: "assisted", cadenceDays: 7, sport: "Short track", idScheme: "isu" });
+    await seedSource(env.DB, SOURCE, { name: "ISU short track", tier: "assisted", cadenceDays: 7, sport: "Short track speed skating", idScheme: "isu" });
     // Pasted last week, so due again; a healthy Automatic source is not listed.
     await seedSource(env.DB, "isu-speed-skating", { name: "ISU speed skating", lastSuccessAt: "2026-11-14T04:00:00.000Z" });
-    vos = await seedAthlete(env.DB, { name: "Hanne Vos", sport: "Short track", externalIds: [{ scheme: "isu", value: "SR-20451" }] });
-    peeters = await seedAthlete(env.DB, { name: "Ella Peeters", sport: "Short track", dateOfBirth: "2002-05-06" });
+    vos = await seedAthlete(env.DB, { name: "Hanne Vos", sport: "Short track speed skating", externalIds: [{ scheme: "isu", value: "SR-20451" }] });
+    peeters = await seedAthlete(env.DB, { name: "Ella Peeters", sport: "Short track speed skating", dateOfBirth: "2002-05-06" });
     // A Belgian Participation in short track this week (the entry list names Hanne Vos), so its source is due.
-    const thisWeek = await seedCompetition(env.DB, { name: "Short Track World Tour, Montréal", sport: "Short track", startDate: "2026-11-13", endDate: "2026-11-15" });
+    const thisWeek = await seedCompetition(env.DB, { name: "Short Track World Tour, Montréal", sport: "Short track speed skating", startDate: "2026-11-13", endDate: "2026-11-15" });
     await seedEntrant(env.DB, thisWeek, vos);
   });
 
@@ -163,6 +163,29 @@ describe("Paste imports step", () => {
     expect(items.map((i) => i.rawCopyId)).toEqual([raw]);
   });
 
+  it("files the competition under the series the owner typed, else one derived from its name (previous edition)", async () => {
+    const typed = await read({ text: pastedTable });
+    await postForm(STEP, [
+      ["intent", "confirm"],
+      ["source", SOURCE],
+      ["raw", new URL(typed, "https://bsh.test").searchParams.get("raw")!],
+      ...Object.entries({ ...COMPETITION, competition: "ISU Short Track World Tour, Beijing", series: "isu-st:world-tour:beijing" }),
+      ...GUESSED.map((role, i): [string, string] => [`col.${i}`, role]),
+      ["row", "2"],
+    ]);
+    await confirm(await read({ text: pastedTable }), GUESSED, [2]);
+
+    const competitions = await getDb(env.DB)
+      .select({ name: schema.competition.name, series: schema.competition.series })
+      .from(schema.competition)
+      .where(eq(schema.competition.source, SOURCE))
+      .orderBy(schema.competition.name);
+    expect(competitions).toEqual([
+      { name: "ISU Short Track World Tour #3", series: "isu-short-track:isu-short-track-world-tour-3" },
+      { name: "ISU Short Track World Tour, Beijing", series: "isu-st:world-tour:beijing" },
+    ]);
+  });
+
   it("writes only the ticked rows", async () => {
     const importer = await read({ text: pastedTable });
 
@@ -218,5 +241,71 @@ describe("Paste imports step", () => {
     expect(await page(res.headers.get("location")!)).toContain(
       "ISU short track: the page refused the Worker (403); copy the table from your browser instead",
     );
+  });
+
+  // #20 review (D): rankings go through the same importer, with ranking column roles.
+  describe("a pasted ranking", () => {
+    const RANKING = "Rank\tName\tNat\tPoints\tISU ID\n1\tKIM Ji-woo\tKOR\t1200\tSR-10011\n18\tVOS Hanne\tBEL\t412\tSR-20451\n31\tCLAES Mira\tBEL\t150\tSR-99999\n";
+    const ROLES = ["ranking-position", "name", "nation", "ranking-points", "if-id"];
+
+    async function confirmRanking(importer: string, rows: number[], fields: Record<string, string>) {
+      const raw = new URL(importer, "https://bsh.test").searchParams.get("raw")!;
+      return postForm(STEP, [
+        ["intent", "confirm"],
+        ["source", SOURCE],
+        ["raw", raw],
+        ["sport", "Short track speed skating"],
+        ...Object.entries(fields),
+        ...ROLES.map((role, i): [string, string] => [`col.${i}`, role]),
+        ...rows.map((r): [string, string] => ["row", String(r)]),
+      ]);
+    }
+
+    it("stores each known Belgian's position as a dated snapshot; rankings never create Athletes", async () => {
+      const importer = await read({ text: RANKING });
+      expect(await page(`${importer}&${ROLES.map((r, i) => `col.${i}=${r}`).join("&")}`)).toMatch(/18 VOS Hanne 412 ✓ IF ID → Hanne Vos/);
+
+      const res = await confirmRanking(importer, [1, 2], { ranking: "ISU short track world ranking · 1000m Women", asOf: "2026-11-10" });
+
+      expect(res.status).toBe(303);
+      const snapshots = await getDb(env.DB).select().from(schema.rankingSnapshot);
+      const raw = new URL(importer, "https://bsh.test").searchParams.get("raw")!;
+      expect(snapshots.map(({ source, ranking, sport, position, points, asOf, athleteId, rawCopyId }) => ({ source, ranking, sport, position, points, asOf, athleteId, rawCopyId }))).toEqual([
+        { source: SOURCE, ranking: "ISU short track world ranking · 1000m Women", sport: "Short track speed skating", position: 18, points: "412", asOf: "2026-11-10", athleteId: vos, rawCopyId: raw },
+      ]);
+      expect(await getDb(env.DB).$count(schema.mergeQueueItem)).toBe(0);
+      expect(await page(STEP)).toContain("ISU short track: stored 1 ranking position, 1 not an Athlete (skipped)");
+    });
+
+    it("refuses a ranking without its name and date", async () => {
+      const res = await confirmRanking(await read({ text: RANKING }), [1], { ranking: "", asOf: "" });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("puts a nation ranking on Belgium's default Team in the event", async () => {
+      const nations = "Pos\tNation\tPoints\n4\tNetherlands\t900\n9\tBelgium\t310\n";
+      const importer = await read({ text: nations });
+      const raw = new URL(importer, "https://bsh.test").searchParams.get("raw")!;
+      await postForm(STEP, [
+        ["intent", "confirm"],
+        ["source", SOURCE],
+        ["raw", raw],
+        ["sport", "Short track speed skating"],
+        ["ranking", "ISU short track nation ranking · Mixed Relay"],
+        ["asOf", "2026-11-10"],
+        ["event", "Mixed Relay"],
+        ["col.0", "ranking-position"],
+        ["col.1", "nation"],
+        ["col.2", "ranking-points"],
+        ["row", "1"],
+      ]);
+
+      const [row] = await getDb(env.DB)
+        .select({ team: schema.team.name, position: schema.rankingSnapshot.position })
+        .from(schema.rankingSnapshot)
+        .innerJoin(schema.team, eq(schema.rankingSnapshot.teamId, schema.team.id));
+      expect(row).toEqual({ team: "Belgium · Mixed Relay", position: 9 });
+    });
   });
 });

@@ -6,7 +6,7 @@
 import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 import { currentPhasesOf, type CompetitionRow } from "./phase-inputs";
-import { roundsFor, type RoundOutcome, type RoundState } from "~/domain";
+import { roundsFor, sameSport, type RoundOutcome, type RoundState } from "~/domain";
 
 export type EntryRow = typeof schema.entry.$inferSelect;
 export type SessionRow = typeof schema.session.$inferSelect;
@@ -27,8 +27,9 @@ export type PlacedRound = {
   outcome: RoundOutcome | null;
   /** The heat or match detail, when any was given. */
   detail: RoundDetail | null;
-  /** When the owner last looked for detail on this round. */
+  /** When the owner last looked for detail on this round, and the start list it was read on. */
   detailCheckedAt: string | null;
+  detailSource: string | null;
   /** The Entry's final result in the event, when there is one. */
   result: EventResultRow | null;
   /** The last round of the event the Entry can still reach (its result shows there). */
@@ -77,7 +78,7 @@ export async function loadPlacedRounds(db: Db, competition: CompetitionRow, chos
         ) ?? null;
       const kept = roundsFor(
         entry,
-        timed.filter((x) => x.event === entry.event && x.session.sport === entry.sport),
+        timed.filter((x) => x.event === entry.event && sameSport(x.session.sport, entry.sport)),
         {
           rounds: own.map((a) => ({ round: a.round, outcome: (a.outcome as RoundOutcome | null) ?? null, listed: hasDetail(a) })),
           result: result ? { date: result.date, status: result.status } : null,
@@ -97,6 +98,7 @@ export async function loadPlacedRounds(db: Db, competition: CompetitionRow, chos
           outcome: x.outcome,
           detail: a && hasDetail(a) ? { heat: a.heat, lane: a.lane, opponent: a.opponent, startsAt: a.startsAt } : null,
           detailCheckedAt: a?.detailCheckedAt ?? null,
+          detailSource: a?.detailSource ?? null,
           result: result ? { place: result.place, status: result.status, performance: result.performance, date: result.date } : null,
           last: x.round === lastRound,
         };

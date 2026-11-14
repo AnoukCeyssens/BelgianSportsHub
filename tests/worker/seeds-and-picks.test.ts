@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fixClock } from "../support/clock";
 import { clearIngestedData, seedAthlete, seedCompetition, seedRankingSnapshot, seedResult, seedTimetable } from "../support/seed";
-import { get, post, signedInAs } from "../support/worker";
+import { get, getDeployed, post, signedInAs } from "../support/worker";
 
 // Spec #20, stories 46, 64 and 67–70, 116; ticket #40 (decided in #12 and
 // #16). The Selection phase shows each Selected Entry's Seed (monthly
@@ -236,6 +236,69 @@ describe("Seeds and personal picks", () => {
     row = rows(await page(expectations(id)), "Seeds").find((r) => r.startsWith("Lucas Verbeke"));
     expect(row).not.toContain("4th");
     expect(await selectedRows(id)).toEqual(["Lucas Verbeke Men's 1500 m freestyle 5th entry list by ranking · 12 Nov world ranking 9th → 6th –"]);
+  });
+
+  it("lets the owner pick from the reader page's Selection phase, back on that page; nobody else sees the form", async () => {
+    const { id, verbeke, vanhoutte } = await lublin();
+    const reader = `/championship/${id}`;
+
+    // The owner's reader page: one pick form per Selected Entry, posting to the owner's expectations action.
+    let html = await page(reader);
+    const picks = html.slice(html.indexOf('aria-label="My picks"'));
+    expect(html).toContain('aria-label="My picks"');
+    expect(picks).toContain(`action="${expectations(id)}"`);
+    expect(pickInput(picks, verbeke)).toBe("");
+    expect(pickInput(picks, vanhoutte)).toBeUndefined();
+
+    const picked = await post(expectations(id), { intent: "pick", entryId: verbeke, pick: "Medal", return: reader });
+    expect(picked.status).toBe(303);
+    expect(picked.headers.get("Location")).toBe(reader);
+    expect(await selectedRows(id)).toEqual(["Lucas Verbeke Men's 1500 m freestyle – Medal 1st–3rd"]);
+    html = await page(reader);
+    expect(pickInput(html.slice(html.indexOf('aria-label="My picks"')), verbeke)).toBe("medal");
+
+    // A return path that is not this competition's page goes back to the owner's page instead.
+    const elsewhere = await post(expectations(id), { intent: "clear-pick", entryId: verbeke, return: "https://example.com/" });
+    expect(elsewhere.headers.get("Location")).toBe(expectations(id));
+
+    // Anyone else's copy of the page has no form at all.
+    const friend = await page(reader, signedInAs("friend@example.com"));
+    expect(friend).not.toContain('aria-label="My picks"');
+    expect(friend).not.toContain('name="pick"');
+    const deployed = await (await getDeployed(reader)).text();
+    expect(deployed).toContain("Lucas Verbeke");
+    expect(deployed).not.toContain('name="pick"');
+
+    // Once picks lock, the form is gone.
+    fixClock("2026-12-02T08:30:00.000Z");
+    expect(await page(`${reader}?phase=selection`)).not.toContain('name="pick"');
+  });
+
+  it("at the Games shows each Selected Entry's Gracenote pick next to its Seed and pick, attributed", async () => {
+    const la = await seedCompetition(env.DB, {
+      name: "LA 2028",
+      sport: "Olympic Games",
+      kind: "games",
+      source: "owner",
+      startDate: "2028-07-14",
+      endDate: "2028-07-30",
+      venueZone: "America/Los_Angeles",
+    });
+    const thiam = await activeAthlete("Nafissatou Thiam", "Athletics");
+    await addEntry(la, "games", `athlete:${thiam}`, "Women's heptathlon", "selected");
+    const entry = (await page(expectations(la, "games"))).match(/data-entry="([^"]+)"/)![1];
+    const gracenote = (place: string, asOf: string) =>
+      post(expectations(la, "games"), { intent: "record-gracenote", entryId: entry, place, asOf, sourceUrl: "https://sporza.be/nl/2026/11/10/gracenote" });
+    expect((await gracenote("Bronze", "2026-10-01")).status).toBe(303);
+    expect((await gracenote("Silver", "2026-11-10")).status).toBe(303);
+
+    const html = await page(`/games/${la}`);
+    // The latest Gracenote pick, with where and when it was published.
+    expect(rows(html, "Selected Entries")).toEqual(["Nafissatou Thiam Women's heptathlon – 2nd Gracenote via sporza.be · 10 Nov –"]);
+    expect(html).toContain('href="https://sporza.be/nl/2026/11/10/gracenote"');
+    // A Championship has no Gracenote.
+    const { id } = await lublin();
+    expect(text(await page(`/championship/${id}`))).not.toContain("Gracenote");
   });
 
   it("lets only the owner write picks and Seeds", async () => {

@@ -6,8 +6,10 @@
 // world-rank Seed snapshot until its final Seed exists (#40, `recordWorldRanks`).
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
-import { belgianDate, rankedTrack, type TrackState } from "~/domain";
+import { belgianDate, placesEarned, rankedTrack, referenceGamesOf, type TrackState } from "~/domain";
 import { recordWorldRanks } from "~/expectations/expectations";
+import { formatDate } from "~/format";
+import { holdEarnedPlaces } from "./quota-places";
 
 export type RankedWho = { athleteId: string } | { teamId: string };
 
@@ -34,7 +36,7 @@ export async function followRanking(db: Db, ranking: { source: string; ranking: 
   const e = schema.entry;
   const t = schema.qualificationTrack;
   const entries = await db
-    .select({ id: e.id, closesOn: schema.competition.qualificationClosesOn, startDate: schema.competition.startDate })
+    .select({ id: e.id, sport: e.sport, event: e.event, closesOn: schema.competition.qualificationClosesOn, competition: schema.competition })
     .from(e)
     .innerJoin(schema.competition, eq(schema.competition.id, e.competitionId))
     .where("athleteId" in ranking.who ? eq(e.athleteId, ranking.who.athleteId) : eq(e.teamId, ranking.who.teamId));
@@ -57,6 +59,7 @@ export async function followRanking(db: Db, ranking: { source: string; ranking: 
   let changed = 0;
   for (const track of tracks) {
     const closesOn = entries.find((x) => x.id === track.entryId)?.closesOn;
+    changed += await holdNationPlaces(track);
     const next = rankedTrack({ needed: track.needed, state: track.state as TrackState }, snapshot, closesOn ? closesOn < today : false);
     if (next.has === track.has && next.state === track.state) {
       await db.update(t).set({ checkedOn: today }).where(eq(t.id, track.id));
@@ -69,11 +72,36 @@ export async function followRanking(db: Db, ranking: { source: string; ranking: 
     changed++;
   }
   // The ranking a track follows is the Entry's world ranking: one Seed snapshot a month until the final Seed (#40).
-  const seeded = entries.filter((x) => x.startDate > snapshot.asOf && tracks.some((track) => track.entryId === x.id));
+  const seeded = entries.filter((x) => x.competition.startDate > snapshot.asOf && tracks.some((track) => track.entryId === x.id));
   await recordWorldRanks(
     db,
     seeded.map((x) => ({ entryId: x.id, rank: snapshot.position, asOf: snapshot.asOf, sourceUrl: null, rawCopyId: snapshot.rawCopyId })),
     now,
   );
   return changed;
+
+  /**
+   * A nation ranking (Belgium's default Team) earns Quota places at the Games
+   * its Entry is at (story 80): the places its track needs, held as
+   * Provisional and adjusted on every snapshot. Reference Games and Games
+   * that are over are left alone.
+   */
+  async function holdNationPlaces(track: typeof schema.qualificationTrack.$inferSelect) {
+    if (!("teamId" in ranking.who) || !snapshot) return 0;
+    const entry = entries.find((x) => x.id === track.entryId);
+    if (!entry || entry.competition.kind !== "games" || referenceGamesOf(entry.competition) || entry.competition.endDate < belgianDate(now)) return 0;
+    const team = await db.query.team.findFirst({ where: eq(schema.team.id, ranking.who.teamId) });
+    if (team?.kind !== "default") return 0;
+    const earned = placesEarned(track.needed, snapshot.position);
+    if (earned === null) return 0;
+    return holdEarnedPlaces(db, {
+      competitionId: entry.competition.id,
+      sport: entry.sport,
+      event: entry.event,
+      earned,
+      ranking: ranking.ranking,
+      source: `${ranking.ranking} · ${formatDate(snapshot.asOf)}`,
+      checkedOn: belgianDate(now),
+    });
+  }
 }

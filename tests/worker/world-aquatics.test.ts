@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import {
@@ -36,7 +36,7 @@ describe("World Aquatics source", () => {
   it("puts a Belgian's place from her last swim on her Athlete page, with the course", async () => {
     const gaspard = await seedAthlete(env.DB, {
       name: "Florine Gaspard",
-      sport: "Aquatics",
+      sport: "Swimming",
       externalIds: [{ scheme: "world-aquatics", value: GASPARD }],
     });
 
@@ -80,7 +80,7 @@ describe("World Aquatics source", () => {
     await setSource(env.DB, AQUATICS, { lastSuccessAt: AQUATICS_DOHA_RUN.lastSuccessAt });
     const dumont = await seedAthlete(env.DB, {
       name: "Valentine Dumont",
-      sport: "Aquatics",
+      sport: "Swimming",
       externalIds: [{ scheme: "world-aquatics", value: "02ad0ca4-0e67-4bdd-a8a3-ff24ffc0fa77" }],
     });
     stubOutboundFetch(aquaticsDohaRun);
@@ -100,6 +100,35 @@ describe("World Aquatics source", () => {
     for (const name of ["Valentine Dumont", "Camille HENVEAUX", "Lucie HANQUET", "Lotte VANHAUWAERT"]) expect(page).toContain(name);
     expect(page).not.toContain("YANG");
     expect(await getDb(env.DB).$count(schema.result)).toBe(1);
+  });
+
+  it("gives each Olympic sport at the Worlds its own Championship, high diving left out, with the relay on the swimming one", async () => {
+    fixClock(AQUATICS_DOHA_RUN.now);
+    await setSource(env.DB, AQUATICS, { lastSuccessAt: AQUATICS_DOHA_RUN.lastSuccessAt });
+    stubOutboundFetch(aquaticsDohaRun);
+
+    await deliverIngestJobs([job]);
+
+    const db = getDb(env.DB);
+    const worlds = await db
+      .select({ name: schema.competition.name, sport: schema.competition.sport, kind: schema.competition.kind, series: schema.competition.series })
+      .from(schema.competition)
+      .where(like(schema.competition.sourceRef, "2969/%"))
+      .orderBy(schema.competition.sport);
+    expect(worlds).toEqual(
+      ["Artistic swimming", "Diving", "Marathon swimming", "Swimming", "Water polo"].map((sport) => ({
+        name: "World Aquatics Championships - Doha 2024, Doha",
+        sport,
+        kind: "championship",
+        series: `world-aquatics:world-championships:${sport.toLowerCase().replace(/ /g, "-")}`,
+      })),
+    );
+    const [relay] = await db
+      .select({ sport: schema.competition.sport, team: schema.team.sport })
+      .from(schema.result)
+      .innerJoin(schema.competition, eq(schema.result.competitionId, schema.competition.id))
+      .innerJoin(schema.team, eq(schema.result.teamId, schema.team.id));
+    expect(relay).toEqual({ sport: "Swimming", team: "Swimming" });
   });
 
   it("makes each Belgian duet its own Team, leaving reserves off the roster", async () => {

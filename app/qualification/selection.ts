@@ -13,7 +13,7 @@
 //   sport), the Selection phase's input.
 import { and, eq, inArray, min, sql } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
-import { belgianDate, entryListSelection, selectorFor, type SelectionCandidate } from "~/domain";
+import { belgianDate, entryListSelection, sameSport, selectorFor, type ListedEntrant, type SelectionCandidate } from "~/domain";
 import { potentialEntries, type PotentialEntry } from "./entries";
 import { linkAtSelection } from "./quota-places";
 
@@ -22,7 +22,7 @@ export type Candidate = PotentialEntry & { names: string[] };
 /** The candidates of a Selection: Active potential Entries of this sport at the competition, withdrawn ones left out. */
 export async function selectionCandidates(db: Db, competitionId: string, sport: string, now: Date): Promise<Candidate[]> {
   const entries = (await potentialEntries(db, [competitionId], now)).filter(
-    (e) => e.sport.toLowerCase() === sport.toLowerCase() && e.status !== "withdrawn",
+    (e) => sameSport(e.sport, sport) && e.status !== "withdrawn",
   );
   // A Team goes by its own name and its members' ("A / B" for a partnership).
   return entries.map((e) => ({
@@ -77,25 +77,26 @@ export async function recordSelection(db: Db, input: SelectionInput, now: Date):
 }
 
 /**
- * A published IF entry list (the competition's `entrant` rows, just stored
- * from this raw copy) replaces the Selection: each Athlete Entry on it is
- * Selected, each left off it Not selected. The selector stays (the BOIC at
- * the Games). Returns the number of Entries changed.
+ * A published IF entry list (the Belgians it names, with the events it names
+ * them in where the source says) replaces the Selection as far as it goes
+ * (`entryListSelection`): per event, and for Teams through their members
+ * (ADR 0001). The selector stays (the BOIC at the Games). Returns the number
+ * of Entries changed.
  */
-export async function applyEntryList(db: Db, competitionId: string, rawCopyId: string, now: Date): Promise<number> {
+export async function applyEntryList(db: Db, competitionId: string, rawCopyId: string, listed: readonly ListedEntrant[], now: Date): Promise<number> {
   const e = schema.entry;
-  const [entries, listed, copy, competition] = await Promise.all([
+  const [rows, copy, competition] = await Promise.all([
     db.select().from(e).where(eq(e.competitionId, competitionId)),
-    db.select({ athleteId: schema.entrant.athleteId }).from(schema.entrant).where(eq(schema.entrant.competitionId, competitionId)),
     db.query.rawCopy.findFirst({ where: eq(schema.rawCopy.id, rawCopyId) }),
     db.query.competition.findFirst({
       where: eq(schema.competition.id, competitionId),
     }),
   ]);
-  if (entries.length === 0 || !copy || !competition) return 0;
+  if (rows.length === 0 || !copy || !competition) return 0;
+  const entries = await withMembers(db, rows);
   const today = belgianDate(now);
   let changed = 0;
-  for (const { id, status } of entryListSelection(entries, new Set(listed.map((x) => x.athleteId)))) {
+  for (const { id, status } of entryListSelection(entries, listed)) {
     const row = entries.find((x) => x.id === id)!;
     if (row.qualificationStatus === status && row.selectionKind === "entry-list" && row.selectionSource === copy.url) continue;
     await db
@@ -116,6 +117,26 @@ export async function applyEntryList(db: Db, competitionId: string, rawCopyId: s
   }
   if (changed > 0) await linkNocPlaces(db, competitionId, entries);
   return changed;
+}
+
+/** Each Entry with its Team's members: everyone a roster of the Team has credited, at any competition. */
+async function withMembers(db: Db, rows: (typeof schema.entry.$inferSelect)[]) {
+  const teamIds = [...new Set(rows.flatMap((r) => (r.teamId ? [r.teamId] : [])))];
+  const [teams, members] =
+    teamIds.length === 0
+      ? [[], []]
+      : await Promise.all([
+          db.select({ id: schema.team.id, kind: schema.team.kind }).from(schema.team).where(inArray(schema.team.id, teamIds)),
+          db
+            .selectDistinct({ teamId: schema.rosterMember.teamId, athleteId: schema.rosterMember.athleteId })
+            .from(schema.rosterMember)
+            .where(inArray(schema.rosterMember.teamId, teamIds)),
+        ]);
+  return rows.map((r) => ({
+    ...r,
+    members: members.flatMap((m) => (m.teamId === r.teamId && m.athleteId ? [m.athleteId] : [])),
+    partnership: teams.find((t) => t.id === r.teamId)?.kind === "partnership",
+  }));
 }
 
 /**

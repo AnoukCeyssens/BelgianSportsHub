@@ -16,7 +16,7 @@
 import { venueZoneOf } from "~/domain";
 import type { SourceAdapter, TimetableRoundInput } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
-import { API, competitionInput, competitionKind, competitionList } from "./world-aquatics";
+import { API, competitionInputs, competitionKind, competitionList } from "./world-aquatics";
 
 const HORIZON_DAYS = 400;
 const ROUND: Record<string, string> = { Finals: "Final", Semifinals: "Semifinal" };
@@ -27,6 +27,8 @@ type ScheduledPhase = {
   Time: string | null;
   DisciplineName: string;
   PhaseName: string;
+  /** The sport's discipline code ("SW", "DV", …). */
+  SportCode?: string;
   /** The venue's UTC offset, "08:00:00". */
   TimeZone: string | null;
 };
@@ -37,22 +39,27 @@ export const worldAquaticsTimetables: SourceAdapter = {
     const today = isoDate(run.now);
     for (const c of await competitionList(run, today, addDays(today, HORIZON_DAYS))) {
       if (competitionKind(c.competitionType.name) !== "championship") continue;
-      const input = competitionInput(c, "championship");
-      if (input.endDate < today) continue;
-      const competitionId = await run.rows.competition(input);
+      const inputs = competitionInputs(c, "championship");
+      if (inputs.length === 0 || inputs[0].endDate < today) continue;
+      const competitionIds = new Map<string, string>();
+      for (const { code, ...input } of inputs) competitionIds.set(code, await run.rows.competition(input));
       const url = `${API}/competitions/${c.id}/schedule`;
       const fetched = await run.fetch(url);
       const phases = JSON.parse(fetched.text) as ScheduledPhase[];
       const course = /\(25m\)/.test(c.competitionType.name) ? " (25m)" : "";
-      await run.rows.timetable({
-        competitionId,
-        version: null,
-        publishedOn: null,
-        sourceUrl: url,
-        venueZone: venueZoneOf(input.country, input.city) ?? zoneOfOffset(phases[0]?.TimeZone ?? null),
-        rounds: rounds(phases, course),
-        rawCopyId: fetched.rawCopyId,
-      });
+      // Each sport's rounds go to its own competition row.
+      for (const input of inputs) {
+        const own = phases.filter((p) => (p.SportCode ?? input.code) === input.code);
+        await run.rows.timetable({
+          competitionId: competitionIds.get(input.code)!,
+          version: null,
+          publishedOn: null,
+          sourceUrl: url,
+          venueZone: venueZoneOf(input.country, input.city) ?? zoneOfOffset(phases[0]?.TimeZone ?? null),
+          rounds: rounds(own, course),
+          rawCopyId: fetched.rawCopyId,
+        });
+      }
     }
   },
 };

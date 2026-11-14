@@ -2,14 +2,35 @@
 // the IF ID, then name + date of birth, and otherwise sent to the merge queue
 // (spec #20, stories 3, 4 and 92). Counts every insert or change, so the run
 // can stamp the source's "last data change".
-import { and, eq } from "drizzle-orm";
+//
+// The Games (#20 review, finding F): a source's own Olympic Games competition
+// is the Games the app follows. `competition()` returns the owner's Games row
+// whose dates overlap (creating a reference Games' row on first use) instead
+// of a second Games, never changing that row; what this run writes against it
+// carries the source competition's sport (`result.sport`, the Team's sport,
+// the merge-queue item's sport), unless a result names its own. A tracked
+// Games whose dates the owner has not recorded yet keeps the source's own row.
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { referenceGamesRow } from "~/competition/reference-games";
 import { getDb, schema } from "~/db/client";
-import { belgianDate, identityMatch, teamIdentity, TIMETABLE_TEXT_HEAD, timetableText, type KnownIdentity, type TimetableRound } from "~/domain";
+import {
+  belgianDate,
+  GAMES_SOURCE,
+  identityMatch,
+  REFERENCE_GAMES,
+  requireSport,
+  sameSport,
+  teamIdentity,
+  TIMETABLE_TEXT_HEAD,
+  timetableText,
+  type KnownIdentity,
+  type TimetableRound,
+} from "~/domain";
 import { followRanking } from "~/qualification/ranked-tracks";
 import { applyEntryList } from "~/qualification/selection";
 import { knownIdentities } from "./identities";
 import { keepRawCopy } from "./raw-copy";
-import type { BelgianRows, CompetitionInput, Person, RankingInput, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
+import type { BelgianRows, CompetitionInput, Entrant, Person, RankingInput, ResultInput, TeamInput, TeamResultInput, TimetableInput } from "./source-adapter";
 import { addVersion, fingerprintOf, replaceSessions, versionsOf } from "./timetable-versions";
 
 type MergeQueueItem = typeof schema.mergeQueueItem.$inferSelect;
@@ -26,9 +47,48 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
   let changes = 0;
   let roster: KnownIdentity[] | null = null;
 
+  /** The owner's Games rows this run resolved a source's Games to, with the sport the source's competition is. */
+  const gamesSports = new Map<string, string>();
+  const competitions = new Map<string, typeof schema.competition.$inferSelect | undefined>();
+
+  async function competitionRow(competitionId: string) {
+    if (!competitions.has(competitionId)) {
+      competitions.set(competitionId, await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) }));
+    }
+    return competitions.get(competitionId);
+  }
+
+  /** The sport of what this run writes against a competition: at the Games, the source competition's sport. */
   async function sportOf(competitionId: string) {
-    const row = await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) });
-    return row?.sport ?? "";
+    return gamesSports.get(competitionId) ?? (await competitionRow(competitionId))?.sport ?? "";
+  }
+
+  /**
+   * A result's stored sport: at the owner's Games row (which spans every sport)
+   * the result's own or this run's sport; elsewhere only a sport other than
+   * the competition's (null means the competition's own).
+   */
+  async function resultSport(competitionId: string, sport: string | null | undefined): Promise<string | null> {
+    const row = await competitionRow(competitionId);
+    if (row?.source === GAMES_SOURCE && row.kind === "games") {
+      const named = sport ?? gamesSports.get(competitionId) ?? null;
+      return named === null ? null : requireSport(named);
+    }
+    if (!sport || (row && sameSport(sport, row.sport))) return null;
+    return requireSport(sport);
+  }
+
+  /** The owner's row for the Games a source's Olympic Games competition is (dates overlap); a reference Games' row is created on first use. */
+  async function ownerGamesRow(input: CompetitionInput): Promise<string | null> {
+    const c = schema.competition;
+    const [row] = await db
+      .select({ id: c.id })
+      .from(c)
+      .where(and(eq(c.source, GAMES_SOURCE), eq(c.kind, "games"), lte(c.startDate, input.endDate), gte(c.endDate, input.startDate)))
+      .limit(1);
+    if (row) return row.id;
+    const reference = REFERENCE_GAMES.find((g) => g.startDate <= input.endDate && g.endDate >= input.startDate);
+    return reference ? referenceGamesRow(env, reference, now) : null;
   }
 
   /** The Athlete this person is, if known; otherwise null (and the person is not on the roster yet). */
@@ -58,12 +118,22 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
     changes: () => changes,
 
     async competition(input: CompetitionInput) {
+      if (source !== GAMES_SOURCE && input.kind === "games") {
+        const sport = requireSport(input.sport);
+        const games = await ownerGamesRow(input);
+        if (games) {
+          gamesSports.set(games, sport);
+          return games;
+        }
+      }
       const { rawCopyId, ...rest } = input;
       const existing = await db.query.competition.findFirst({
         where: and(eq(schema.competition.source, source), eq(schema.competition.sourceRef, input.sourceRef)),
       });
       // A source that does not know the venue's zone keeps the one a timetable (or the owner) gave.
-      const values = { ...rest, series: rest.series ?? null, venueZone: rest.venueZone ?? existing?.venueZone ?? null };
+      // The owner's Games rows span every sport ("Olympic Games"); any other competition is one sport.
+      const sport = source === GAMES_SOURCE && rest.kind === "games" ? rest.sport : requireSport(rest.sport);
+      const values = { ...rest, sport, series: rest.series ?? null, venueZone: rest.venueZone ?? existing?.venueZone ?? null };
       if (!existing) {
         const [row] = await db
           .insert(schema.competition)
@@ -73,6 +143,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
         return row.id;
       }
       const changed = (Object.keys(values) as (keyof typeof values)[]).some((k) => existing[k] !== values[k]);
+      competitions.delete(existing.id);
       if (changed) {
         await db.update(schema.competition).set({ ...values, rawCopyId }).where(eq(schema.competition.id, existing.id));
         changes++;
@@ -99,7 +170,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       if ("athleteId" in input) athleteId = input.athleteId;
       else {
         if (input.person.nationality !== BELGIUM) return;
-        ({ athleteId, item } = await athleteOrQueued(input.person, input.competitionId, input.rawCopyId));
+        ({ athleteId, item } = await athleteOrQueued(input.person, input.competitionId, input.rawCopyId, input.sport));
       }
       await writeResult(input, { athleteId, mergeQueueItemId: athleteId ? null : item!.id, teamId: null });
       // Only appearing in the result is a performance (DNF and DSQ included, DNS not).
@@ -108,12 +179,12 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
 
     async teamResult(input: TeamResultInput) {
       if (input.nationality !== BELGIUM) return;
-      const sport = input.sport ?? (await sportOf(input.competitionId));
+      const sport = requireSport((await resultSport(input.competitionId, input.sport)) ?? (await sportOf(input.competitionId)));
       const belgians = input.roster.filter((p) => p.nationality === BELGIUM);
       const teamId = await findOrCreateTeam({ sport, event: input.teamEvent ?? input.event, members: belgians, rawCopyId: input.rawCopyId });
       await writeResult(input, { athleteId: null, mergeQueueItemId: null, teamId });
       for (const person of belgians) {
-        const { athleteId, item } = await athleteOrQueued(person, input.competitionId, input.rawCopyId);
+        const { athleteId, item } = await athleteOrQueued(person, input.competitionId, input.rawCopyId, sport);
         const added = await db
           .insert(schema.rosterMember)
           .values({ teamId, competitionId: input.competitionId, athleteId, mergeQueueItemId: athleteId ? null : item!.id, rawCopyId: input.rawCopyId })
@@ -125,7 +196,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
     },
 
     async team(input: TeamInput) {
-      return findOrCreateTeam({ ...input, members: input.members?.filter((p) => p.nationality === BELGIUM) ?? null });
+      return findOrCreateTeam({ ...input, sport: requireSport(input.sport), members: input.members?.filter((p) => p.nationality === BELGIUM) ?? null });
     },
 
     async ranking(input: RankingInput) {
@@ -145,7 +216,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
         eq(s.asOf, input.asOf),
         "athleteId" in who ? eq(s.athleteId, who.athleteId) : eq(s.teamId, who.teamId),
       );
-      const values = { sport: input.sport, position: input.position, points: input.points };
+      const values = { sport: requireSport(input.sport), position: input.position, points: input.points };
       const existing = await db.query.rankingSnapshot.findFirst({ where: key });
       if (!existing) {
         await db.insert(s).values({
@@ -166,25 +237,43 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       changes += await followRanking(db, { source, ranking: input.ranking, who }, now);
     },
 
-    async entrants(competitionId: string, people: Person[], rawCopyId: string) {
+    async entrants(competitionId: string, people: Entrant[], rawCopyId: string) {
       const athleteIds = new Set<string>();
+      // The events the list names each Athlete in; null once a listing names none.
+      const events = new Map<string, string[] | null>();
       for (const person of people) {
         if (person.nationality !== BELGIUM) continue;
         const { athleteId } = await athleteFor(person);
-        if (athleteId) athleteIds.add(athleteId);
+        if (!athleteId) continue;
+        athleteIds.add(athleteId);
+        const seen = events.has(athleteId) ? events.get(athleteId)! : [];
+        events.set(athleteId, seen === null || !person.events ? null : [...seen, ...person.events]);
       }
-      const current = await db.select().from(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
+      // At the Games a source's list covers its own sport only: the other sports' entrants stay.
+      const gamesSport = gamesSports.get(competitionId);
+      const listed = await db
+        .select({ athleteId: schema.entrant.athleteId, rawCopyId: schema.entrant.rawCopyId, sport: schema.athlete.sport })
+        .from(schema.entrant)
+        .innerJoin(schema.athlete, eq(schema.entrant.athleteId, schema.athlete.id))
+        .where(eq(schema.entrant.competitionId, competitionId));
+      const current = gamesSport ? listed.filter((e) => sameSport(e.sport, gamesSport) || athleteIds.has(e.athleteId)) : listed;
       const same = current.length === athleteIds.size && current.every((e) => athleteIds.has(e.athleteId));
       if (!same) {
-        await db.delete(schema.entrant).where(eq(schema.entrant.competitionId, competitionId));
+        const e = schema.entrant;
+        if (current.length > 0) {
+          await db.delete(e).where(and(eq(e.competitionId, competitionId), inArray(e.athleteId, current.map((x) => x.athleteId))));
+        }
         if (athleteIds.size > 0) {
-          await db.insert(schema.entrant).values([...athleteIds].map((athleteId) => ({ competitionId, athleteId, rawCopyId })));
+          await db.insert(e).values([...athleteIds].map((athleteId) => ({ competitionId, athleteId, rawCopyId })));
         }
         changes++;
       }
       // The IF entry list replaces the Selection (#34), also for Entries named since the list was stored.
       // A list without Belgians may simply not be published yet, so it leaves the Selection alone.
-      if (athleteIds.size > 0) changes += await applyEntryList(db, competitionId, same ? current[0]?.rawCopyId ?? rawCopyId : rawCopyId, now);
+      if (athleteIds.size > 0) {
+        const listed = [...events].map(([athleteId, named]) => ({ athleteId, events: named }));
+        changes += await applyEntryList(db, competitionId, same ? current[0]?.rawCopyId ?? rawCopyId : rawCopyId, listed, now);
+      }
     },
 
     async timetable(input: TimetableInput) {
@@ -192,7 +281,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       if (!competition) throw new Error(`No competition ${input.competitionId}`);
       const venueZone = input.venueZone ?? competition.venueZone;
       if (!venueZone || input.rounds.length === 0) return;
-      const rounds: TimetableRound[] = input.rounds.map((r, index) => ({ ...r, index, sport: competition.sport }));
+      const rounds: TimetableRound[] = input.rounds.map((r, index) => ({ ...r, index, sport: gamesSports.get(competition.id) ?? competition.sport }));
       const text = timetableText(rounds);
       const fingerprint = await fingerprintOf(text);
 
@@ -233,14 +322,14 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
   };
 
   /** The Athlete this person is; an unknown person is put in the merge queue (once per IF ID). */
-  async function athleteOrQueued(person: Person, competitionId: string, rawCopyId: string) {
+  async function athleteOrQueued(person: Person, competitionId: string, rawCopyId: string, sport?: string | null) {
     const found = await athleteFor(person);
     if (found.athleteId || found.item) return found;
     await db.insert(schema.mergeQueueItem).values({
       source,
       name: person.name,
       dateOfBirth: person.dateOfBirth,
-      sport: await sportOf(competitionId),
+      sport: sport ? requireSport(sport) : await sportOf(competitionId),
       ...person.ifId,
       rawCopyId,
       createdAt: now.toISOString(),
@@ -258,7 +347,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       competitionId: input.competitionId,
       ...entry,
       event: input.event,
-      sport: input.sport ?? null,
+      sport: await resultSport(input.competitionId, input.sport),
       date: input.date,
       place: input.place,
       status: input.status,
