@@ -4,3 +4,4 @@ export { toDisplayTime, type DisplayTime } from "./time-display";
 export { isSeniorInternationalPerformance, type Performance } from "./senior-performance";
 export { identityMatch, normaliseName, type ExternalId, type IdentityMatch, type IncomingIdentity, type KnownIdentity } from "./identity-match";
 export { matchesNameSearch } from "./name-search";
+export { CURATION_PATH, offlineReading, type OfflineReading } from "./offline-reading";

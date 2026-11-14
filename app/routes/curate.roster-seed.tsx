@@ -1,7 +1,7 @@
 import { Form, redirect } from "react-router";
 import { cloudflareContext } from "~/context";
 import type { IngestJob } from "~/ingest/queue";
-import type { Route } from "./+types/curation.roster-seed";
+import type { Route } from "./+types/curate.roster-seed";
 
 // Owner action (spec #20, stories 1 and 7): seed the roster from Team Belgium
 // at launch, and refresh it when a Games delegation is announced. The work
@@ -18,7 +18,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ context }: Route.ActionArgs) {
   const job: IngestJob = { kind: "seed-roster" };
   await context.get(cloudflareContext).env.INGEST.send(job);
-  return redirect("/curation/roster-seed?queued=1", 303);
+  return redirect("/curate/roster-seed?queued=1", 303);
 }
 
 export default function RosterSeed({ loaderData }: Route.ComponentProps) {

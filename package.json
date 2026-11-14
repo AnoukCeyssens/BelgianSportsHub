@@ -36,7 +36,16 @@
     "drizzle-kit": "^0.31.11",
     "typescript": "^5.9.3",
     "vite": "^7.3.8",
+    "vite-plugin-pwa": "^2.0.0",
     "vitest": "^4.1.12",
+    "workbox-build": "^7.4.1",
+    "workbox-cacheable-response": "^7.4.1",
+    "workbox-core": "^7.4.1",
+    "workbox-expiration": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1",
+    "workbox-window": "^7.4.1",
     "wrangler": "^4.162.0"
   }
 }
