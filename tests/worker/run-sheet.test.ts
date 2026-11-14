@@ -39,6 +39,7 @@ describe("Run sheet", () => {
     await db.delete(schema.runSheetLog);
     await db.delete(schema.runSheetSession);
     await db.delete(schema.source);
+    await db.delete(schema.checklistItem);
     // Healthy: fetched at this morning's cron.
     await seedSource(env.DB, "isu-speed-skating", { name: "ISU speed skating", lastSuccessAt: "2026-11-14T04:00:10.000Z" });
   });

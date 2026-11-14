@@ -53,6 +53,37 @@ export async function seedMergeQueueItem(d1: D1Database, item: MergeQueueSeed): 
   return row.id;
 }
 
+type CompetitionSeed = {
+  name: string;
+  sport: string;
+  source: string;
+  startDate: string;
+  endDate: string;
+  city?: string;
+  kind?: "championship" | "games" | "circuit";
+};
+
+/** Adds a competition as its source would publish it (with a raw copy it came from). */
+export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promise<string> {
+  const db = getDb(d1);
+  const [raw] = await db
+    .insert(schema.rawCopy)
+    .values({ source: c.source, url: `https://example.test/${c.source}/calendar`, r2Key: `raw/${c.source}/${crypto.randomUUID()}`, fetchedAt: "2026-10-01T04:00:00.000Z" })
+    .returning({ id: schema.rawCopy.id });
+  const [row] = await db
+    .insert(schema.competition)
+    .values({ kind: "circuit", ...c, sourceRef: crypto.randomUUID(), rawCopyId: raw.id })
+    .returning({ id: schema.competition.id });
+  return row.id;
+}
+
+/** Names an Athlete on a competition's entry list. */
+export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
+  const db = getDb(d1);
+  const competition = await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) });
+  await db.insert(schema.entrant).values({ competitionId, athleteId, rawCopyId: competition!.rawCopyId });
+}
+
 /**
  * Storage is shared by the tests in one file. Removes every Athlete and
  * everything ingest wrote (rows and raw copies in R2), keeping Source rows.
@@ -72,4 +103,12 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   }
   const keys = (await env.RAW.list({ prefix: "raw/" })).objects.map((o) => o.key);
   if (keys.length > 0) await env.RAW.delete(keys);
+}
+
+type ChecklistItemSeed = { topic: string; name: string; dueOn: string; url?: string; everyMonths?: number };
+
+/** Adds a Monthly checklist item, as the owner would. */
+export async function seedChecklistItem(d1: D1Database, item: ChecklistItemSeed): Promise<string> {
+  const [row] = await getDb(d1).insert(schema.checklistItem).values(item).returning({ id: schema.checklistItem.id });
+  return row.id;
 }

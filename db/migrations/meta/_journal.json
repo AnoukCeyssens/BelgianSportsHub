@@ -40,8 +40,22 @@
     {
       "idx": 5,
       "version": "6",
-      "when": 1794658248964,
-      "tag": "0005_paste_importer",
+      "when": 1794657940363,
+      "tag": "0005_fis_points_list_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794658316047,
+      "tag": "0006_monthly_checklist",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794658527238,
+      "tag": "0007_paste_importer",
       "breakpoints": true
     }
   ]

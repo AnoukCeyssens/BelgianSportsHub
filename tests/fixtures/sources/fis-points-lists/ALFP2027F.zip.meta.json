@@ -1,0 +1,7 @@
+{
+  "url": "https://www.fis-ski.com/DB/v2/download/fis-list/ALFP2027F.zip",
+  "status": 200,
+  "contentType": "application/zip",
+  "recordedAt": "2026-11-14T11:56:20.971Z",
+  "trimmedByHand": "Every file kept in order; res cut to the races with a Belgian result (Belgian rows plus the first 3 others per race), rac/evt to those races and events, com/pts to the competitors kept, team to 3 rows."
+}
