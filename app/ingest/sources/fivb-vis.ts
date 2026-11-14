@@ -3,7 +3,8 @@
 // volleyball and beach volleyball adapters. Public requests need no
 // authentication; each is an XML <Request> element passed in the query string,
 // so every request has a stable URL for its raw copy.
-import type { Person } from "../source-adapter";
+import { seriesKey } from "~/domain";
+import type { CompetitionKind, Person } from "../source-adapter";
 
 const ENDPOINT = "https://www.fivb.org/Vis2009/XmlRequest.asmx";
 
@@ -44,4 +45,17 @@ function decodeEntities(value: string): string {
     if (entity[0] !== "#") return named[entity.toLowerCase()];
     return String.fromCodePoint(entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10));
   });
+}
+
+/**
+ * The series of a VIS tournament (GLOSSARY "Participation"). VIS gives no
+ * venue, so a Championship's host is cut from its name: what follows " - "
+ * ("CEV EuroBeachVolley 2026 - Stare Jablonki M" → its gender only), while a
+ * circuit leg keeps it ("BPT Futures Leuven").
+ */
+export function visSeries(source: string, name: string, kind: CompetitionKind, sport: string): string {
+  const clean = name.trim();
+  const host = kind === "championship" ? clean.match(/^(.*?)\s+-\s+(.*?)(?:\s+([MW]))?$/) : null;
+  const named = host ? `${host[1]}${host[3] ? ` ${host[3]}` : ""}` : clean;
+  return seriesKey({ source, name: named, kind, sport, city: null });
 }

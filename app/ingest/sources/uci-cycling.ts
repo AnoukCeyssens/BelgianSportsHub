@@ -29,6 +29,7 @@
 // to Belgium (Belgium's default Team in the category's road race). The other
 // disciplines' rankings are not fetched yet. DataRide's ranking rows do carry
 // the rider's UCI ID (`UciId`), unlike its results grids.
+import { seriesKey } from "~/domain";
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://dataride.uci.ch";
@@ -126,6 +127,7 @@ export const uciCycling: SourceAdapter = {
           country: c.CountryIsoCode3 || null,
           venueZone: null,
           sourceRef: `${discipline.id}/${c.CompetitionId}`,
+          series: uciSeries(discipline, c, kind),
           rawCopyId: c.rawCopyId,
         });
         if (startDate > today) continue;
@@ -340,6 +342,18 @@ function teams(rows: Result[]) {
     else current?.rows.push(r);
   }
   return found;
+}
+
+/**
+ * The series of a UCI competition, per discipline: the Worlds are the class
+ * (CM) whatever their sponsor and host; anything else is its name, a World
+ * Cup leg without its round number (which changes from season to season)
+ * and with its host country instead (DataRide names no city).
+ */
+function uciSeries(discipline: Discipline, c: Competition, kind: CompetitionKind): string {
+  if (kind !== "games" && c.ClassCode === "CM") return `uci-cycling:${discipline.id}:world-championships`;
+  const name = c.CompetitionName.replace(/\s*-?\s*\bround\s*\d+\b/i, "");
+  return seriesKey({ source: `uci-cycling:${discipline.id}`, name, kind, sport: discipline.sport, city: c.ClassCode === "CDM" ? c.CountryIsoCode3 : null });
 }
 
 /** Kendo grid paging, as the DataRide pages send it. */

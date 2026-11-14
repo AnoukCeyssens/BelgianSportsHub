@@ -24,6 +24,7 @@
 //    until a run with the key is recorded.
 // The API gives only a year of birth, so a Belgian not yet known by World
 // Triathlon ID waits in the merge queue.
+import { seriesKey } from "~/domain";
 import { SourceBlocked, type CompetitionKind, type Person, type ResultStatus, type SourceAdapter, type SourceRun } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 
@@ -97,6 +98,7 @@ export const worldTriathlon: SourceAdapter = {
         country: event.event_country_noc,
         venueZone: null,
         sourceRef: String(event.event_id),
+        series: seriesKey({ source: "world-triathlon", name: event.event_title, kind, sport: SPORT, city: event.event_venue }),
         rawCopyId: event.rawCopyId,
       });
 

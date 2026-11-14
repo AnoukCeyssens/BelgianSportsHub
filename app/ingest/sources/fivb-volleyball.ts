@@ -15,7 +15,7 @@
 // Rankings are not ingested yet (#33: VIS ranking requests still to work out; see conventions.md "Rankings").
 import type { CompetitionKind, SourceAdapter } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
-import { elements, visPerson, visUrl } from "./fivb-vis";
+import { elements, visPerson, visSeries, visUrl } from "./fivb-vis";
 
 const SPORT = "Volleyball";
 const FIRST_RUN_LOOKBACK_DAYS = 365;
@@ -74,6 +74,7 @@ export const fivbVolleyball: SourceAdapter = {
         country: null,
         venueZone: null,
         sourceRef: t.No,
+        series: visSeries("fivb-volleyball", t.Name, kind, SPORT),
         rawCopyId: list.rawCopyId,
       });
       if (t.EndDate >= today) {
