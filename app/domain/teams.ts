@@ -1,5 +1,6 @@
 // Teams (GLOSSARY "Team", "Roster"; ADR 0001): which Team a multi-athlete
 // result or ranking belongs to, and how Team medals count.
+import { canonicalSport } from "./sports";
 
 export type TeamKind = "default" | "partnership";
 
@@ -14,7 +15,7 @@ export type TeamIdentity = {
 };
 
 /** Sports where every multi-athlete entry is a standing partnership (Belgium can field several pairs). */
-const PARTNERSHIP_SPORTS = new Set(["beach volleyball", "rowing"]);
+const PARTNERSHIP_SPORTS = new Set(["Beach volleyball", "Rowing", "Coastal rowing"]);
 
 /** Events where Belgium can field several crews at once: doubles, pairs, duets, synchro, small boats and sleds. */
 const PARTNERSHIP_EVENT =
@@ -29,7 +30,7 @@ const PARTNERSHIP_EVENT =
 export function teamIdentity(input: { sport: string; event: string; members: TeamMember[] | null }): TeamIdentity {
   const { sport, event, members } = input;
   const partnership =
-    members !== null && members.length > 0 && (PARTNERSHIP_SPORTS.has(sport.toLowerCase()) || PARTNERSHIP_EVENT.test(event));
+    members !== null && members.length > 0 && (PARTNERSHIP_SPORTS.has(canonicalSport(sport) ?? sport) || PARTNERSHIP_EVENT.test(event));
   if (!partnership) return { kind: "default", key: `${sport}|${event}`, name: `Belgium · ${event}` };
   const ids = members.map((m) => m.id).toSorted();
   return { kind: "partnership", key: `${sport}|${event}|${ids.join("+")}`, name: members.map((m) => m.name).join(" / ") };

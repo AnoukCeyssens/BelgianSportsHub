@@ -15,6 +15,7 @@ import {
   QUALIFICATION_STATUSES,
   rankingPlaces,
   referenceGamesOf,
+  sameSport,
   suggestStatus,
   type QualificationStatus,
   type SuggestionQuotaPlace,
@@ -71,7 +72,7 @@ export async function loadQualificationReview(db: Db, now: Date) {
   const items: ReviewItem[] = [];
   for (const entry of entries) {
     const target = targets.find((t) => t.id === entry.competitionId)!;
-    const own = snapshots.filter((s) => (s.athleteId ?? s.teamId) === entry.who.id && s.sport.toLowerCase() === entry.sport.toLowerCase());
+    const own = snapshots.filter((s) => (s.athleteId ?? s.teamId) === entry.who.id && sameSport(s.sport, entry.sport));
     const latestOn = (key: string) => own.filter((s) => `${s.source}|${s.ranking}` === key);
 
     const changes: Change[] = entry.tracks
@@ -108,7 +109,7 @@ export async function loadQualificationReview(db: Db, now: Date) {
       quotaPlaces.filter(
         (p) =>
           p.competitionId === entry.competitionId &&
-          p.sport.toLowerCase() === entry.sport.toLowerCase() &&
+          sameSport(p.sport, entry.sport) &&
           p.event.toLowerCase() === entry.event.toLowerCase(),
       ),
     );

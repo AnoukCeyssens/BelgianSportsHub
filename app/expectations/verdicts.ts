@@ -18,6 +18,7 @@ import {
   lastSnapshotBefore,
   outcomeOf,
   pickLockAt,
+  sameSport,
   tally,
   verdict,
   withdrawnBeforeLock,
@@ -156,7 +157,7 @@ async function timingOf(db: Db, competition: CompetitionRow) {
     const { whole, sports } = await gamesPhaseInputs(db, competition);
     return {
       lockAt: pickLockAt(whole),
-      startOf: (sport: string) => sports.find((s) => s.sport.toLowerCase() === sport.toLowerCase())?.firstDay ?? competition.startDate,
+      startOf: (sport: string) => sports.find((s) => sameSport(s.sport, sport))?.firstDay ?? competition.startDate,
     };
   }
   const inputs = (await phaseInputsFor(db, [competition])).get(competition.id)!;

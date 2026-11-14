@@ -128,6 +128,17 @@ describe("Games", () => {
     expect(refused.status).toBe(400);
   });
 
+  it("stores a sport by its Olympic programme name, and refuses a name that is no sport", async () => {
+    await saveGamesDates("la-2028", "2028-07-12", "2028-07-30");
+
+    await saveSportDays("la-2028", "athletics (track & field)", "2028-07-15", "2028-07-24");
+    await saveSportDays("la-2028", "Road cycling", "2028-07-14", "2028-07-16");
+    const refused = await saveSportDays("la-2028", "Aquatics", "2028-07-13", "2028-07-20");
+
+    expect(refused.status).toBe(400);
+    expect(sportRows(await page(`/games/${await gamesId("la-2028")}`))).toEqual(["Athletics 15–24 Jul Standards", "Cycling road 14–16 Jul Standards"]);
+  });
+
   it("shows French Alps 2030 in Standards with only the expected publication date", async () => {
     await saveGamesDates("la-2028", "2028-07-12", "2028-07-30");
     await saveGamesDates("french-alps-2030", "2030-02-01", "2030-02-17");

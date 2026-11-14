@@ -13,9 +13,11 @@ import { Form } from "react-router";
 import { type Db, getDb, schema } from "~/db/client";
 import {
   belgianDate,
+  canonicalSport,
   readHtmlTable,
   readPastedTable,
   readTimetable,
+  sameSport,
   TIMETABLE_COLUMN_ROLES,
   timetableColumnMapping,
   type SavedTimetableMapping,
@@ -123,8 +125,8 @@ export async function loadTimetableReview(env: Pick<Env, "DB" | "RAW">, db: Db, 
     rowCount: table.rows.length,
     roundCount: rounds.length,
     events: events.map((e) => {
-      const named = entries.filter((x) => x.event === e.event && x.sport.toLowerCase() === e.sport.toLowerCase());
-      const sameSport = (sport: string) => sport.toLowerCase() === e.sport.toLowerCase();
+      const named = entries.filter((x) => x.event === e.event && sameSport(x.sport, e.sport));
+      const ofSport = (sport: string) => sameSport(sport, e.sport);
       const candidate = (who: string, name: string, entry: (typeof named)[number] | undefined) => ({
         who,
         name,
@@ -135,10 +137,10 @@ export async function loadTimetableReview(env: Pick<Env, "DB" | "RAW">, db: Db, 
         ...e,
         candidates: [
           ...teams
-            .filter((t) => sameSport(t.sport) || named.some((n) => n.teamId === t.id))
+            .filter((t) => ofSport(t.sport) || named.some((n) => n.teamId === t.id))
             .map((t) => candidate(`team:${t.id}`, `${t.name} (Team · ${t.event})`, named.find((n) => n.teamId === t.id))),
           ...athletes
-            .filter((a) => sameSport(a.sport) || entrantIds.has(a.id) || named.some((n) => n.athleteId === a.id))
+            .filter((a) => ofSport(a.sport) || entrantIds.has(a.id) || named.some((n) => n.athleteId === a.id))
             .map((a) => candidate(`athlete:${a.id}`, a.name, named.find((n) => n.athleteId === a.id))),
         ],
       };
@@ -296,7 +298,7 @@ async function withKnownSports(db: Db, competition: CompetitionRow, rounds: Time
       : [competition.sport];
   return rounds.map((r) => {
     const plain = r.sport.replace(/\s*\(.*\)\s*$/, "").trim();
-    return { ...r, sport: windows.find((w) => w.toLowerCase() === plain.toLowerCase()) ?? plain };
+    return { ...r, sport: windows.find((w) => sameSport(w, r.sport)) ?? canonicalSport(r.sport) ?? plain };
   });
 }
 

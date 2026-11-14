@@ -61,7 +61,8 @@ describe("Monthly checklist step", () => {
 
       expect(content).toContain("Belgian federation selection criteria");
       expect(content).toContain("Athletics");
-      expect(content).toContain("Skiing and snowboard");
+      expect(content).toContain("Alpine skiing, Cross-country skiing, Ski jumping, Freestyle skiing, Snowboard, Freeride");
+      expect(content).toContain("Cycling road, Cycling track, Cycling mountain bike, Cycling BMX racing, Cycling BMX freestyle");
       expect(content).toContain("LA28 sport entries deadline");
       expect(content).toContain("French Alps 2030 sport entries deadline");
     });

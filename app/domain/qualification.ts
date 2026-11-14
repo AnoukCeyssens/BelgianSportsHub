@@ -8,6 +8,7 @@
 // these rules). Quota places (#36) are a separate fact (ADR 0002).
 import { belgianDate } from "./monthly-checklist";
 import { referenceGamesOf } from "./games";
+import { olympicCycleOf, sameSport } from "./sports";
 
 export const QUALIFICATION_STATUSES = [
   "not-in-contention",
@@ -89,38 +90,11 @@ export function trackProgress(track: TrackMeasure): number {
   return Math.max(0, Math.min(100, Math.floor(ratio * 100)));
 }
 
-/** Winter sports on the Olympic programme (Milano-Cortina 2026, French Alps 2030); anything else is summer. */
-const WINTER_SPORTS = [
-  "alpine skiing",
-  "biathlon",
-  "bobsleigh",
-  "cross-country skiing",
-  "curling",
-  "figure skating",
-  "freeride",
-  "freestyle skiing",
-  "ice hockey",
-  "luge",
-  "nordic combined",
-  "short track",
-  "skeleton",
-  "ski jumping",
-  "ski mountaineering",
-  "snowboard",
-  "speed skating",
-];
-
 export type OlympicCycle = "summer" | "winter";
-
-/** GLOSSARY "Olympic cycle": the summer cycle (LA 2028) or the winter cycle (French Alps 2030). */
-export function olympicCycleOf(sport: string): OlympicCycle {
-  const s = sport.toLowerCase();
-  return WINTER_SPORTS.some((w) => s === w || s.startsWith(`${w} `)) ? "winter" : "summer";
-}
 
 /** A Games competition's cycle: the Games' "sport" is "Olympic Games" or "Olympic Winter Games" (TRACKED_GAMES). */
 function gamesCycle(c: { sport: string; series?: string | null }): OlympicCycle {
-  return /winter/i.test(c.sport) || /winter/i.test(c.series ?? "") ? "winter" : olympicCycleOf(c.sport);
+  return /winter/i.test(c.sport) || /winter/i.test(c.series ?? "") ? "winter" : "summer";
 }
 
 export type TargetCompetition = {
@@ -155,7 +129,7 @@ export function qualificationTargets<C extends TargetCompetition>(
   const championships = ahead.filter((c) => c.kind === "championship");
   const championship =
     championships.find((c) => input.withEntries.has(c.id)) ??
-    championships.find((c) => c.sport.toLowerCase() === input.sport.toLowerCase()) ??
+    championships.find((c) => sameSport(c.sport, input.sport)) ??
     null;
   return { olympics, championship };
 }

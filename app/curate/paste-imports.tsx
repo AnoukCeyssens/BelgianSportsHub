@@ -21,6 +21,7 @@ import {
   readHtmlTable,
   readPastedTable,
   REFERENCE_GAMES,
+  sameSport,
   type KnownIdentity,
   type PasteColumnRole,
   type PastedResultRow,
@@ -34,6 +35,7 @@ import { belgianRows } from "~/ingest/belgian-rows";
 import { knownIdentities } from "~/ingest/identities";
 import { fetchAndKeep, keepRawCopy } from "~/ingest/raw-copy";
 import { SourceBlocked, type CompetitionKind } from "~/ingest/source-adapter";
+import { SPORT_LIST_ID, SportOptions, typedSport } from "./sport-field";
 
 const STEP_PATH = "/curate/run/paste-imports";
 const importerPath = (source: string, raw?: string) => `${STEP_PATH}?source=${encodeURIComponent(source)}${raw ? `&raw=${encodeURIComponent(raw)}` : ""}`;
@@ -71,7 +73,7 @@ export async function loadPasteImports(db: Db, now: Date) {
     participationsBetween(db, shiftDays(today, -PARTICIPATION_WINDOW_DAYS), shiftDays(today, PARTICIPATION_WINDOW_DAYS)),
   ]);
   const belgian = nearby.filter((c) => c.participation.status !== "none");
-  const hasParticipation = (s: SourceRow) => belgian.some((c) => c.source === s.key || (s.sport !== null && c.sport === s.sport));
+  const hasParticipation = (s: SourceRow) => belgian.some((c) => c.source === s.key || (s.sport !== null && sameSport(c.sport, s.sport)));
   const imports = sources
     .filter((s) => pasteImportDue({ ...s, tier: s.tier as SourceTier }, now) && hasParticipation(s))
     .map((s) => ({ key: s.key, name: s.name, sport: s.sport, blocked: s.blockedAt !== null, lastPastedAt: s.lastPastedAt }));
@@ -166,7 +168,7 @@ async function read(env: Pick<Env, "DB" | "RAW">, source: SourceRow, form: FormD
 
 async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, form: FormData, now: Date) {
   const field = (name: string) => String(form.get(name) ?? "").trim();
-  const sport = field("sport") || source.sport;
+  const sport = field("sport") || source.sport ? typedSport(field("sport") || source.sport!) : null;
   // A reference Games (Paris 2024, Milano-Cortina 2026, ticket #46) is the owner's one row; any other competition is the source's.
   const reference = field("reference") ? REFERENCE_GAMES.find((g) => g.key === field("reference")) : undefined;
   if (field("reference") && !reference) throw new Response("No such reference Games", { status: 400 });
@@ -488,7 +490,8 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
             </label>
             <label>
               Sport
-              <input name="sport" required defaultValue={source.sport ?? ""} />
+              <input name="sport" required defaultValue={source.sport ?? ""} list={SPORT_LIST_ID} />
+              <SportOptions />
             </label>
             <label>
               First day

@@ -14,6 +14,7 @@ import {
   dayToShow,
   liveDays,
   medalTable,
+  sameSport,
   toDisplayTime,
   venueLabel,
   type LiveDay,
@@ -136,7 +137,7 @@ export async function loadMedalTable(db: Db, competition: CompetitionRow, chosen
     .leftJoin(schema.mergeQueueItem, eq(r.mergeQueueItemId, schema.mergeQueueItem.id))
     .where(eq(r.competitionId, competition.id))
     .orderBy(asc(r.date), asc(r.place));
-  const inSports = rows.filter(({ result }) => chosen.length === 0 || chosen.includes(result.sport ?? competition.sport));
+  const inSports = rows.filter(({ result }) => chosen.length === 0 || chosen.some((c) => sameSport(c, result.sport ?? competition.sport)));
   const medalResults: MedalResult[] = inSports.map(({ result }) => ({
     competitionId: result.competitionId,
     competitionKind: competition.kind,

@@ -177,24 +177,24 @@ describe("World Aquatics timetables", () => {
     await clearIngestedData(env);
     beijing = await seedCompetition(env.DB, {
       name: "World Aquatics Swimming Championships (25m) 2026",
-      sport: "Aquatics",
+      sport: "Swimming",
       source: "world-aquatics",
-      sourceRef: "5052",
+      sourceRef: "5052/SW",
       kind: "championship",
       startDate: "2026-12-01",
       endDate: "2026-12-06",
       city: "Beijing",
     });
-    const roos = await seedAthlete(env.DB, { name: "Roos Vanotterdijk", sport: "Aquatics" });
+    const roos = await seedAthlete(env.DB, { name: "Roos Vanotterdijk", sport: "Swimming" });
     // Named as the World Aquatics results source names short-course events.
-    await seedEntry(env.DB, { competitionId: beijing, sport: "Aquatics", event: "Women's 50m Freestyle (25m)", athleteId: roos });
+    await seedEntry(env.DB, { competitionId: beijing, sport: "Swimming", event: "Women's 50m Freestyle (25m)", athleteId: roos });
   });
 
   it("fetches the short-course Worlds' schedule, and none for Worlds without one yet", async () => {
     await runSource(SOURCE, AQUATICS_TIMETABLE_RUN.now, "2026-11-13T04:00:00.000Z", aquaticsTimetableRun);
 
     expect(await storedTimetables()).toEqual(["World Aquatics Swimming Championships (25m) 2026 · fetched 2026-11-14 3 Sessions source Name Entries"]);
-    const budapest = await competitionBy("world-aquatics", "5546");
+    const budapest = await competitionBy("world-aquatics", "5546/SW");
     expect(budapest.kind).toBe("championship");
     expect(await getDb(env.DB).select().from(schema.timetableVersion).where(eq(schema.timetableVersion.competitionId, budapest.id))).toEqual([]);
   });

@@ -6,7 +6,7 @@
 import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 import { currentPhasesOf, type CompetitionRow } from "./phase-inputs";
-import { roundsFor, type RoundOutcome, type RoundState } from "~/domain";
+import { roundsFor, sameSport, type RoundOutcome, type RoundState } from "~/domain";
 
 export type EntryRow = typeof schema.entry.$inferSelect;
 export type SessionRow = typeof schema.session.$inferSelect;
@@ -77,7 +77,7 @@ export async function loadPlacedRounds(db: Db, competition: CompetitionRow, chos
         ) ?? null;
       const kept = roundsFor(
         entry,
-        timed.filter((x) => x.event === entry.event && x.session.sport === entry.sport),
+        timed.filter((x) => x.event === entry.event && sameSport(x.session.sport, entry.sport)),
         {
           rounds: own.map((a) => ({ round: a.round, outcome: (a.outcome as RoundOutcome | null) ?? null, listed: hasDetail(a) })),
           result: result ? { date: result.date, status: result.status } : null,

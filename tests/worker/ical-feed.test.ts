@@ -44,10 +44,10 @@ describe("iCal feed", () => {
     });
     await seedEntrant(env.DB, calgary, tas);
 
-    const desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
+    const desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
     const montreal2025 = await seedCompetition(env.DB, {
       name: "Short Track World Tour, Montréal",
-      sport: "Short track",
+      sport: "Short track speed skating",
       startDate: "2025-11-14",
       endDate: "2025-11-16",
       series: "isu-st:world-tour:montreal",
@@ -55,7 +55,7 @@ describe("iCal feed", () => {
     await seedResult(env.DB, montreal2025, desmet, { date: "2025-11-15" });
     await seedCompetition(env.DB, {
       name: "Short Track World Tour, Montréal",
-      sport: "Short track",
+      sport: "Short track speed skating",
       startDate: "2026-11-13",
       endDate: "2026-11-15",
       series: "isu-st:world-tour:montreal",
@@ -94,7 +94,7 @@ describe("iCal feed", () => {
       "20261201 European Short Course Swimming Championships",
       "20280714 Olympic Games LA28",
     ]);
-    expect(shown[0].DESCRIPTION).toBe("Short track · Confirmed · Hanne Desmet");
+    expect(shown[0].DESCRIPTION).toBe("Short track speed skating · Confirmed · Hanne Desmet");
     expect(shown[2]).toEqual({
       UID: `${calgary}@belgiansportshub`,
       DTSTAMP: "20261114T120000Z",
@@ -105,7 +105,7 @@ describe("iCal feed", () => {
       DESCRIPTION: "Speed skating · Confirmed · Sandrine Tas",
       URL: "https://bsh.test/calendar?month=2026-11",
     });
-    expect(shown[1].DESCRIPTION).toBe("Short track · Likely: Belgian Entry at the previous edition");
+    expect(shown[1].DESCRIPTION).toBe("Short track speed skating · Likely: Belgian Entry at the previous edition");
     expect(shown[3].DESCRIPTION).toBe("Swimming · Championship · No Belgian Participation known yet");
     expect(shown[4]["DTEND;VALUE=DATE"]).toBe("20280731");
     expect(shown[4].DESCRIPTION).toBe("Olympic Games · the Games · No Belgian Participation known yet");

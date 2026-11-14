@@ -32,7 +32,7 @@ describe("Calendar", () => {
 
   it("lists this month's competitions with a Belgian Participation, saying whether it is confirmed or likely", async () => {
     const tas = await seedAthlete(env.DB, { name: "Sandrine Tas", sport: "Speed skating" });
-    const desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
+    const desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
 
     const calgary = await seedCompetition(env.DB, {
       name: "Speed Skating World Cup, Calgary",
@@ -46,7 +46,7 @@ describe("Calendar", () => {
     // Hanne Desmet skated last year's Montréal leg: this year's is likely.
     const montreal2025 = await seedCompetition(env.DB, {
       name: "Short Track World Tour, Montréal",
-      sport: "Short track",
+      sport: "Short track speed skating",
       startDate: "2025-11-14",
       endDate: "2025-11-16",
       series: "isu-st:world-tour:montreal",
@@ -54,7 +54,7 @@ describe("Calendar", () => {
     await seedResult(env.DB, montreal2025, desmet, { date: "2025-11-15" });
     await seedCompetition(env.DB, {
       name: "Short Track World Tour, Montréal",
-      sport: "Short track",
+      sport: "Short track speed skating",
       startDate: "2026-11-13",
       endDate: "2026-11-15",
       series: "isu-st:world-tour:montreal",
@@ -70,7 +70,7 @@ describe("Calendar", () => {
 
     expect(html).toContain("November 2026");
     expect(listed(html, "Calgary")).toBe("20–22 Nov Speed Skating World Cup, Calgary Speed skating · Confirmed · Sandrine Tas");
-    expect(listed(html, "Montréal")).toBe("13–15 Nov Short Track World Tour, Montréal Short track · Likely: Belgian Entry at the previous edition");
+    expect(listed(html, "Montréal")).toBe("13–15 Nov Short Track World Tour, Montréal Short track speed skating · Likely: Belgian Entry at the previous edition");
     expect(listed(html, "Wuxi")).toBe("27–29 Nov WT Grand Slam, Wuxi Taekwondo · Likely: added by hand");
     expect(listed(html, "Gurgl")).toBeUndefined();
   });
@@ -159,7 +159,7 @@ describe("Calendar", () => {
     for (const [name, sport, day] of [
       ["Speed Skating World Cup, Obihiro", "Speed skating", "2026-11-20"],
       ["Speed Skating World Cup, Stavanger", "Speed skating", "2026-11-27"],
-      ["Short Track World Tour, Seoul", "Short track", "2026-11-27"],
+      ["Short Track World Tour, Seoul", "Short track speed skating", "2026-11-27"],
     ]) {
       const id = await seedCompetition(env.DB, { name, sport, startDate: day });
       await seedEntrant(env.DB, id, athlete);
@@ -173,7 +173,7 @@ describe("Calendar", () => {
     expect(colour("Short Track World Tour, Seoul")).not.toBe(colour("Speed Skating World Cup, Obihiro"));
     const legend = html.slice(html.indexOf('aria-label="Legend"'));
     expect(legend).toMatch(new RegExp(`background:${colour("Speed Skating World Cup, Obihiro")}[^>]*></span>Speed skating`));
-    expect(legend).toMatch(new RegExp(`background:${colour("Short Track World Tour, Seoul")}[^>]*></span>Short track`));
+    expect(legend).toMatch(new RegExp(`background:${colour("Short Track World Tour, Seoul")}[^>]*></span>Short track speed skating`));
   });
 
   it("moves between months with the arrows", async () => {

@@ -15,10 +15,22 @@
 // swimming team is Belgium's Team for the event, each synchro pair or duet its
 // own Team; the roster is whoever the result credits, reserves left out. No
 // structured entry lists, so there is no Upcoming.
+// A competition holds several Olympic sports (the Worlds: swimming, diving,
+// artistic swimming, marathon swimming, water polo): each gets its own
+// competition row, source ref "<id>/<discipline code>", so every sport has its
+// own Championship (qualification target, Phases, calendar colour). High
+// diving is not on the Olympic programme and is left out.
 import type { CompetitionInput, CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 export const API = "https://api.worldaquatics.com/fina";
-const SPORT = "Aquatics";
+/** World Aquatics discipline codes of the Olympic sports (app/domain/sports.ts names). */
+export const SPORT_OF_CODE: Record<string, string> = {
+  SW: "Swimming",
+  DV: "Diving",
+  SY: "Artistic swimming",
+  OW: "Marathon swimming",
+  WP: "Water polo",
+};
 const FIRST_RUN_LOOKBACK_DAYS = 365;
 /** The list is asked from this many days before the window, so a competition that started earlier but is still running comes along. */
 const LIST_LEAD_DAYS = 14;
@@ -34,6 +46,8 @@ export type Competition = {
   location?: { countryCode?: string | null; city?: string | null };
   competitionType: { name: string };
   series: unknown[];
+  /** Discipline codes held there ("SW", "DV", …). */
+  disciplines?: string[];
 };
 
 type Events = {
@@ -76,35 +90,39 @@ export const worldAquatics: SourceAdapter = {
     for (const c of await competitions(run, windowStart, addDays(today, CALENDAR_HORIZON_DAYS))) {
       const kind = competitionKind(c.competitionType.name);
       if (!kind || c.venueDateTo.slice(0, 10) < windowStart) continue;
-      const input = competitionInput(c, kind);
-      const competitionId = await run.rows.competition(input);
-      if (input.startDate > today) continue;
+      const competitionIds = new Map<string, string>();
+      for (const { code, ...input } of competitionInputs(c, kind)) competitionIds.set(code, await run.rows.competition(input));
+      if (competitionIds.size === 0 || c.venueDateFrom.slice(0, 10) > today) continue;
 
       const listed = await run.fetch(`${API}/competitions/${c.id}/events`);
       const events = JSON.parse(listed.text) as Events;
       const course = events.PoolConfiguration === "25m" ? " (25m)" : "";
-      for (const discipline of events.Sports.flatMap((s) => s.DisciplineList)) {
-        if (discipline.HeatList.length === 0 || discipline.HeatList.some((h) => h.ResultStatus !== "OFFICIAL")) continue;
-        const fetched = await run.fetch(`${API}/events/${discipline.Id}`);
-        const body = JSON.parse(fetched.text) as DisciplineResults;
-        if (TEAM_EVENT.test(discipline.DisciplineName)) {
-          await teamResults(run, { competitionId, competitionRef: c.id, disciplineId: discipline.Id, event: `${body.DisciplineName}${course}`, rawCopyId: fetched.rawCopyId }, body);
-          continue;
-        }
-        for (const [personId, { heat, r }] of lastSwims(body)) {
-          const status = statusOf(r);
-          if (!status) continue;
-          await run.rows.result({
-            competitionId,
-            person: person(r),
-            event: `${body.DisciplineName}${course}`,
-            date: heat.Date,
-            place: status === "finished" ? r.Rank : null,
-            status,
-            performance: status === "finished" ? r.Time : null,
-            sourceRef: `${c.id}/${discipline.Id}/${personId}`,
-            rawCopyId: fetched.rawCopyId,
-          });
+      for (const sport of events.Sports) {
+        const competitionId = competitionIds.get(sport.Code);
+        if (!competitionId) continue;
+        for (const discipline of sport.DisciplineList) {
+          if (discipline.HeatList.length === 0 || discipline.HeatList.some((h) => h.ResultStatus !== "OFFICIAL")) continue;
+          const fetched = await run.fetch(`${API}/events/${discipline.Id}`);
+          const body = JSON.parse(fetched.text) as DisciplineResults;
+          if (TEAM_EVENT.test(discipline.DisciplineName)) {
+            await teamResults(run, { competitionId, competitionRef: c.id, disciplineId: discipline.Id, event: `${body.DisciplineName}${course}`, rawCopyId: fetched.rawCopyId }, body);
+            continue;
+          }
+          for (const [personId, { heat, r }] of lastSwims(body)) {
+            const status = statusOf(r);
+            if (!status) continue;
+            await run.rows.result({
+              competitionId,
+              person: person(r),
+              event: `${body.DisciplineName}${course}`,
+              date: heat.Date,
+              place: status === "finished" ? r.Rank : null,
+              status,
+              performance: status === "finished" ? r.Time : null,
+              sourceRef: `${c.id}/${discipline.Id}/${personId}`,
+              rawCopyId: fetched.rawCopyId,
+            });
+          }
         }
       }
     }
@@ -178,22 +196,49 @@ export async function competitionList(run: SourceRun, from: string, to: string) 
   return body.content.map((c) => ({ ...c, rawCopyId: fetched.rawCopyId }));
 }
 
-/** A listed competition as a competition row (shared with the timetable source, which writes as this one). */
-export function competitionInput(c: Competition & { rawCopyId: string }, kind: CompetitionKind): CompetitionInput {
+/**
+ * A listed competition as competition rows, one per Olympic sport held there
+ * (shared with the timetable source, which writes as this one). A list entry
+ * without disciplines is taken from its type ("Diving World Cup").
+ */
+export function competitionInputs(c: Competition & { rawCopyId: string }, kind: CompetitionKind): (CompetitionInput & { code: string })[] {
   const city = c.location?.city || null;
-  return {
-    // World Cup legs share one name; the city tells them apart.
-    name: c.series.length > 0 && city ? `${c.name}, ${city}` : c.name,
-    sport: SPORT,
-    kind,
-    startDate: c.venueDateFrom.slice(0, 10),
-    endDate: c.venueDateTo.slice(0, 10),
-    city,
-    country: c.location?.countryCode || null,
-    venueZone: null,
-    sourceRef: String(c.id),
-    rawCopyId: c.rawCopyId,
-  };
+  const codes = c.disciplines ?? Object.keys(SPORT_OF_CODE).filter((code) => typeOf(code).test(c.competitionType.name));
+  return codes
+    .filter((code) => SPORT_OF_CODE[code])
+    .map((code) => ({
+      code,
+      // World Cup legs share one name; the city tells them apart.
+      name: c.series.length > 0 && city ? `${c.name}, ${city}` : c.name,
+      sport: SPORT_OF_CODE[code],
+      kind,
+      startDate: c.venueDateFrom.slice(0, 10),
+      endDate: c.venueDateTo.slice(0, 10),
+      city,
+      country: c.location?.countryCode || null,
+      venueZone: null,
+      sourceRef: `${c.id}/${code}`,
+      series: seriesOf(c, code),
+      rawCopyId: c.rawCopyId,
+    }));
+}
+
+function typeOf(code: string): RegExp {
+  return { SW: /swimming/i, DV: /diving/i, SY: /artistic/i, OW: /open water/i, WP: /water polo/i }[code] ?? /$^/;
+}
+
+/**
+ * The recurring competition (GLOSSARY "Participation": previous edition): the
+ * Worlds per course and sport, a World Cup leg per sport and city, the Games.
+ */
+function seriesOf(c: Competition, code: string): string | null {
+  const type = c.competitionType.name;
+  const sport = SPORT_OF_CODE[code].toLowerCase().replace(/ /g, "-");
+  if (/^Olympic Games/i.test(type)) return "olympic-games";
+  if (/Championships/i.test(type)) return `world-aquatics:world-championships${/25m/.test(type) ? "-25m" : ""}:${sport}`;
+  const city = c.location?.city;
+  if (/World Cup/i.test(type) && city) return `world-aquatics:world-cup:${sport}:${city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  return null;
 }
 
 /** The Games, the World Championships (long and short course) and the World Cups; not Grand Prix, youth or masters events. */

@@ -60,8 +60,8 @@ describe("Run sheet", () => {
       lastError: "HTTP 500",
     });
     // A Belgian is entered at a UCI race this week, so the blocked (Assisted) UCI source is due for a paste.
-    const race = await seedCompetition(env.DB, { name: "UCI Track Nations Cup", sport: "Track cycling", source: "uci", startDate: "2026-11-13", endDate: "2026-11-15" });
-    await seedEntrant(env.DB, race, await seedAthlete(env.DB, { name: "Lindsay De Vylder", sport: "Track cycling" }));
+    const race = await seedCompetition(env.DB, { name: "UCI Track Nations Cup", sport: "Cycling track", source: "uci", startDate: "2026-11-13", endDate: "2026-11-15" });
+    await seedEntrant(env.DB, race, await seedAthlete(env.DB, { name: "Lindsay De Vylder", sport: "Cycling track" }));
   }
 
   it("opens on the first step, Source health", async () => {

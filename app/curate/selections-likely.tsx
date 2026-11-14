@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { Form } from "react-router";
 import { participationsBetween, REASON_TEXT } from "~/calendar/participations";
 import { type Db, schema } from "~/db/client";
-import { BELGIAN_ZONE, LIKELY_REVIEW_WEEKS, needsLikelyReview } from "~/domain";
+import { BELGIAN_ZONE, LIKELY_REVIEW_WEEKS, needsLikelyReview, sameSport } from "~/domain";
 import { formatDate, formatDayRange } from "~/format";
 import { loadDueSelections, SelectionCard, type SelectionItem } from "./selections";
 
@@ -57,7 +57,7 @@ export async function actOnLikely(db: Db, intent: string, form: FormData, now: D
 }
 
 export function SelectionsLikelyStep({ data, review }: { data: SelectionsLikelyData; review: SelectionItem | null }) {
-  const same = (s: SelectionItem) => review !== null && s.competition.id === review.competition.id && s.sport.toLowerCase() === review.sport.toLowerCase();
+  const same = (s: SelectionItem) => review !== null && s.competition.id === review.competition.id && sameSport(s.sport, review.sport);
   return (
     <>
       {review ? <SelectionCard item={review} opened /> : null}

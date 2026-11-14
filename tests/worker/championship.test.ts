@@ -74,13 +74,13 @@ describe("Championship tab", () => {
     // Going on right now, with a Belgian named.
     const shortTrack = await seedCompetition(env.DB, {
       name: "European Short Track Championships",
-      sport: "Short track",
+      sport: "Short track speed skating",
       kind: "championship",
       startDate: "2026-11-13",
       endDate: "2026-11-15",
       venueZone: "Europe/Warsaw",
     });
-    await seedEntrant(env.DB, shortTrack, await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" }));
+    await seedEntrant(env.DB, shortTrack, await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" }));
 
     // Not listed: no Belgian Participation, already over, not a Championship.
     await seedCompetition(env.DB, { name: "World Swimming Championships (25 m)", sport: "Swimming", kind: "championship", startDate: "2026-12-10", endDate: "2026-12-14" });
@@ -92,7 +92,7 @@ describe("Championship tab", () => {
     const html = await page("/championship");
 
     expect(listRows(html)).toEqual([
-      "13–15 Nov European Short Track Championships Short track · Confirmed · Hanne Desmet · Live",
+      "13–15 Nov European Short Track Championships Short track speed skating · Confirmed · Hanne Desmet · Live",
       "1–6 Dec European Short Course Swimming Championships Swimming · Confirmed · Lucas Henveaux · Standards",
       "11–19 Sept 2027 World Athletics Championships, Beijing Athletics · Likely: added by hand · Standards",
     ]);

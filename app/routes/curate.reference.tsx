@@ -10,6 +10,7 @@ import { belgianRows } from "~/ingest/belgian-rows";
 import { keepRawCopy } from "~/ingest/raw-copy";
 import type { ResultStatus } from "~/ingest/source-adapter";
 import type { Route } from "./+types/curate.reference";
+import { SPORT_LIST_ID, SportOptions, typedSport } from "~/curate/sport-field";
 
 // Owner-only (under /curate); spec #20, story 119 and "Reference backfill";
 // ticket #46. The owner enters a Belgian result at a reference Games by hand,
@@ -65,7 +66,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const known = roster.length === 0 ? [] : await db.select({ id: schema.athlete.id }).from(schema.athlete).where(inArray(schema.athlete.id, roster));
   if (known.length !== roster.length) throw bad("The roster names an unknown Athlete");
   const entry = (athlete ?? team)!;
-  const sport = field("sport") || entry.sport;
+  const sport = typedSport(field("sport") || entry.sport);
   const event = field("event");
   if (!event) throw bad("Name the event");
   const date = field("date");
@@ -149,7 +150,8 @@ export default function EnterReferenceResult({ loaderData }: Route.ComponentProp
         </label>
         <label>
           Sport (if not the Athlete's or Team's)
-          <input name="sport" />
+          <input name="sport" list={SPORT_LIST_ID} />
+          <SportOptions />
         </label>
         <label>
           Event

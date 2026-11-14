@@ -33,7 +33,7 @@ describe("UCI cycling source", () => {
   });
 
   it("puts a Belgian's Championship place on her Athlete page, matched on name and date of birth", async () => {
-    const kopecky = await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling", dateOfBirth: "1995-11-10" });
+    const kopecky = await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling road", dateOfBirth: "1995-11-10" });
 
     const result = await runAfterTrackWorlds();
 
@@ -46,7 +46,7 @@ describe("UCI cycling source", () => {
   });
 
   it("takes a WorldTour stage race's general classification, not its stages", async () => {
-    const widar = await seedAthlete(env.DB, { name: "Jarno Widar", sport: "Cycling", dateOfBirth: "2005-11-13" });
+    const widar = await seedAthlete(env.DB, { name: "Jarno Widar", sport: "Cycling road", dateOfBirth: "2005-11-13" });
 
     await runAfterTrackWorlds();
 
@@ -76,20 +76,20 @@ describe("UCI cycling source", () => {
     expect(rows).toHaveLength(32);
   });
 
-  it("keeps the Championships, the WorldTour and the World Cups, not lesser road races", async () => {
+  it("keeps the Championships, the WorldTour and the World Cups, not lesser road races, each under its discipline's sport", async () => {
     await runAfterTrackWorlds();
 
     const competitions = await getDb(env.DB)
-      .select({ name: schema.competition.name, kind: schema.competition.kind, country: schema.competition.country })
+      .select({ name: schema.competition.name, sport: schema.competition.sport, kind: schema.competition.kind, country: schema.competition.country })
       .from(schema.competition)
       .orderBy(schema.competition.startDate, schema.competition.name);
     expect(competitions).toEqual([
-      { name: "Tour of Guangxi", kind: "circuit", country: "CHN" },
-      { name: "Tissot UCI Track World Championships", kind: "championship", country: "CHN" },
-      { name: "UCI BMX Freestyle World Cup - Park & Flatland", kind: "circuit", country: "CHN" },
-      { name: "CAC Road Cycling African Championships", kind: "championship", country: "KEN" },
-      { name: "UCI BMX Racing World Cup - Round 9", kind: "circuit", country: "USA" },
-      { name: "UCI BMX Racing World Cup - Round 10", kind: "circuit", country: "USA" },
+      { name: "Tour of Guangxi", sport: "Cycling road", kind: "circuit", country: "CHN" },
+      { name: "Tissot UCI Track World Championships", sport: "Cycling track", kind: "championship", country: "CHN" },
+      { name: "UCI BMX Freestyle World Cup - Park & Flatland", sport: "Cycling BMX freestyle", kind: "circuit", country: "CHN" },
+      { name: "CAC Road Cycling African Championships", sport: "Cycling road", kind: "championship", country: "KEN" },
+      { name: "UCI BMX Racing World Cup - Round 9", sport: "Cycling BMX racing", kind: "circuit", country: "USA" },
+      { name: "UCI BMX Racing World Cup - Round 10", sport: "Cycling BMX racing", kind: "circuit", country: "USA" },
     ]);
   });
 
@@ -121,7 +121,7 @@ describe("UCI cycling source", () => {
   });
 
   it("writes Belgium's place in each track team event to its Team, with every rider the result credits", async () => {
-    const kopecky = await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling", dateOfBirth: "1995-11-10" });
+    const kopecky = await seedAthlete(env.DB, { name: "Lotte Kopecky", sport: "Cycling road", dateOfBirth: "1995-11-10" });
 
     await runAfterTrackWorlds();
 

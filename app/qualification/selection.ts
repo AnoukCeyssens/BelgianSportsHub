@@ -13,7 +13,7 @@
 //   sport), the Selection phase's input.
 import { and, eq, inArray, min, sql } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
-import { belgianDate, entryListSelection, selectorFor, type SelectionCandidate } from "~/domain";
+import { belgianDate, entryListSelection, sameSport, selectorFor, type SelectionCandidate } from "~/domain";
 import { potentialEntries, type PotentialEntry } from "./entries";
 import { linkAtSelection } from "./quota-places";
 
@@ -22,7 +22,7 @@ export type Candidate = PotentialEntry & { names: string[] };
 /** The candidates of a Selection: Active potential Entries of this sport at the competition, withdrawn ones left out. */
 export async function selectionCandidates(db: Db, competitionId: string, sport: string, now: Date): Promise<Candidate[]> {
   const entries = (await potentialEntries(db, [competitionId], now)).filter(
-    (e) => e.sport.toLowerCase() === sport.toLowerCase() && e.status !== "withdrawn",
+    (e) => sameSport(e.sport, sport) && e.status !== "withdrawn",
   );
   // A Team goes by its own name and its members' ("A / B" for a partnership).
   return entries.map((e) => ({

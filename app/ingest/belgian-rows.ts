@@ -4,7 +4,17 @@
 // can stamp the source's "last data change".
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "~/db/client";
-import { belgianDate, identityMatch, teamIdentity, TIMETABLE_TEXT_HEAD, timetableText, type KnownIdentity, type TimetableRound } from "~/domain";
+import {
+  belgianDate,
+  GAMES_SOURCE,
+  identityMatch,
+  requireSport,
+  teamIdentity,
+  TIMETABLE_TEXT_HEAD,
+  timetableText,
+  type KnownIdentity,
+  type TimetableRound,
+} from "~/domain";
 import { followRanking } from "~/qualification/ranked-tracks";
 import { applyEntryList } from "~/qualification/selection";
 import { knownIdentities } from "./identities";
@@ -63,7 +73,9 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
         where: and(eq(schema.competition.source, source), eq(schema.competition.sourceRef, input.sourceRef)),
       });
       // A source that does not know the venue's zone keeps the one a timetable (or the owner) gave.
-      const values = { ...rest, series: rest.series ?? null, venueZone: rest.venueZone ?? existing?.venueZone ?? null };
+      // The owner's Games rows span every sport ("Olympic Games"); any other competition is one sport.
+      const sport = source === GAMES_SOURCE && rest.kind === "games" ? rest.sport : requireSport(rest.sport);
+      const values = { ...rest, sport, series: rest.series ?? null, venueZone: rest.venueZone ?? existing?.venueZone ?? null };
       if (!existing) {
         const [row] = await db
           .insert(schema.competition)
@@ -108,7 +120,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
 
     async teamResult(input: TeamResultInput) {
       if (input.nationality !== BELGIUM) return;
-      const sport = input.sport ?? (await sportOf(input.competitionId));
+      const sport = requireSport(input.sport ?? (await sportOf(input.competitionId)));
       const belgians = input.roster.filter((p) => p.nationality === BELGIUM);
       const teamId = await findOrCreateTeam({ sport, event: input.teamEvent ?? input.event, members: belgians, rawCopyId: input.rawCopyId });
       await writeResult(input, { athleteId: null, mergeQueueItemId: null, teamId });
@@ -125,7 +137,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
     },
 
     async team(input: TeamInput) {
-      return findOrCreateTeam({ ...input, members: input.members?.filter((p) => p.nationality === BELGIUM) ?? null });
+      return findOrCreateTeam({ ...input, sport: requireSport(input.sport), members: input.members?.filter((p) => p.nationality === BELGIUM) ?? null });
     },
 
     async ranking(input: RankingInput) {
@@ -145,7 +157,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
         eq(s.asOf, input.asOf),
         "athleteId" in who ? eq(s.athleteId, who.athleteId) : eq(s.teamId, who.teamId),
       );
-      const values = { sport: input.sport, position: input.position, points: input.points };
+      const values = { sport: requireSport(input.sport), position: input.position, points: input.points };
       const existing = await db.query.rankingSnapshot.findFirst({ where: key });
       if (!existing) {
         await db.insert(s).values({
@@ -258,7 +270,7 @@ export function belgianRows(env: Pick<Env, "DB" | "RAW">, source: string, now: D
       competitionId: input.competitionId,
       ...entry,
       event: input.event,
-      sport: input.sport ?? null,
+      sport: input.sport ? requireSport(input.sport) : null,
       date: input.date,
       place: input.place,
       status: input.status,

@@ -97,16 +97,16 @@ describe("Sessions and the Live day view", () => {
     await clearIngestedData(env);
     europeans = await seedCompetition(env.DB, {
       name: "European Short Track Championships 2027",
-      sport: "Short track",
+      sport: "Short track speed skating",
       kind: "championship",
       startDate: "2027-01-15",
       endDate: "2027-01-17",
       city: "Gdańsk",
       venueZone: "Europe/Warsaw",
     });
-    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
-    vanRuijven = await seedAthlete(env.DB, { name: "Tineke den Dulk", sport: "Short track" });
-    relay = await seedAthlete(env.DB, { name: "Stijn Desmet", sport: "Short track" });
+    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
+    vanRuijven = await seedAthlete(env.DB, { name: "Tineke den Dulk", sport: "Short track speed skating" });
+    relay = await seedAthlete(env.DB, { name: "Stijn Desmet", sport: "Short track speed skating" });
     await seedAthlete(env.DB, { name: "Nafissatou Thiam", sport: "Athletics" });
   });
 

@@ -50,22 +50,22 @@ describe("Live day pass and medal table", () => {
     await clearIngestedData(env);
     europeans = await seedCompetition(env.DB, {
       name: "European Short Track Championships 2027",
-      sport: "Short track",
+      sport: "Short track speed skating",
       kind: "championship",
       startDate: "2027-01-15",
       endDate: "2027-01-17",
       city: "Gdańsk",
       venueZone: "Europe/Warsaw",
     });
-    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track" });
-    w500 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track", event: "Women's 500 m", athleteId: desmet });
-    w1000 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track", event: "Women's 1000 m", athleteId: desmet });
+    desmet = await seedAthlete(env.DB, { name: "Hanne Desmet", sport: "Short track speed skating" });
+    w500 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track speed skating", event: "Women's 500 m", athleteId: desmet });
+    w1000 = await seedEntry(env.DB, { competitionId: europeans, sport: "Short track speed skating", event: "Women's 1000 m", athleteId: desmet });
     await seedTimetable(env.DB, europeans, "Europe/Warsaw", [
-      { sport: "Short track", date: "2027-01-15", start: "13:00", rounds: [["Women's 500 m", "Heats"]] },
-      { sport: "Short track", date: "2027-01-15", start: "15:30", rounds: [["Women's 1000 m", "Heats"]] },
-      { sport: "Short track", date: "2027-01-16", start: "12:00", rounds: [["Women's 500 m", "Quarter-finals"]] },
-      { sport: "Short track", date: "2027-01-17", start: "13:00", rounds: [["Women's 1000 m", "Quarter-finals"]] },
-      { sport: "Short track", date: "2027-01-17", start: "15:00", rounds: [["Women's 500 m", "Final"]] },
+      { sport: "Short track speed skating", date: "2027-01-15", start: "13:00", rounds: [["Women's 500 m", "Heats"]] },
+      { sport: "Short track speed skating", date: "2027-01-15", start: "15:30", rounds: [["Women's 1000 m", "Heats"]] },
+      { sport: "Short track speed skating", date: "2027-01-16", start: "12:00", rounds: [["Women's 500 m", "Quarter-finals"]] },
+      { sport: "Short track speed skating", date: "2027-01-17", start: "13:00", rounds: [["Women's 1000 m", "Quarter-finals"]] },
+      { sport: "Short track speed skating", date: "2027-01-17", start: "15:00", rounds: [["Women's 500 m", "Final"]] },
     ]);
   });
 
@@ -148,17 +148,17 @@ describe("Live day pass and medal table", () => {
     fixClock("2026-11-14T12:00:00.000Z");
     const owner = { sourceUrl: "https://la28.example/schedule" };
     await post("/curate/run/schedules", { intent: "save-games-dates", games: "la-2028", firstDay: "2028-07-12", lastDay: "2028-07-30", ...owner });
-    for (const sport of ["Athletics", "Cycling Road"]) {
+    for (const sport of ["Athletics", "Cycling road"]) {
       await post("/curate/run/schedules", { intent: "save-sport-days", games: "la-2028", sport, firstDay: "2028-07-14", lastDay: "2028-07-30", ...owner });
     }
     const la = (await getDb(env.DB).query.competition.findFirst({ where: (c, { eq }) => eq(c.kind, "games") }))!.id;
     const thiam = await seedAthlete(env.DB, { name: "Nafissatou Thiam", sport: "Athletics" });
-    const evenepoel = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling Road" });
+    const evenepoel = await seedAthlete(env.DB, { name: "Remco Evenepoel", sport: "Cycling road" });
     const hept = await seedEntry(env.DB, { competitionId: la, sport: "Athletics", event: "Women's Heptathlon", athleteId: thiam });
-    const road = await seedEntry(env.DB, { competitionId: la, sport: "Cycling Road", event: "Men's Road Race", athleteId: evenepoel });
+    const road = await seedEntry(env.DB, { competitionId: la, sport: "Cycling road", event: "Men's Road Race", athleteId: evenepoel });
     await seedTimetable(env.DB, la, "America/Los_Angeles", [
       { sport: "Athletics", date: "2028-07-16", start: "18:30", rounds: [["Women's Heptathlon", "Final"]] },
-      { sport: "Cycling Road", date: "2028-07-15", start: "09:00", rounds: [["Men's Road Race", "Final"]] },
+      { sport: "Cycling road", date: "2028-07-15", start: "09:00", rounds: [["Men's Road Race", "Final"]] },
     ]);
 
     fixClock("2028-07-17T12:00:00.000Z");

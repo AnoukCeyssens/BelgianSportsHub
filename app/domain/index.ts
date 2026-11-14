@@ -87,7 +87,6 @@ export {
   inContention,
   isQualificationStatus,
   meetsCriteria,
-  olympicCycleOf,
   rankedTrack,
   rankingPlaces,
   suggestStatus,
@@ -171,3 +170,4 @@ export {
   type Tally,
   type Verdict,
 } from "./verdicts";
+export { canonicalSport, olympicCycleOf, requireSport, sameSport, SPORTS, type SportDefinition } from "./sports";

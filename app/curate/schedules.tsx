@@ -13,6 +13,7 @@ import { belgianDate, GAMES_SOURCE, TRACKED_GAMES, type TrackedGames } from "~/d
 import { formatDate, formatDayRange } from "~/format";
 import { keepRawCopy } from "~/ingest/raw-copy";
 import { loadTimetables, TimetablesPart, type TimetableReviewData } from "./timetables";
+import { SPORT_LIST_ID, SportOptions, typedSport } from "./sport-field";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -70,8 +71,8 @@ export async function actOnSchedules(env: Pick<Env, "DB" | "RAW">, intent: strin
   }
 
   if (!games) throw new Response(`Record the dates of ${tracked.name} first`, { status: 400 });
-  const sport = field("sport");
-  if (!sport) throw new Response("Name the sport", { status: 400 });
+  if (!field("sport")) throw new Response("Name the sport", { status: 400 });
+  const sport = typedSport(field("sport"));
 
   if (intent === "save-sport-days") {
     const { firstDay, lastDay, sourceUrl } = typedDays(field);
@@ -213,7 +214,8 @@ function SportDays({ games, sports }: { games: string; sports: SchedulesData["ga
         <div className="fields">
           <label>
             Sport
-            <input name="sport" required placeholder="e.g. Athletics" />
+            <input name="sport" required placeholder="e.g. Athletics" list={SPORT_LIST_ID} />
+            <SportOptions />
           </label>
           <label>
             First day

@@ -83,6 +83,16 @@ Adapters are tested against real federation payloads.
 5. A payload too big to keep whole (e.g. Team Belgium's 1 MB sitemaps) may be trimmed by hand after recording; say so in a `trimmedByHand` field of its `.meta.json`. A source whose test needs many files gets an `index.ts` next to them exporting the ready-to-stub list (see `tests/fixtures/sources/team-belgium/index.ts`).
 
 
+## Sport names
+
+Set by the #20 review. **One vocabulary:** `SPORTS` in `app/domain/sports.ts`, the Olympic programme's sports at discipline level as the IOC lists them for LA 2028 and French Alps 2030 (plus Breaking and Nordic combined for the reference Games): "Swimming", "Diving", "Artistic swimming", "Marathon swimming", "Water polo" (never "Aquatics"); "Cycling road", "Cycling track", "Cycling mountain bike", "Cycling BMX racing", "Cycling BMX freestyle" (never "Cycling"); "Equestrian dressage/eventing/jumping"; "Short track speed skating"; and so on. Each carries its Olympic cycle.
+
+- **Store canonical names only.** `requireSport(raw)` (throws) in the row writer for every competition, result, Team and ranking an adapter hands over; `typedSport(raw)` (`app/curate/sport-field.tsx`, a 400 for anything else, with a `<SportOptions />` datalist) for every owner form that takes a sport. `canonicalSport(raw)` maps the names sources and people use ("Athletics (Track & Field)", "Short track", "Road cycling", "Open water swimming", "Softball") through one alias table, and is null for anything that is no sport ("Aquatics", "Cycling", "Olympic Games"). The owner's Games rows keep the Games' own label ("Olympic Games") as their sport; results on them carry `result.sport`.
+- **Compare with `sameSport(a, b)`**, never `===` or `toLowerCase()`.
+- **`olympicCycleOf(sport)`** is null for a name that is no sport: such an Entry has no Olympics target, rather than defaulting to summer.
+- **A source that spans several sports sets the sport per competition or result from its discipline.** World Aquatics: one competition row per Olympic sport held there (source ref `<id>/<code>`, SW/DV/SY/OW/WP; high diving left out), and its timetable source splits the schedule by `SportCode`. UCI: each DataRide discipline is its own sport. A Source row's `sport` is the sport its pastes belong to (null when it spans several).
+- Migration `0025_sport_vocabulary` rewrote stored names (and Team keys, which start with the sport).
+
 ## Sources and adapters
 
 Set by the first Automatic source, ISU speed skating (#23). Every later Automatic source (#42, #43, #44) follows it.

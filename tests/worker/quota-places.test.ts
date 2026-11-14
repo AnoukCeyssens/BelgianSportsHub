@@ -124,7 +124,7 @@ describe("Quota places", () => {
     const la = await la2028();
     await post(curate(la), {
       intent: "add-quota-places",
-      sport: "Equestrian",
+      sport: "Equestrian eventing",
       event: "Team eventing",
       kind: "noc",
       how: "hold",
@@ -134,7 +134,7 @@ describe("Quota places", () => {
       source: "Equestrian federation news, 10 Nov",
     });
     expect(quotaRows(await page(`/games/${la}`))).toEqual([
-      "Equestrian · Team eventing NOC-owned Provisional via FEI Olympic ranking at Selection Equestrian federation news, 10 Nov · checked 14 Nov 2026",
+      "Equestrian eventing · Team eventing NOC-owned Provisional via FEI Olympic ranking at Selection Equestrian federation news, 10 Nov · checked 14 Nov 2026",
     ]);
 
     // Moving a place needs a source; illegal moves are refused.
@@ -146,7 +146,7 @@ describe("Quota places", () => {
     const moved = await post(curate(la), { intent: "move-quota-place", placeId: place, event: "allocate", source: "https://inside.fei.org/olympic-allocation" });
     expect(moved.status).toBe(303);
     expect(quotaRows(await page(`/games/${la}`))).toEqual([
-      "Equestrian · Team eventing NOC-owned Allocated via FEI Olympic ranking at Selection https://inside.fei.org/olympic-allocation · checked 2 Dec 2026",
+      "Equestrian eventing · Team eventing NOC-owned Allocated via FEI Olympic ranking at Selection https://inside.fei.org/olympic-allocation · checked 2 Dec 2026",
     ]);
   });
 

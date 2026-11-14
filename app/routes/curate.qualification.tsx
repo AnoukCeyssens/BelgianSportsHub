@@ -19,6 +19,7 @@ import {
   quotaPlaceLinkable,
   quotaPlaceTransition,
   referenceGamesOf,
+  sameSport,
   TRACK_STATES,
   zonedWallClockToInstant,
   type QuotaPlaceKind,
@@ -31,6 +32,7 @@ import { linkAtSelection, quotaPlacesOf, recordQuotaPlaces } from "~/qualificati
 import { withdrawalColumn } from "~/qualification/withdrawal";
 import { activeStatuses } from "~/roster/active";
 import type { Route } from "./+types/curate.qualification";
+import { SPORT_LIST_ID, SportOptions, typedSport } from "~/curate/sport-field";
 
 // Owner-only (under /curate); spec #20, stories 25, 82–85; ticket #32. The
 // owner curates a target competition's potential Entries: each Active
@@ -66,7 +68,7 @@ async function targetOf(db: Db, id: string, request: Request): Promise<Target> {
 
 /** Which sports' Athletes and Teams can be Entries: the Championship's sport, or every sport of the Games' cycle. */
 function sportFits(target: Target) {
-  if (target.kind === "championship") return (sport: string) => sport.toLowerCase() === target.sport.toLowerCase();
+  if (target.kind === "championship") return (sport: string) => sameSport(sport, target.sport);
   const cycle = /winter/i.test(target.sport) || /winter/i.test(target.series ?? "") ? "winter" : "summer";
   return (sport: string) => olympicCycleOf(sport) === cycle;
 }
@@ -270,6 +272,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
         event = row.event;
       }
       if (!sport || !event) refuse("Sport and event are required");
+      sport = typedSport(sport);
       await recordQuotaPlaces(db, {
         competitionId: target.id,
         sport,
@@ -358,7 +361,7 @@ async function notOnATeamRoster(db: Db, athleteId: string, sport: string, event:
     .from(schema.rosterMember)
     .innerJoin(schema.team, eq(schema.team.id, schema.rosterMember.teamId))
     .where(eq(schema.rosterMember.athleteId, athleteId));
-  const team = rows.find((r) => r.sport.toLowerCase() === sport.toLowerCase() && r.event.toLowerCase() === event.toLowerCase());
+  const team = rows.find((r) => sameSport(r.sport, sport) && r.event.toLowerCase() === event.toLowerCase());
   if (team) refuse(`${event} is a Team event: set the status on ${team.name}, not on its roster members`);
 }
 
@@ -566,7 +569,7 @@ type Loaded = Route.ComponentProps["loaderData"];
 /** The Games' Quota places (ticket #36): record new ones, move each along its lifecycle, link it to its Entry. */
 function QuotaPlaces({ places, entries }: { places: NonNullable<Loaded["quotaPlaces"]>; entries: Loaded["entries"] }) {
   const sameEvent = (place: (typeof places)[number], entry: (typeof entries)[number]) =>
-    entry.sport.toLowerCase() === place.sport.toLowerCase() && entry.event.toLowerCase() === place.event.toLowerCase();
+    sameSport(entry.sport, place.sport) && entry.event.toLowerCase() === place.event.toLowerCase();
   return (
     <>
       <h2>Quota places</h2>
@@ -645,7 +648,8 @@ function QuotaPlaces({ places, entries }: { places: NonNullable<Loaded["quotaPla
         <input type="hidden" name="intent" value="add-quota-places" />
         <label>
           Sport
-          <input name="sport" placeholder="Cycling road" />
+          <input name="sport" placeholder="Cycling road" list={SPORT_LIST_ID} />
+          <SportOptions />
         </label>
         <label>
           Event

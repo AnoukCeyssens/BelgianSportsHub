@@ -4,7 +4,7 @@
 // embeds its data as Next.js JSON. Only the ID (slug), name, date of birth,
 // sports and results are read; bios, photos and the unreliable active/retired
 // flags are ignored.
-import type { Performance } from "~/domain";
+import { requireSport, type Performance } from "~/domain";
 
 export const TEAM_BELGIUM_SITEMAP_URL = "https://www.teambelgium.be/sitemap.xml";
 
@@ -72,8 +72,10 @@ export function parseProfile(html: string): TeamBelgiumProfile {
  * Team Belgium sport slugs (Dutch) for sports on the LA 2028 or French Alps
  * 2030 programme, with their English names. Team Belgium also covers World
  * Games, Deaflympics and other non-Olympic sports; those are not listed.
+ * The English names are the app's sport vocabulary (app/domain/sports.ts);
+ * a name outside it fails when the module loads.
  */
-const OLYMPIC_SPORTS: Record<string, string> = {
+const OLYMPIC_SPORTS: Record<string, string> = canonical({
   // Summer (LA 2028)
   Atletiek: "Athletics",
   Badminton: "Badminton",
@@ -143,4 +145,8 @@ const OLYMPIC_SPORTS: Record<string, string> = {
   "Ski-Mountaineering": "Ski mountaineering",
   Snelschaatsen: "Speed skating",
   Snowboarden: "Snowboard",
-};
+});
+
+function canonical(names: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(names).map(([slug, name]) => [slug, requireSport(name)]));
+}

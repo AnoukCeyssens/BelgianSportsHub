@@ -176,6 +176,13 @@
       "when": 1794670164957,
       "tag": "0024_verdicts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794671380346,
+      "tag": "0025_sport_vocabulary",
+      "breakpoints": true
     }
   ]
 }

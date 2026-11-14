@@ -22,7 +22,6 @@
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://dataride.uci.ch";
-const SPORT = "Cycling";
 const FIRST_RUN_LOOKBACK_DAYS = 365;
 const CALENDAR_HORIZON_DAYS = 14;
 /** DataRide states dates as midnight in its own zone. */
@@ -31,6 +30,8 @@ const DATARIDE_ZONE = "Europe/Zurich";
 type Discipline = {
   id: number;
   name: string;
+  /** The Olympic sport (app/domain/sports.ts): each UCI discipline is its own. */
+  sport: string;
   /** The competition classes that count (UCI class codes). */
   classes: Record<string, CompetitionKind>;
   /** The Olympic race types (DataRide race type codes), team events included. */
@@ -48,19 +49,21 @@ const DISCIPLINES: Discipline[] = [
   {
     id: 10,
     name: "Road",
+    sport: "Cycling road",
     classes: { ...CHAMPIONSHIPS, "1.UWT": "circuit", "2.UWT": "circuit", "1.WWT": "circuit", "2.WWT": "circuit" },
     raceTypes: new Set(["IRR", "ITT"]),
   },
-  { id: 9, name: "Track", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["SP", "KE", "OM", ...TEAM_RACE_TYPES]) },
+  { id: 9, name: "Track", sport: "Cycling track", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["SP", "KE", "OM", ...TEAM_RACE_TYPES]) },
   {
     id: 7,
     name: "Mountain bike",
+    sport: "Cycling mountain bike",
     classes: { ...CHAMPIONSHIPS, CDM: "circuit" },
     raceTypes: new Set(["XCO"]),
     competition: /XCO/,
   },
-  { id: 1, name: "BMX racing", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BMX-IND"]) },
-  { id: 13, name: "BMX freestyle", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BFR-PRK"]) },
+  { id: 1, name: "BMX racing", sport: "Cycling BMX racing", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BMX-IND"]) },
+  { id: 13, name: "BMX freestyle", sport: "Cycling BMX freestyle", classes: { ...CHAMPIONSHIPS, CDM: "circuit" }, raceTypes: new Set(["BFR-PRK"]) },
 ];
 
 const SENIOR = new Set(["Men Elite", "Women Elite"]);
@@ -104,7 +107,7 @@ export const uciCycling: SourceAdapter = {
         if (endDate < windowStart || startDate > horizon) continue;
         const competitionId = await run.rows.competition({
           name: c.CompetitionName,
-          sport: SPORT,
+          sport: discipline.sport,
           kind,
           startDate,
           endDate,

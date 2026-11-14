@@ -75,13 +75,13 @@ describe("Paste imports step", () => {
     await db.delete(schema.runSheetLog);
     await db.delete(schema.runSheetSession);
     await db.delete(schema.source);
-    await seedSource(env.DB, SOURCE, { name: "ISU short track", tier: "assisted", cadenceDays: 7, sport: "Short track", idScheme: "isu" });
+    await seedSource(env.DB, SOURCE, { name: "ISU short track", tier: "assisted", cadenceDays: 7, sport: "Short track speed skating", idScheme: "isu" });
     // Pasted last week, so due again; a healthy Automatic source is not listed.
     await seedSource(env.DB, "isu-speed-skating", { name: "ISU speed skating", lastSuccessAt: "2026-11-14T04:00:00.000Z" });
-    vos = await seedAthlete(env.DB, { name: "Hanne Vos", sport: "Short track", externalIds: [{ scheme: "isu", value: "SR-20451" }] });
-    peeters = await seedAthlete(env.DB, { name: "Ella Peeters", sport: "Short track", dateOfBirth: "2002-05-06" });
+    vos = await seedAthlete(env.DB, { name: "Hanne Vos", sport: "Short track speed skating", externalIds: [{ scheme: "isu", value: "SR-20451" }] });
+    peeters = await seedAthlete(env.DB, { name: "Ella Peeters", sport: "Short track speed skating", dateOfBirth: "2002-05-06" });
     // A Belgian Participation in short track this week (the entry list names Hanne Vos), so its source is due.
-    const thisWeek = await seedCompetition(env.DB, { name: "Short Track World Tour, Montréal", sport: "Short track", startDate: "2026-11-13", endDate: "2026-11-15" });
+    const thisWeek = await seedCompetition(env.DB, { name: "Short Track World Tour, Montréal", sport: "Short track speed skating", startDate: "2026-11-13", endDate: "2026-11-15" });
     await seedEntrant(env.DB, thisWeek, vos);
   });
 
