@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentPhase, phaseToShow, type PhaseInputs } from "~/domain";
+import { combinedPhaseInputs, currentPhase, phaseToShow, type PhaseInputs } from "~/domain";
 
 // Spec #20, stories 41–46 and the `currentPhase` rule; GLOSSARY "Phase" and
 // "Session"; ticket #31. Standards until the standards are published,
@@ -104,5 +104,49 @@ describe("phaseToShow", () => {
     { name: "an unknown phase: the current one", asked: "medals", current: "after", expected: "after" },
   ] as const)("$name", ({ asked, current, expected }) => {
     expect(phaseToShow(asked, current)).toBe(expected);
+  });
+});
+
+// Spec #20, stories 49 and 50; ticket #35. Each Games sport is in its own
+// phase (its own days, Selection and first Session). Several sports together,
+// and the Games as a whole, are in the phase their combined inputs give: Live
+// from the first Session (or day-one midnight) in any of them, After once the
+// last of them has ended.
+describe("combinedPhaseInputs", () => {
+  // LA 2028 (UTC−7 in July), standards published for the whole Games.
+  const games = { venueZone: "America/Los_Angeles", standardsPublishedOn: "2026-10-01", firstSelectedOn: null, firstSessionStart: null };
+  const football: PhaseInputs = { ...games, startDate: "2028-07-12", endDate: "2028-07-29" };
+  const athletics: PhaseInputs = { ...games, startDate: "2028-07-15", endDate: "2028-07-24", firstSessionStart: "2028-07-15T08:00" };
+  const cycling: PhaseInputs = { ...games, startDate: "2028-07-14", endDate: "2028-07-16", firstSelectedOn: "2028-06-20" };
+  const hockey: PhaseInputs = { ...games, startDate: "2028-07-13", endDate: "2028-07-28", firstSessionStart: "2028-07-13T09:00" };
+
+  it.each([
+    { name: "a single sport keeps its own phase", sports: [athletics], now: "2028-07-14T12:00:00Z", expected: "qualification" },
+    { name: "Selection once the first Entry in any of them is Selected", sports: [athletics, cycling], now: "2028-06-21T12:00:00Z", expected: "selection" },
+    { name: "still Selection before the first of them starts", sports: [athletics, cycling], now: "2028-07-14T06:59:00Z", expected: "selection" },
+    {
+      name: "Live from day-one midnight of a sport with no Session, though another sport's first Session is later",
+      sports: [athletics, cycling],
+      now: "2028-07-14T07:00:00Z",
+      expected: "live",
+    },
+    { name: "Live at the earliest first Session (09:00 LA)", sports: [athletics, hockey], now: "2028-07-13T16:00:00Z", expected: "live" },
+    { name: "not yet Live one minute before it", sports: [athletics, hockey], now: "2028-07-13T15:59:00Z", expected: "qualification" },
+    { name: "Live while any of them is still going", sports: [cycling, athletics], now: "2028-07-20T12:00:00Z", expected: "live" },
+    { name: "After once the last of them has ended", sports: [cycling, athletics], now: "2028-07-25T07:00:00Z", expected: "after" },
+    {
+      name: "the Games as a whole are Live at the first day in any sport",
+      sports: [athletics, cycling, hockey, football],
+      now: "2028-07-12T07:00:00Z",
+      expected: "live",
+    },
+    {
+      name: "the Games as a whole are still Live while one sport is After",
+      sports: [athletics, cycling, hockey, football],
+      now: "2028-07-29T12:00:00Z",
+      expected: "live",
+    },
+  ] satisfies { name: string; sports: PhaseInputs[]; now: string; expected: string }[])("$name", ({ sports, now, expected }) => {
+    expect(currentPhase(combinedPhaseInputs(sports), new Date(now))).toBe(expected);
   });
 });

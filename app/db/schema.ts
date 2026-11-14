@@ -210,6 +210,30 @@ export const competition = sqliteTable(
 );
 
 /**
+ * One sport's first and last competition day at a Games (spec #20, story 60;
+ * ticket #35), curated by the owner in the Run sheet's Schedules step until
+ * the full session schedule is imported. Each sport is in its own Phase from
+ * these days. Always inside the Games' own dates.
+ */
+export const gamesSportWindow = sqliteTable(
+  "games_sport_window",
+  {
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id, { onDelete: "cascade" }),
+    sport: text("sport").notNull(),
+    /** YYYY-MM-DD, venue-local. */
+    firstDay: text("first_day").notNull(),
+    lastDay: text("last_day").notNull(),
+    /** Where the owner read the days (e.g. the organiser's competition schedule). */
+    sourceUrl: text("source_url").notNull(),
+    /** Belgian date of the owner's last check. */
+    checkedOn: text("checked_on").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.competitionId, t.sport] })],
+);
+
+/**
  * An incoming identity that matched no Athlete (spec #20, stories 4 and 6),
  * waiting for the owner to link it, create an Athlete from it, or mark it
  * "not an Athlete". One item per external ID.
