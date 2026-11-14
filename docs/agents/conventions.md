@@ -14,6 +14,8 @@ Set by the walking skeleton (#21). Every later ticket follows them. Vocabulary: 
 | `app/context.ts` | `cloudflareContext` (bindings) and `dbFrom(context)` for loaders and actions. |
 | `app/clock.ts` | `now()`: the only place the I/O shell reads the time. |
 | `app/ingest/` | Queue consumer, raw-copy keeping, the source run (`source-run.ts`), the adapter seam (`source-adapter.ts`), the Belgian-row writer (`belgian-rows.ts`) and merge-queue resolution. Source adapters go in `app/ingest/sources/<source>.ts`, registered in `app/ingest/sources/index.ts`. See "Sources and adapters". |
+| `app/curate/` | The Run sheet's steps (loader, action, component per step) and its session log. See "The Run sheet". |
+| `app/owner.ts` | Owner-only gate for every `/curate` route, called first by the fetch handler. |
 | `app/format.ts` | Shared display formats (dates, ordinals). |
 | `app/backup/` | Weekly D1 export to R2 (`backups/`, last 12), run by the scheduled handler on its own cron. |
 | `app/offline.tsx`, `pwa/service-worker.ts`, `public/` | Installable app: service worker (built by vite-plugin-pwa, own `tsconfig.pwa.json`), offline fallback pages, icons. The manifest is in `vite.config.ts`. |
@@ -71,7 +73,7 @@ Runs in workerd through `@cloudflare/vitest-plugin`, with a real local D1 (all m
 Adapters are tested against real federation payloads.
 
 1. `npm run record-fixture -- world-athletics thiam-results.json "https://…"` writes `tests/fixtures/sources/world-athletics/thiam-results.json` (byte for byte) and `thiam-results.json.meta.json` (`url`, `status`, `contentType`, `recordedAt`).
-2. In the test: `import body from "../fixtures/sources/<source>/<file>?raw"` and `import meta from "…/<file>.meta.json"`, then `stubOutboundFetch([{ ...meta, body }])`. Binary payloads (FIS ZIPs) need a loader that yields a `Uint8Array`; the first binary adapter adds it here.
+2. In the test: `import body from "../fixtures/sources/<source>/<file>?raw"` and `import meta from "…/<file>.meta.json"`, then `stubOutboundFetch([{ ...meta, body }])`. Binary payloads (FIS ZIPs): `import zip from "…/<file>.zip?bytes"` yields a `Uint8Array` byte for byte (the `bytes-fixtures` plugin in `vitest.config.ts`); the stub then sends its `content-length`, as a real download does. See `tests/fixtures/sources/fis-points-lists/index.ts`.
 3. Keep fixtures small: record one realistic page, not a whole season. Record by hand from a public endpoint only; never in CI; never from Olympedia, Olympics.com or Totallympics.
 4. When a source changes format, record a new fixture next to the old one; the old one stays as a regression case.
 5. A payload too big to keep whole (e.g. Team Belgium's 1 MB sitemaps) may be trimmed by hand after recording; say so in a `trimmedByHand` field of its `.meta.json`. A source whose test needs many files gets an `index.ts` next to them exporting the ready-to-stub list (see `tests/fixtures/sources/team-belgium/index.ts`).
@@ -87,25 +89,38 @@ Set by the first Automatic source, ISU speed skating (#23). Every later Automati
 1. stamps `lastAttemptAt`;
 2. calls the adapter with a `SourceRun`;
 3. on success stamps `lastSuccessAt`, and `lastChangeAt` when any row was inserted or changed;
-4. on `SourceBlocked` (401, 403, 451 or a Cloudflare bot challenge) sets `blockedAt` / `blockedReason` and acks: a refusal is never retried, the source is Assisted until the owner retries it ("Fetch now" on `/curate/sources` clears the block);
+4. on `SourceBlocked` (401, 403, 451 or a Cloudflare bot challenge) sets `blockedAt` / `blockedReason` and acks: a refusal is never retried, the source is Assisted until the owner retries it ("Fetch now" or "Retry fetch now" in the Run sheet's Source health step, `/curate/run/source-health`, clears the block);
 5. on any other error stamps `lastFailureAt` / `lastError` and rethrows, so the job is retried.
 
 **The adapter seam** (`app/ingest/source-adapter.ts`). An adapter is `{ run(run: SourceRun) }` and knows only its source's URLs and payloads:
 - `run.now`, and `run.since` (start of the last successful run, null on the first): fetch only what changed since; on the first run choose a bounded backfill (ISU: one year).
-- `run.fetch(url)` fetches politely, keeps the body as received in R2 and a `raw_copy` row, and returns `{ text, rawCopyId }`. Never call `fetch()` directly. Binary or streamed payloads (FIS ZIPs) will need a sibling of `fetch` on `SourceRun`; add it there, not in the adapter.
+- `run.fetch(url)` fetches politely, keeps the body as received in R2 and a `raw_copy` row, and returns `{ text, rawCopyId }`. Never call `fetch()` directly.
+- `run.fetchStream(url)` is its sibling for large or binary payloads (FIS ZIPs): the body streams into R2 and comes back as a stream read from R2 (`{ body, rawCopyId }`), so a job never holds it whole (128 MB). `app/ingest/zip-stream.ts` reads a ZIP from such a stream entry by entry, line by line.
+- A source that needs a credential (World Triathlon's API key) reads it with `run.secret(name)` and sends it as a header: `run.fetch(url, { headers: { apikey } })`. Never put it in the URL, which is kept with the raw copy. Without the credential the adapter throws `SourceBlocked` before fetching, so the source shows as blocked (Assisted) until the owner sets the Worker secret (`wrangler secret put <NAME> --env test|live`; `.dev.vars` locally). Tests pass it as `deliverIngestJobs(jobs, { NAME: "test-key" })`.
+- When the API has no real payload to record (no credential yet), build fixtures by hand from its documented response examples, use made-up names and IDs, and say so in a `builtFromDocumentation` field of each `.meta.json`. Replace them with a recorded run once the credential exists.
 - `run.rows` takes what was parsed: `competition()` (returns its id; only qualification-relevant senior competitions), `result()` (one Belgian performance; leave out DNS and withdrawals) and `entrants()` (a competition's entry list, replaced as a whole). Each input carries the `rawCopyId` it was parsed from, so every row links to its raw copy. A `sourceRef` (the source's own ID) makes a re-fetch update the same row instead of duplicating it.
 - The writer keeps Belgian rows only (`person.nationality === "BEL"`), but filter early anyway. It matches identities with `identityMatch` (IF ID, then name + date of birth), remembers the IF ID on a name + date-of-birth match, moves "Athlete since" back for an earlier performance, and sends anything unmatched to the merge queue with its results attached.
 - Adapters never touch D1, R2, identity rules or health.
 
-**Merge queue.** An unmatched person becomes one `merge_queue_item` per IF ID (`scheme` + `value`); their results wait on it (`result.mergeQueueItemId`). `resolveMergeQueueItem(d1, itemId, resolution)` in `app/ingest/merge-queue.ts` links them to an Athlete, creates a new Athlete (from the item, "Athlete since" from its earliest result) or marks them "not an Athlete"; later runs then match on the IF ID, or keep attaching to the not-an-Athlete item. `/curate/merge-queue` is the bare page for it until the Run sheet (#24) takes over.
+**Merge queue.** An unmatched person becomes one `merge_queue_item` per IF ID (`scheme` + `value`); their results wait on it (`result.mergeQueueItemId`). `resolveMergeQueueItem(d1, itemId, resolution)` in `app/ingest/merge-queue.ts` links them to an Athlete, creates a new Athlete (from the item, "Athlete since" from its earliest result) or marks them "not an Athlete"; later runs then match on the IF ID, or keep attaching to the not-an-Athlete item. The Run sheet's Merge queue step (`/curate/run/merge-queue`) is the owner's page for it.
 
 **Results and Upcoming.** Until Teams and Entries arrive (#27), a `result` belongs to an Athlete (or a merge-queue item) and names its event as text; team events (ISU team pursuit) are not ingested yet. An `entrant` is an Athlete named on a competition's entry list; the Athlete page lists those competitions that have not ended yet under Upcoming.
+
+**Manual results** (#26, `app/curate/manual-results.tsx`). A result is due when an Athlete is an `entrant` of a competition whose Source has tier `manual` and whose `endDate` has come (Belgian date), and they have no result there yet. The form keeps what the owner typed as a JSON raw copy whose `url` is the source URL (the PDF), then writes through the same `belgianRows(...).result()` writer, passing `athleteId` instead of `person` (no identity matching). DNS is recorded only here and never moves "Athlete since"; "Did not compete" writes no result and removes the `entrant` row.
 
 **Adding an Automatic source:** record fixtures of one realistic run (trim by hand where large, note it in `trimmedByHand`), export the ready-to-stub list from `tests/fixtures/sources/<source>/index.ts`, write the Worker test against `deliverIngestJobs([{ kind: "fetch-source", source }])`, then the adapter, its registry entry and the Source row. Before it counts as Automatic, the owner runs "Fetch now" on the deployed test copy; a refusal shows it as blocked (Assisted).
 
 ## Offline reading and curation routes
 
-The service worker caches every page and its React Router data (`<path>.data`) as it is viewed, network first, and precaches the app shell. **Curation routes must live under `/curate`** (`CURATION_PATH` in `app/domain/offline-reading.ts`): they are never cached, and offline the root layout replaces them with an offline message, so the owner never fills in a stale form. Anything else counts as a reader page. Static files are served as named (`assets.html_handling: "none"`). The service worker is registered in production builds only.
+The service worker caches every page and its React Router data (`<path>.data`) as it is viewed, network first, and precaches the app shell. **Curation routes must live under `/curate`** (`CURATION_PATH` in `app/domain/offline-reading.ts`): they are never cached, and offline the root layout replaces them with an offline message, so the owner never fills in a stale form. Anything else counts as a reader page.
+
+**Curation is owner-only.** The fetch handler refuses every `/curate` path (and its `.data` request, in any case or encoding: `isCurationPath`) with a 403 unless Cloudflare Access's `Cf-Access-Authenticated-User-Email` is `OWNER_EMAIL` (a var per environment in `wrangler.jsonc`; see `app/owner.ts`). The local dev copy (`APP_ENV` "dev") has no Access in front, so a request without that header counts as the owner's there; deployed copies fail closed. In tests, `signedInAs(email)` from `tests/support/worker.ts` sends the header, and `getDeployed(path)` runs a request as a deployed copy would. Static files are served as named (`assets.html_handling: "none"`). The service worker is registered in production builds only.
+
+## The Run sheet (curation workspace)
+
+Set by #24. The weekly session is `/curate/run/<step>` (`app/routes/curate.run.tsx`); `/curate` opens its first step. The steps, their order, time estimates, per-item minutes and one-line purposes are data in `WEEKLY_RUN_SHEET` (`app/domain/run-sheet.ts`); `runSheetProgress` decides ✓ (empty or passed) and the estimated time left.
+
+**Adding a step's items** (#25, #26, …): put the step's loader, action and component in `app/curate/<step>.tsx` (see `source-health.tsx`, `merge-queue.tsx`): `load…(db, now)` returns the items plus `open` (the item count), `actOn…(…)` does one owner action and returns the session-log message. Then in `curate.run.tsx` add the open count to `loadSteps`, dispatch the step's intents in `action`, and render the component. Every action is logged through `logAction` (`app/curate/session.ts`); "next" with items left logs a pass, which ticks the step for the rest of the session. A session opens with its first logged action and closes on "Finish session" (the last step's Next).
 
 ## Cron triggers
 
@@ -123,4 +138,4 @@ With the Cloudflare Vite plugin, the environment is chosen at **build** time (`C
 
 Placeholders in `wrangler.jsonc` (marked `PLACEHOLDER`) must be replaced before the first deploy: the custom domain (`bsh.example.com`, `test.bsh.example.com`) and the D1 database ids.
 
-Cloudflare Access is configured in the Zero Trust dashboard, not in code: one self-hosted application per copy covering the whole domain, an email allowlist policy with one-time PIN login, and (later) a Bypass policy for the iCal feed path only.
+Cloudflare Access is configured in the Zero Trust dashboard, not in code: one self-hosted application per copy covering the whole domain, an email allowlist policy with one-time PIN login, and (later) a Bypass policy for the iCal feed path only. The owner's Access email goes in `OWNER_EMAIL` (placeholder `owner@example.com` in `env.test` and `env.live`).

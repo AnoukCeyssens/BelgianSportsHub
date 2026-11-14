@@ -58,7 +58,7 @@ describe("World Athletics source", () => {
     await runAfterVanDamme();
 
     const rows = await getDb(env.DB).select({ event: schema.result.event }).from(schema.result);
-    const queue = await (await get("/curate/merge-queue")).text();
+    const queue = await (await get("/curate/run/merge-queue")).text();
     // Jonathan Sacoor ran only the promotional 400 m; the U18 winners are youths.
     expect(queue).not.toContain("Jonathan SACOOR");
     expect(queue).not.toContain("Maya WINTQUIN");

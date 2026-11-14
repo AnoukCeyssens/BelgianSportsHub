@@ -10,18 +10,48 @@ export function get(path: string, init?: RequestInit) {
 }
 
 /** POST a form to an action through the fetch handler. Redirects are returned, not followed. */
-export function post(path: string, form: Record<string, string> = {}) {
-  return get(path, { method: "POST", body: new URLSearchParams(form) });
+export function post(path: string, form: Record<string, string> = {}, init?: RequestInit) {
+  return get(path, { method: "POST", body: new URLSearchParams(form), ...init });
 }
 
-/** Deliver ingest jobs to the queue consumer; returns which messages were acked or retried. */
-export async function deliverIngestJobs(jobs: IngestJob[]) {
+/**
+ * Request options for a signed-in viewer: Cloudflare Access puts the email
+ * of whoever passed its login on every request. Without it (local dev and
+ * tests), the dev copy treats the request as the owner's.
+ */
+export function signedInAs(email: string): RequestInit {
+  return { headers: { "Cf-Access-Authenticated-User-Email": email } };
+}
+
+/** The owner's email in local dev and tests (OWNER_EMAIL in wrangler.jsonc's top level). */
+export const OWNER_EMAIL = "owner@localhost";
+
+/**
+ * GET through the fetch handler as a deployed copy (test or live) would run:
+ * with that copy's APP_ENV, so there is no local-dev shortcut for the owner.
+ */
+export async function getDeployed(path: string, init?: RequestInit) {
+  const ctx = createExecutionContext();
+  const res = await worker.fetch(
+    new Request(`https://bsh.test${path}`, { redirect: "manual", ...init }) as Request<unknown, IncomingRequestCfProperties>,
+    { ...env, APP_ENV: "test", OWNER_EMAIL: "owner@example.com" } as Env,
+    ctx,
+  );
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+/**
+ * Deliver ingest jobs to the queue consumer; returns which messages were acked
+ * or retried. `secrets` adds Worker secrets (e.g. a source's API key) for this delivery.
+ */
+export async function deliverIngestJobs(jobs: IngestJob[], secrets: Record<string, string> = {}) {
   const batch = createMessageBatch<IngestJob>(
     "bsh-ingest-dev",
     jobs.map((body, i) => ({ id: `msg-${i + 1}`, timestamp: new Date(), attempts: 1, body })),
   );
   const ctx = createExecutionContext();
-  await worker.queue(batch, env, ctx);
+  await worker.queue(batch, { ...env, ...secrets }, ctx);
   await waitOnExecutionContext(ctx);
   return getQueueResult(batch, ctx);
 }

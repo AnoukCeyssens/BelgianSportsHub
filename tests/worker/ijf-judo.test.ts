@@ -76,7 +76,7 @@ describe("IJF judo source", () => {
   it("sends a Belgian it cannot match to the merge queue", async () => {
     await runZagreb();
 
-    const queue = await (await get("/curate/merge-queue")).text();
+    const queue = await (await get("/curate/run/merge-queue")).text();
     expect(queue).toContain("Olivier NAERT");
     expect(queue).toContain("58321");
   });

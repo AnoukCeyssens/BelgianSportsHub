@@ -58,7 +58,7 @@ describe("FIE fencing source", () => {
   it("sends Belgians it cannot match to the merge queue under their FIE ID", async () => {
     await runBerne();
 
-    const queue = await (await get("/curate/merge-queue")).text();
+    const queue = await (await get("/curate/run/merge-queue")).text();
     expect(queue).toContain("VAN DE STEENE Adrian");
     expect(queue).toContain("59058");
   });

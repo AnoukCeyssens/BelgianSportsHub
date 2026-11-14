@@ -1,0 +1,6 @@
+{
+  "url": "https://api.worldarchery.org/v3/COMPETITIONS/?DisciplineId=1&StartDate=2026-11-14&EndDate=2026-11-28&RBP=All",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:03:13.133Z"
+}

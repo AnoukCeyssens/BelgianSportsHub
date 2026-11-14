@@ -15,8 +15,25 @@ export type OfflineReading = "reader" | "curation";
 
 /** How a same-origin page or data request (React Router's "<path>.data") reads offline. */
 export function offlineReading(pathname: string): OfflineReading {
-  const page = pageOf(pathname);
-  return page === CURATION_PATH || page.startsWith(`${CURATION_PATH}/`) ? "curation" : "reader";
+  return isCurationPath(pathname) ? "curation" : "reader";
+}
+
+/**
+ * Whether a page or its data request ("<path>.data") belongs to the
+ * (owner-only) curation area. Route matching ignores case and decodes the
+ * path, so this does too: "/Curate" or "/%63urate" are still curation.
+ */
+export function isCurationPath(pathname: string): boolean {
+  const page = pageOf(decoded(pathname).replace(/\/{2,}/g, "/").toLowerCase());
+  return page === CURATION_PATH || page.startsWith(`${CURATION_PATH}/`);
+}
+
+function decoded(pathname: string) {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
 }
 
 /** "/athletes/x.data" → "/athletes/x"; "/_.data" → "/"; "/curate/_.data" → "/curate/". */

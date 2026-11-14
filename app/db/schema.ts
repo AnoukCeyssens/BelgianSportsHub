@@ -24,6 +24,7 @@ export const EXTERNAL_ID_SCHEMES = {
   "team-belgium": "Team Belgium",
   "world-athletics": "World Athletics",
   isu: "ISU",
+  fis: "FIS",
   olympedia: "Olympedia",
   wikidata: "Wikidata",
 } as const;
@@ -93,6 +94,62 @@ export const source = sqliteTable("source", {
   /** Set when the source refused a Worker request; it is then Assisted until cleared. */
   blockedAt: text("blocked_at"),
   blockedReason: text("blocked_reason"),
+  /**
+   * When the owner last acknowledged the source's problem in the Run sheet
+   * (acknowledge, keep on Assisted, or retry). A newer problem reopens it.
+   */
+  acknowledgedAt: text("acknowledged_at"),
+});
+
+/**
+ * One curation session on a Run sheet (spec #20, Curation workspace). Open
+ * until the owner finishes it on the last step; the next visit starts a new one.
+ */
+export const runSheetSession = sqliteTable("run_sheet_session", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** "weekly" (the Live day pass comes later). */
+  sheet: text("sheet").notNull(),
+  startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"),
+});
+
+/**
+ * The session log: every action the owner took in a session, in order. A
+ * "pass" entry marks a step the owner moved on from (✓ in the rail).
+ */
+export const runSheetLog = sqliteTable("run_sheet_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => runSheetSession.id),
+  at: text("at").notNull(),
+  /** Run sheet step key, e.g. "source-health". */
+  step: text("step").notNull(),
+  /** e.g. "pass", "acknowledge", "retry", "link". */
+  action: text("action").notNull(),
+  message: text("message").notNull(),
+});
+
+/**
+ * One Monthly checklist item (spec #20, story 111): a slow-moving source the
+ * owner looks at by hand, grouped under a topic (e.g. "2030 IF qualification
+ * systems" → "FIS"). Due in the weekly Run sheet from `dueOn`; ticking it
+ * moves `dueOn` `everyMonths` months past the tick.
+ */
+export const checklistItem = sqliteTable("checklist_item", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  topic: text("topic").notNull(),
+  name: text("name").notNull(),
+  url: text("url"),
+  everyMonths: integer("every_months").notNull().default(1),
+  /** YYYY-MM-DD (Belgian date). */
+  dueOn: text("due_on").notNull(),
+  /** ISO instant of the last tick. */
+  lastCheckedAt: text("last_checked_at"),
+  /** "no change" | "changed" at the last tick. */
+  lastOutcome: text("last_outcome"),
+  /** What changed, when the owner said so. */
+  lastNote: text("last_note"),
 });
 
 /** A competition as a source publishes it: a Championship, the Games, or a circuit event. */

@@ -56,7 +56,7 @@ describe("World Aquatics source", () => {
     expect(rows).toEqual([
       { event: "Women's 50m Freestyle (25m)", place: 10, url: "https://api.worldaquatics.com/fina/events/91e75cea-cb84-46e4-8eb6-e570aacf2625" },
     ]);
-    expect(await (await get("/curate/merge-queue")).text()).toContain("Florine GASPARD");
+    expect(await (await get("/curate/run/merge-queue")).text()).toContain("Florine GASPARD");
   });
 
   it("keeps the World Cups and Championships, not Grand Prix or youth events", async () => {

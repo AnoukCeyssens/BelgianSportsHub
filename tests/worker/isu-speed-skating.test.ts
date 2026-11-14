@@ -96,7 +96,7 @@ describe("ISU speed skating source", () => {
   it("sends a Belgian it cannot match to the merge queue instead of creating an Athlete", async () => {
     await runWorldCup1();
 
-    const queue = await (await get("/curate/merge-queue")).text();
+    const queue = await (await get("/curate/run/merge-queue")).text();
     expect(queue).toContain("Indra Medard");
     expect(queue).toContain("4 Oct 1998");
     expect(queue).toContain("ISU 2049");
@@ -106,7 +106,7 @@ describe("ISU speed skating source", () => {
   it("makes a queued Belgian an Athlete, with his results, once the owner resolves the identity", async () => {
     await runWorldCup1();
 
-    const res = await post("/curate/merge-queue", { item: (await queuedItem("2049")).id, resolution: "create" });
+    const res = await post("/curate/run/merge-queue", { item: (await queuedItem("2049")).id, intent: "create" });
 
     expect(res.status).toBe(303);
     const list = await (await get("/athletes")).text();
@@ -119,14 +119,14 @@ describe("ISU speed skating source", () => {
     expect(html).toContain("1500m Men Division B");
     expect(html).toContain("18th");
     expect(html).toContain("1:49.423");
-    expect(await (await get("/curate/merge-queue")).text()).not.toContain("Indra Medard");
+    expect(await (await get("/curate/run/merge-queue")).text()).not.toContain("ISU 2049");
   });
 
   it("links a queued identity to an existing Athlete, who then gets the results", async () => {
     await runWorldCup1();
     const medard = await seedAthlete(env.DB, { name: "Indra Médard", sport: "Speed skating" });
 
-    await post("/curate/merge-queue", { item: (await queuedItem("2049")).id, resolution: "link", athlete: medard });
+    await post("/curate/run/merge-queue", { item: (await queuedItem("2049")).id, intent: "link", athlete: medard });
 
     const html = await athletePage(medard);
     expect(html).toContain("ISU 2049");
@@ -135,12 +135,12 @@ describe("ISU speed skating source", () => {
 
   it("leaves an identity marked not an Athlete off the roster, also on later runs", async () => {
     await runWorldCup1();
-    await post("/curate/merge-queue", { item: (await queuedItem("2049")).id, resolution: "not-an-athlete" });
+    await post("/curate/run/merge-queue", { item: (await queuedItem("2049")).id, intent: "not-an-athlete" });
 
     await setSource(env.DB, ISU, { lastSuccessAt: ISU_WORLD_CUP_1_RUN.lastSuccessAt });
     await runWorldCup1();
 
-    expect(await (await get("/curate/merge-queue")).text()).not.toContain("Indra Medard");
+    expect(await (await get("/curate/run/merge-queue")).text()).not.toContain("ISU 2049");
     expect(await (await get("/athletes")).text()).not.toContain("Indra Medard");
   });
 
@@ -220,7 +220,7 @@ describe("ISU speed skating source", () => {
     expect(source.blockedAt).toBe(ISU_WORLD_CUP_1_RUN.now);
     expect(source.blockedReason).toContain("403");
     expect(source.lastSuccessAt).toBe(ISU_WORLD_CUP_1_RUN.lastSuccessAt);
-    const page = await (await get("/curate/sources")).text();
+    const page = await (await get("/curate/run/source-health")).text();
     expect(page).toMatch(/ISU speed skating.*?Assisted.*?blocked/s);
   });
 

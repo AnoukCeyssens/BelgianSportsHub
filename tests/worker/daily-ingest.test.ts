@@ -20,8 +20,6 @@ async function addSource(key: string, row: Partial<typeof schema.source.$inferIn
 
 describe("daily ingest cron", () => {
   it("queues one job per Automatic source whose cadence is due, and none for blocked, Assisted or not-yet-due ones", async () => {
-    // Every migrated source fetched just before the cron, so only the ones arranged below can be due.
-    await getDb(env.DB).update(schema.source).set({ lastSuccessAt: "2026-11-16T03:59:00.000Z", blockedAt: null });
     await setSource(env.DB, "isu-speed-skating", { lastSuccessAt: "2026-11-13T04:01:00.000Z", blockedAt: null });
     await addSource("weekly-due", { cadenceDays: 7, lastSuccessAt: "2026-11-09T04:05:00.000Z" });
     await addSource("weekly-not-due", { cadenceDays: 7, lastSuccessAt: "2026-11-13T04:05:00.000Z" });
@@ -30,10 +28,13 @@ describe("daily ingest cron", () => {
 
     const queued = await runScheduled(DAILY_INGEST_CRON, "2026-11-16T04:00:00.000Z");
 
-    expect(queued).toEqual([
-      { kind: "fetch-source", source: "isu-speed-skating" },
-      { kind: "fetch-source", source: "weekly-due" },
-    ]);
+    // Other Automatic sources from the migrations (never fetched here, so due) are queued too.
+    const sources = queued.map((job) => job.kind === "fetch-source" && job.source);
+    expect(sources).toContain("isu-speed-skating");
+    expect(sources).toContain("weekly-due");
+    expect(sources).not.toContain("weekly-not-due");
+    expect(sources).not.toContain("blocked");
+    expect(sources).not.toContain("pasted");
   });
 
   it("lets the owner fetch a source now, which clears a block and runs it", async () => {
@@ -44,15 +45,15 @@ describe("daily ingest cron", () => {
     });
     fixClock(ISU_WORLD_CUP_1_RUN.now);
     stubOutboundFetch(isuWorldCup1Run);
-    expect(await (await get("/curate/sources")).text()).toContain("Fetch now");
+    expect(await (await get("/curate/run/source-health")).text()).toContain("Fetch now");
 
-    const res = await post("/curate/sources", { source: "isu-speed-skating" });
+    const res = await post("/curate/run/source-health", { intent: "retry", source: "isu-speed-skating" });
 
     expect(res.status).toBe(303);
     // Through the real local queue, so wait for the consumer to finish.
     await vi.waitFor(
       async () => {
-        const page = await (await get("/curate/sources")).text();
+        const page = await (await get("/curate/run/source-health")).text();
         // The ISU row: Automatic again, fetched just now, healthy.
         const row = page.match(/<tr><td>ISU speed skating.*?<\/tr>/s)?.[0] ?? "";
         expect(row).toContain("<td>Automatic</td>");
