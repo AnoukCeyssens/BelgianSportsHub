@@ -183,6 +183,13 @@
       "when": 1794671380346,
       "tag": "0025_sport_vocabulary",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794672862630,
+      "tag": "0026_assisted_and_manual_sources",
+      "breakpoints": true
     }
   ]
 }

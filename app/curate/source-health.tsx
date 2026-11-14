@@ -4,7 +4,7 @@
 // "Fetch now" in the table runs any Automatic source straight away (the owner's
 // test fetch before a new source counts as Automatic).
 import { asc, eq } from "drizzle-orm";
-import { Form } from "react-router";
+import { Form, Link } from "react-router";
 import { type Db, schema } from "~/db/client";
 import { sourceAttention, sourceHealth, type SourceProblem, type SourceTier } from "~/domain";
 import { formatInstant } from "~/format";
@@ -60,6 +60,9 @@ export function SourceHealthStep({ data, problemsOnly = false }: { data: SourceH
   return (
     <>
       {problemsOnly ? null : <div className="card">
+        <p className="meta">
+          Tier, cadence, sport, URL and notes of every source: <Link to="/curate/sources">Edit sources</Link>
+        </p>
         <table>
           <thead>
             <tr>

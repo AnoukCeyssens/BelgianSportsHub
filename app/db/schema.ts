@@ -123,6 +123,10 @@ export const source = sqliteTable("source", {
   columnMapping: text("column_mapping", { mode: "json" }).$type<Record<string, string>>(),
   /** When a paste for this source was last confirmed (the Paste imports step's cadence). */
   lastPastedAt: text("last_pasted_at"),
+  /** Where the owner reads it (results page, database, API root). */
+  url: text("url"),
+  /** How to use it: access quirks, PDFs, what it covers. */
+  notes: text("notes"),
 });
 
 /**
