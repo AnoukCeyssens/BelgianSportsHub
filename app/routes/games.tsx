@@ -100,7 +100,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       colour: sportColour(s.sport),
     })),
     panel: await loadPhasePanel(db, games, shown, at, { sports: names, chosen }, search.get("day")),
-    owner: isOwner(request, context.get(cloudflareContext).env),
+    owner: await isOwner(request, context.get(cloudflareContext).env),
   };
 }
 

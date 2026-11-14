@@ -3,6 +3,8 @@ import { createExecutionContext, createMessageBatch, createScheduledController, 
 import { env, exports } from "cloudflare:workers";
 import worker from "../../workers/app";
 import type { IngestJob } from "~/ingest/queue";
+import { ACCESS_AUD, ACCESS_TEAM_DOMAIN, accessCerts, accessJwt } from "./access";
+import { stubOutboundFetch, type RecordedResponse } from "./outbound-fetch";
 
 /** GET a page or feed through the fetch handler. Redirects are returned, not followed. */
 export function get(path: string, init?: RequestInit) {
@@ -16,25 +18,47 @@ export function post(path: string, form: Record<string, string> = {}, init?: Req
 
 /**
  * Request options for a signed-in viewer: Cloudflare Access puts the email
- * of whoever passed its login on every request. Without it (local dev and
- * tests), the dev copy treats the request as the owner's.
+ * of whoever passed its login on every request (and a signed JWT saying the
+ * same, which getDeployed() adds). Without it (local dev and tests), the dev
+ * copy treats the request as the owner's.
  */
 export function signedInAs(email: string): RequestInit {
-  return { headers: { "Cf-Access-Authenticated-User-Email": email } };
+  return { headers: { [ACCESS_EMAIL_HEADER]: email } };
 }
+
+const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
+const ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
 
 /** The owner's email in local dev and tests (OWNER_EMAIL in wrangler.jsonc's top level). */
 export const OWNER_EMAIL = "owner@localhost";
 
+/** The vars of the deployed test copy: its owner and its Cloudflare Access application. */
+const DEPLOYED = { APP_ENV: "test", OWNER_EMAIL: "owner@example.com", ACCESS_TEAM_DOMAIN, ACCESS_AUD };
+
+export type DeployedOptions = {
+  /** Overrides of the copy's vars, e.g. an empty ACCESS_AUD. */
+  vars?: Partial<typeof DEPLOYED>;
+  /** What the team's certs endpoint answers (default: the Access key). */
+  certs?: RecordedResponse[];
+};
+
 /**
  * GET through the fetch handler as a deployed copy (test or live) would run:
- * with that copy's APP_ENV, so there is no local-dev shortcut for the owner.
+ * with that copy's APP_ENV, so there is no local-dev shortcut for the owner,
+ * and behind Cloudflare Access: a request signed in with signedInAs(email)
+ * also carries a valid Access JWT for that email (unless it brings its own
+ * Cf-Access-Jwt-Assertion), checked against the stubbed team certs.
  */
-export async function getDeployed(path: string, init?: RequestInit) {
+export async function getDeployed(path: string, init?: RequestInit, options: DeployedOptions = {}) {
+  const vars = { ...DEPLOYED, ...options.vars };
+  stubOutboundFetch(options.certs ?? [await accessCerts(vars.ACCESS_TEAM_DOMAIN || ACCESS_TEAM_DOMAIN)]);
+  const headers = new Headers(init?.headers);
+  const email = headers.get(ACCESS_EMAIL_HEADER);
+  if (email && !headers.has(ACCESS_JWT_HEADER)) headers.set(ACCESS_JWT_HEADER, await accessJwt({ email }));
   const ctx = createExecutionContext();
   const res = await worker.fetch(
-    new Request(`https://bsh.test${path}`, { redirect: "manual", ...init }) as Request<unknown, IncomingRequestCfProperties>,
-    { ...env, APP_ENV: "test", OWNER_EMAIL: "owner@example.com" } as Env,
+    new Request(`https://bsh.test${path}`, { redirect: "manual", ...init, headers }) as Request<unknown, IncomingRequestCfProperties>,
+    { ...env, ...vars } as Env,
     ctx,
   );
   await waitOnExecutionContext(ctx);
@@ -49,7 +73,7 @@ export async function getWithSecrets(path: string, secrets: Record<string, strin
   const ctx = createExecutionContext();
   const res = await worker.fetch(
     new Request(`https://bsh.test${path}`, { redirect: "manual" }) as Request<unknown, IncomingRequestCfProperties>,
-    { ...env, ...(deployed ? { APP_ENV: "test", OWNER_EMAIL: "owner@example.com" } : {}), ...secrets } as Env,
+    { ...env, ...(deployed ? DEPLOYED : {}), ...secrets } as Env,
     ctx,
   );
   await waitOnExecutionContext(ctx);

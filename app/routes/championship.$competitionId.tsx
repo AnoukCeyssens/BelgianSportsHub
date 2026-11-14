@@ -43,7 +43,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     current,
     shown,
     panel: await loadPhasePanel(db, competition, shown, at, undefined, search.get("day")),
-    owner: isOwner(request, context.get(cloudflareContext).env),
+    owner: await isOwner(request, context.get(cloudflareContext).env),
   };
 }
 
