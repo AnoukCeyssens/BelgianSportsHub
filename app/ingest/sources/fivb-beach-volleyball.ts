@@ -6,16 +6,18 @@
 // 2. for each qualification-relevant one (the Games, World Championships,
 //    Beach Pro Tour, CEV European Championships and Continental Cup), its
 //    team list: the competition is kept when a Belgian pair plays it, and its
-//    Belgian players are its entry list behind Upcoming until it ends.
-// A beach volleyball result belongs to the pair, which is a Team (ADR 0001):
-// results and rankings wait for Teams (#27) and rankings ingest (#33).
+//    Belgian players are its entry list behind Upcoming until it ends; once it
+//    has ended, each ranked Belgian pair's final rank is a result of that
+//    pair's Team (ADR 0001: every standing partnership is its own Team).
+// Rankings wait for rankings ingest (#33).
 import type { CompetitionKind, Person, SourceAdapter } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 import { elements, visPerson, visUrl } from "./fivb-vis";
 
 const SPORT = "Beach volleyball";
-/** Past tournaments only add competitions until Teams arrive, so the first run looks back a month only. */
+/** Each tournament in the window costs a request, so the first run looks back a month only. */
 const FIRST_RUN_LOOKBACK_DAYS = 30;
+const EVENT_BY_GENDER: Record<string, string> = { "0": "Men", "1": "Women" };
 const ENTRY_LIST_HORIZON_DAYS = 14;
 
 /** VIS BeachTournamentType values that are qualification-relevant senior tournaments. */
@@ -57,7 +59,10 @@ export const fivbBeachVolleyball: SourceAdapter = {
       const teams = await run.fetch(
         visUrl(`<Request Type="GetBeachTeamList" Fields="${TEAM_FIELDS}"><Filter NoTournament="${t.No}"/></Request>`),
       );
-      const belgians = elements(teams.text, "BeachTeam").flatMap(players).filter((p) => p.nationality === "BEL");
+      const pairs = elements(teams.text, "BeachTeam")
+        .map((team) => ({ team, players: players(team) }))
+        .filter(({ players }) => players.some((p) => p.nationality === "BEL"));
+      const belgians = pairs.flatMap(({ players }) => players).filter((p) => p.nationality === "BEL");
       if (belgians.length === 0) continue;
 
       const competitionId = await run.rows.competition({
@@ -73,7 +78,27 @@ export const fivbBeachVolleyball: SourceAdapter = {
         sourceRef: t.No,
         rawCopyId: list.rawCopyId,
       });
-      if (t.EndDateMainDraw >= today) await run.rows.entrants(competitionId, belgians, teams.rawCopyId);
+      if (t.EndDateMainDraw >= today) {
+        await run.rows.entrants(competitionId, belgians, teams.rawCopyId);
+        continue;
+      }
+      // Ended: the final rank of every Belgian pair that has one (pairs out in the qualification have none).
+      for (const { team, players } of pairs) {
+        const rank = Number(team.Rank);
+        if (!team.Rank || !Number.isInteger(rank) || !players.every((p) => p.nationality === "BEL")) continue;
+        await run.rows.teamResult({
+          competitionId,
+          nationality: "BEL",
+          event: EVENT_BY_GENDER[t.Gender] ?? "Beach volleyball",
+          date: t.EndDateMainDraw,
+          place: rank,
+          status: "finished",
+          performance: null,
+          sourceRef: `${t.No}/${team.No}`,
+          rawCopyId: teams.rawCopyId,
+          roster: players,
+        });
+      }
     }
   },
 };

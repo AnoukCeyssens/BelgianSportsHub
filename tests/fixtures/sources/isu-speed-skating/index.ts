@@ -16,6 +16,14 @@ import wc2Competitors from "./wc2-competitors.json?raw";
 import wc2CompetitorsMeta from "./wc2-competitors.json.meta.json";
 import events202601 from "./events-2026-01.json?raw";
 import events202601Meta from "./events-2026-01.json.meta.json";
+import events202511 from "./events-2025-11.json?raw";
+import events202511Meta from "./events-2025-11.json.meta.json";
+import wc1At2025Competitions from "./wc1-2025-competitions.json?raw";
+import wc1At2025CompetitionsMeta from "./wc1-2025-competitions.json.meta.json";
+import wc1At2025Results17 from "./wc1-2025-results-17.json?raw";
+import wc1At2025Results17Meta from "./wc1-2025-results-17.json.meta.json";
+import wc1At2025Results24 from "./wc1-2025-results-24.json?raw";
+import wc1At2025Results24Meta from "./wc1-2025-results-24.json.meta.json";
 
 /**
  * The daily run on Saturday 14 Nov 2026 around 12:00 UTC, during World Cup #1
@@ -46,3 +54,22 @@ export const ISU_WORLD_CUP_1_RUN = { now: "2026-11-14T12:00:00.000Z", lastSucces
  */
 export const isuJanuary2026Run: RecordedResponse[] = [{ ...events202601Meta, body: events202601 }];
 export const ISU_JANUARY_2026_RUN = { now: "2026-01-06T04:00:00.000Z", lastSuccessAt: "2026-01-05T04:00:00.000Z" };
+
+/**
+ * The daily run on Monday 17 Nov 2025 after a run on 16 Nov at 04:00 UTC,
+ * once World Cup #1 (Salt Lake City, 14–16 Nov 2025) had ended:
+ * - the senior events ending on or after 15 Nov (trimmed to World Cup #1);
+ * - its competitions (trimmed): 16 official before the last run, and the two
+ *   team pursuits 17 and 24 skated since;
+ * - Team Pursuit Women Division B (trimmed): Belgium 2nd (Fran Vanhoutte,
+ *   Isabelle Van Elst, Sandrine Tas), behind Kazakhstan;
+ * - Team Pursuit Men (trimmed): Belgium 7th (Bart Swings, Indra Medard,
+ *   Mathias Vosté, Daan Van Der Elst), behind the United States.
+ */
+export const isuTeamPursuitRun: RecordedResponse[] = [
+  { ...events202511Meta, body: events202511 },
+  { ...wc1At2025CompetitionsMeta, body: wc1At2025Competitions },
+  { ...wc1At2025Results17Meta, body: wc1At2025Results17 },
+  { ...wc1At2025Results24Meta, body: wc1At2025Results24 },
+];
+export const ISU_TEAM_PURSUIT_RUN = { now: "2025-11-17T04:00:00.000Z", lastSuccessAt: "2025-11-16T04:00:00.000Z" };

@@ -107,6 +107,33 @@ export type ResultInput = {
 );
 
 /**
+ * One Belgian Team's result (ADR 0001): a relay, team pursuit, pair, boat or
+ * national side. The writer finds or creates the Team (by default one per
+ * Belgium + event; one per partnership where Belgium can field several, see
+ * the domain rule `teamIdentity`) and adds the credited Belgians to its roster
+ * at this competition.
+ */
+export type TeamResultInput = Omit<ResultInput, "person" | "athleteId"> & {
+  /** IOC code of the nation the Team competes for. */
+  nationality: string;
+  /**
+   * The event the Team is identified by, when the result's event title is
+   * more specific (ISU "Team Pursuit Women Division B" → "Team Pursuit Women").
+   */
+  teamEvent?: string;
+  /** Everyone the official result (or the squad list) credits; unnamed reserves are left out. */
+  roster: Person[];
+};
+
+/** A Team as a ranking names it: a pair's members, or none for a nation ranking (the default Team). */
+export type TeamInput = {
+  sport: string;
+  event: string;
+  members: Person[] | null;
+  rawCopyId: string;
+};
+
+/**
  * Where an adapter puts what it parsed. Only performances count as results:
  * an adapter leaves out DNS and withdrawals. Non-Belgian people are ignored
  * here, but adapters should filter by nationality early to keep work small.
@@ -116,6 +143,10 @@ export type BelgianRows = {
   competition(input: CompetitionInput): Promise<string>;
   /** Writes one result for a Belgian: to the matched (or named) Athlete, or to a merge-queue item. */
   result(input: ResultInput): Promise<void>;
+  /** Writes one Belgian Team's result and adds its credited Belgians to the Team's roster at the competition. */
+  teamResult(input: TeamResultInput): Promise<void>;
+  /** Finds or creates the Team a ranking row belongs to (pair → its partnership, nation → the default Team); returns its id. */
+  team(input: TeamInput): Promise<string>;
   /** Replaces a competition's entry list: the Belgians it names who are already Athletes. */
   entrants(competitionId: string, people: Person[], rawCopyId: string): Promise<void>;
 };

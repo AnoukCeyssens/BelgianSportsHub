@@ -84,6 +84,33 @@ export async function seedEntrant(d1: D1Database, competitionId: string, athlete
   await db.insert(schema.entrant).values({ competitionId, athleteId, rawCopyId: competition!.rawCopyId });
 }
 
+type TeamResultSeed = { competitionId: string; sport: string; event: string; place: number; roster: string[] };
+
+/** Gives Belgium's default Team for the event a finished result, with these Athletes on its roster. Returns the Team's id. */
+export async function seedTeamResult(d1: D1Database, r: TeamResultSeed): Promise<string> {
+  const db = getDb(d1);
+  const competition = (await db.query.competition.findFirst({ where: eq(schema.competition.id, r.competitionId) }))!;
+  const [team] = await db
+    .insert(schema.team)
+    .values({ key: `${r.sport}|${r.event}`, name: `Belgium · ${r.event}`, sport: r.sport, event: r.event, kind: "default" })
+    .returning({ id: schema.team.id });
+  await db.insert(schema.result).values({
+    competitionId: r.competitionId,
+    teamId: team.id,
+    event: r.event,
+    date: competition.endDate,
+    place: r.place,
+    status: "finished",
+    source: competition.source,
+    sourceRef: crypto.randomUUID(),
+    rawCopyId: competition.rawCopyId,
+  });
+  for (const athleteId of r.roster) {
+    await db.insert(schema.rosterMember).values({ teamId: team.id, competitionId: r.competitionId, athleteId, rawCopyId: competition.rawCopyId });
+  }
+  return team.id;
+}
+
 /**
  * Storage is shared by the tests in one file. Removes every Athlete and
  * everything ingest wrote (rows and raw copies in R2), keeping Source rows.
@@ -92,7 +119,9 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const db = getDb(env.DB);
   for (const table of [
     schema.entrant,
+    schema.rosterMember,
     schema.result,
+    schema.team,
     schema.mergeQueueItem,
     schema.competition,
     schema.athleteExternalId,

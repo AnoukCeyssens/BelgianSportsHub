@@ -1,0 +1,7 @@
+{
+  "url": "https://www.fivb.org/Vis2009/XmlRequest.asmx?Request=%3CRequest%20Type%3D%22GetVolleyTournamentRanking%22%20NoTournament%3D%221471%22%20Fields%3D%22Rank%20TeamName%20TeamCode%20NoTeam%20Position%22%2F%3E",
+  "status": 200,
+  "contentType": "application/xml",
+  "recordedAt": "2026-11-14T12:23:06.465Z",
+  "trimmedByHand": "Only the winners (T\u00fcrkiye) and Belgium (9th) kept."
+}

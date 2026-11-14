@@ -9,7 +9,8 @@
 //    run; Belgian rows only;
 // 3. for each such event running now or starting within two weeks: its
 //    competitors list, as the entry list behind Upcoming.
-// Team results (team pursuit, team sprint) wait for Teams (#27).
+// Team results (team pursuit, team sprint) go to Belgium's Team for the event,
+// with the skaters the result credits as its roster.
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://api.isuresults.eu";
@@ -53,13 +54,17 @@ type IsuCompetition = {
 type IsuResult = {
   id: number;
   type: "ind" | "ms" | "team";
-  competitor: { skater?: IsuSkater };
+  /** Individual results. */
+  competitor?: { skater?: IsuSkater };
+  /** Team results. */
+  team?: IsuTeam;
   rank: number | null;
   status: number | null;
   time: string | null;
   sprintPoints?: number | null;
 };
 type IsuCompetitor = { skater?: IsuSkater };
+type IsuTeam = { country: string; members: { member: { skater?: IsuSkater } }[] };
 
 /** ISU result status codes; DNS (4) and Withdrawn (5) are not performances. */
 const STATUS: Record<number, ResultStatus | null> = { 0: "finished", 1: "eliminated", 2: "DNF", 3: "DSQ", 4: null, 5: null };
@@ -116,14 +121,10 @@ async function results(run: SourceRun, event: IsuEvent, competitionId: string) {
     const fetched = await run.fetch(`${API}/events/${event.isuId}/competitions/${c.scheduleNumber}/results/`);
     const date = event.track ? isoDate(new Date(c.start), event.track.timeZone) : c.start.slice(0, 10);
     for (const r of JSON.parse(fetched.text) as IsuResult[]) {
-      const skater = r.competitor.skater;
       const status = r.status === null ? "finished" : STATUS[r.status];
-      if (r.type === "team" || !skater || !status) continue;
-      const p = person(skater);
-      if (!isBelgian(p)) continue;
-      await run.rows.result({
+      if (!status) continue;
+      const common = {
         competitionId,
-        person: p,
         event: c.title,
         date,
         place: status === "DNF" || status === "DSQ" ? null : r.rank,
@@ -131,7 +132,23 @@ async function results(run: SourceRun, event: IsuEvent, competitionId: string) {
         performance: performance(r),
         sourceRef: `${event.isuId}/${c.scheduleNumber}/${r.id}`,
         rawCopyId: fetched.rawCopyId,
-      });
+      };
+      if (r.type === "team") {
+        if (r.team?.country !== "BEL") continue;
+        await run.rows.teamResult({
+          ...common,
+          nationality: r.team.country,
+          // Division B is the same Team: Belgium's team pursuit is one Team whichever division it skates.
+          teamEvent: c.title.replace(/ Division [AB]$/, ""),
+          roster: r.team.members.flatMap((m) => (m.member.skater ? [person(m.member.skater)] : [])),
+        });
+        continue;
+      }
+      const skater = r.competitor?.skater;
+      if (!skater) continue;
+      const p = person(skater);
+      if (!isBelgian(p)) continue;
+      await run.rows.result({ ...common, person: p });
     }
   }
 }

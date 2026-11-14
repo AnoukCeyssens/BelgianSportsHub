@@ -29,3 +29,4 @@ export {
   type SavedColumnMapping,
 } from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
+export { athleteMedals, belgiumMedals, teamIdentity, type MedalCount, type MedalEntry, type MedalResult, type TeamIdentity, type TeamKind, type TeamMember } from "./teams";

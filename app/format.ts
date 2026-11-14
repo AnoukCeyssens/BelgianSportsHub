@@ -38,3 +38,9 @@ export function placeText(place: number | null, status: string) {
     place % 100 >= 11 && place % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[place % 10] ?? "th";
   return `${place}${suffix}`;
 }
+
+/** "Medals: 1 gold · 2 bronze"; null when there are none. */
+export function medalsText(m: { gold: number; silver: number; bronze: number }) {
+  const parts = (["gold", "silver", "bronze"] as const).filter((c) => m[c] > 0).map((c) => `${m[c]} ${c}`);
+  return parts.length > 0 ? `Medals: ${parts.join(" · ")}` : null;
+}

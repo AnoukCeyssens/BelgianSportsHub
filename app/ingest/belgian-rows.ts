@@ -4,9 +4,11 @@
 // can stamp the source's "last data change".
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "~/db/client";
-import { identityMatch, type KnownIdentity } from "~/domain";
+import { identityMatch, teamIdentity, type KnownIdentity } from "~/domain";
 import { knownIdentities } from "./identities";
-import type { BelgianRows, CompetitionInput, Person, ResultInput } from "./source-adapter";
+import type { BelgianRows, CompetitionInput, Person, ResultInput, TeamInput, TeamResultInput } from "./source-adapter";
+
+type MergeQueueItem = typeof schema.mergeQueueItem.$inferSelect;
 
 const BELGIUM = "BEL";
 
@@ -23,7 +25,7 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
   }
 
   /** The Athlete this person is, if known; otherwise null (and the person is not on the roster yet). */
-  async function athleteFor(person: Person): Promise<{ athleteId: string | null; item: typeof schema.mergeQueueItem.$inferSelect | null }> {
+  async function athleteFor(person: Person): Promise<{ athleteId: string | null; item: MergeQueueItem | null }> {
     const item = await db.query.mergeQueueItem.findFirst({
       where: and(eq(schema.mergeQueueItem.scheme, person.ifId.scheme), eq(schema.mergeQueueItem.value, person.ifId.value)),
     });
@@ -71,50 +73,37 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
 
     async result(input: ResultInput) {
       let athleteId: string | null;
-      let item: typeof schema.mergeQueueItem.$inferSelect | null = null;
+      let item: MergeQueueItem | null = null;
       if ("athleteId" in input) athleteId = input.athleteId;
       else {
         if (input.person.nationality !== BELGIUM) return;
-        ({ athleteId, item } = await athleteFor(input.person));
+        ({ athleteId, item } = await athleteOrQueued(input.person, input.competitionId, input.rawCopyId));
       }
-      if (!athleteId && !item && "person" in input) {
-        await db
-          .insert(schema.mergeQueueItem)
-          .values({
-            source,
-            name: input.person.name,
-            dateOfBirth: input.person.dateOfBirth,
-            sport: await sportOf(input.competitionId),
-            ...input.person.ifId,
-            rawCopyId: input.rawCopyId,
-            createdAt: now.toISOString(),
-          });
-        changes++;
-        ({ athleteId, item } = await athleteFor(input.person));
-      }
-
-      const values = {
-        competitionId: input.competitionId,
-        athleteId,
-        mergeQueueItemId: athleteId ? null : item!.id,
-        event: input.event,
-        date: input.date,
-        place: input.place,
-        status: input.status,
-        performance: input.performance,
-      };
-      const existing = await db.query.result.findFirst({
-        where: and(eq(schema.result.source, source), eq(schema.result.sourceRef, input.sourceRef)),
-      });
-      if (!existing) {
-        await db.insert(schema.result).values({ ...values, source, sourceRef: input.sourceRef, rawCopyId: input.rawCopyId });
-        changes++;
-      } else if ((Object.keys(values) as (keyof typeof values)[]).some((k) => existing[k] !== values[k])) {
-        await db.update(schema.result).set({ ...values, rawCopyId: input.rawCopyId }).where(eq(schema.result.id, existing.id));
-        changes++;
-      }
+      await writeResult(input, { athleteId, mergeQueueItemId: athleteId ? null : item!.id, teamId: null });
       // Only appearing in the result is a performance (DNF and DSQ included, DNS not).
       if (athleteId && input.status !== "DNS") await extendAthleteSince(athleteId, input.date, input.competitionId);
+    },
+
+    async teamResult(input: TeamResultInput) {
+      if (input.nationality !== BELGIUM) return;
+      const sport = await sportOf(input.competitionId);
+      const belgians = input.roster.filter((p) => p.nationality === BELGIUM);
+      const teamId = await findOrCreateTeam({ sport, event: input.teamEvent ?? input.event, members: belgians, rawCopyId: input.rawCopyId });
+      await writeResult(input, { athleteId: null, mergeQueueItemId: null, teamId });
+      for (const person of belgians) {
+        const { athleteId, item } = await athleteOrQueued(person, input.competitionId, input.rawCopyId);
+        const added = await db
+          .insert(schema.rosterMember)
+          .values({ teamId, competitionId: input.competitionId, athleteId, mergeQueueItemId: athleteId ? null : item!.id, rawCopyId: input.rawCopyId })
+          .onConflictDoNothing()
+          .returning();
+        changes += added.length;
+        if (athleteId && input.status !== "DNS") await extendAthleteSince(athleteId, input.date, input.competitionId);
+      }
+    },
+
+    async team(input: TeamInput) {
+      return findOrCreateTeam({ ...input, members: input.members?.filter((p) => p.nationality === BELGIUM) ?? null });
     },
 
     async entrants(competitionId: string, people: Person[], rawCopyId: string) {
@@ -134,6 +123,66 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
       changes++;
     },
   };
+
+  /** The Athlete this person is; an unknown person is put in the merge queue (once per IF ID). */
+  async function athleteOrQueued(person: Person, competitionId: string, rawCopyId: string) {
+    const found = await athleteFor(person);
+    if (found.athleteId || found.item) return found;
+    await db.insert(schema.mergeQueueItem).values({
+      source,
+      name: person.name,
+      dateOfBirth: person.dateOfBirth,
+      sport: await sportOf(competitionId),
+      ...person.ifId,
+      rawCopyId,
+      createdAt: now.toISOString(),
+    });
+    changes++;
+    return athleteFor(person);
+  }
+
+  /** Inserts or updates the result with this source ref, belonging to the given Entry. */
+  async function writeResult(
+    input: Omit<ResultInput, "person" | "athleteId">,
+    entry: { athleteId: string | null; mergeQueueItemId: string | null; teamId: string | null },
+  ) {
+    const values = {
+      competitionId: input.competitionId,
+      ...entry,
+      event: input.event,
+      date: input.date,
+      place: input.place,
+      status: input.status,
+      performance: input.performance,
+    };
+    const existing = await db.query.result.findFirst({
+      where: and(eq(schema.result.source, source), eq(schema.result.sourceRef, input.sourceRef)),
+    });
+    if (!existing) {
+      await db.insert(schema.result).values({ ...values, source, sourceRef: input.sourceRef, rawCopyId: input.rawCopyId });
+      changes++;
+    } else if ((Object.keys(values) as (keyof typeof values)[]).some((k) => existing[k] !== values[k])) {
+      await db.update(schema.result).set({ ...values, rawCopyId: input.rawCopyId }).where(eq(schema.result.id, existing.id));
+      changes++;
+    }
+  }
+
+  /** The Team these members (or, without members, Belgium's default Team) are in this event; created when new. */
+  async function findOrCreateTeam(input: TeamInput) {
+    const identity = teamIdentity({
+      sport: input.sport,
+      event: input.event,
+      members: input.members?.map((p) => ({ id: `${p.ifId.scheme}:${p.ifId.value}`, name: p.name })) ?? null,
+    });
+    const existing = await db.query.team.findFirst({ where: eq(schema.team.key, identity.key) });
+    if (existing) return existing.id;
+    const [row] = await db
+      .insert(schema.team)
+      .values({ ...identity, sport: input.sport, event: input.event, rawCopyId: input.rawCopyId })
+      .returning({ id: schema.team.id });
+    changes++;
+    return row.id;
+  }
 
   /** "Athlete since" moves back when an earlier senior international performance turns up. */
   async function extendAthleteSince(athleteId: string, date: string, competitionId: string) {

@@ -8,6 +8,8 @@ import eventsRefused from "./events-refused.json?raw";
 import eventsRefusedMeta from "./events-refused.json.meta.json";
 import programs from "./programs.json?raw";
 import programsMeta from "./programs.json.meta.json";
+import resultsMixedRelay from "./results-mixed-relay.json?raw";
+import resultsMixedRelayMeta from "./results-mixed-relay.json.meta.json";
 import resultsEliteMen from "./results-elite-men.json?raw";
 import resultsEliteMenMeta from "./results-elite-men.json.meta.json";
 
@@ -20,12 +22,15 @@ import resultsEliteMenMeta from "./results-elite-men.json.meta.json";
  *   start list), a mixed relay and a U23 race;
  * - Elite Men results: Jules Voorbeeld (BEL) 14th, Arno Specimen (BEL) DNF,
  *   Noah Absent (BEL) DNS, a British winner;
+ * - Mixed Relay results (9 Nov): Belgium 6th (Lotte Voorbeeld, Jules
+ *   Voorbeeld, Mira Exemplaar, Arno Specimen), Great Britain 1st;
  * - Elite Women start list: Lotte Voorbeeld (BEL) and a Spaniard.
  */
 export const triathlonWorldCupRun: RecordedResponse[] = [
   { ...eventsMeta, body: events },
   { ...programsMeta, body: programs },
   { ...resultsEliteMenMeta, body: resultsEliteMen },
+  { ...resultsMixedRelayMeta, body: resultsMixedRelay },
   { ...entriesEliteWomenMeta, body: entriesEliteWomen },
 ];
 export const TRIATHLON_WORLD_CUP_RUN = { now: "2026-11-14T04:00:00.000Z", lastSuccessAt: "2026-11-13T04:00:00.000Z" };

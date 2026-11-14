@@ -119,6 +119,7 @@ describe("World Triathlon source", () => {
     expect(results.sort((a, b) => a.ref.localeCompare(b.ref))).toEqual([
       { ref: "490002", status: "finished", place: 14 },
       { ref: "490003", status: "DNF", place: null },
+      { ref: "490102", status: "finished", place: 6 },
     ]);
     const competitions = await getDb(env.DB).select({ name: schema.competition.name, kind: schema.competition.kind }).from(schema.competition);
     expect(competitions).toEqual([{ name: "2026 World Triathlon Cup Exampleton", kind: "circuit" }]);
@@ -127,5 +128,22 @@ describe("World Triathlon source", () => {
       "2026 World Triathlon Cup Exampleton",
     );
     expect((await sourceRow()).lastSuccessAt).toBe(TRIATHLON_WORLD_CUP_RUN.now);
+  });
+
+  it("writes the mixed relay to Belgium's relay Team, on every member's Athlete page", async () => {
+    const lotte = await seedAthlete(env.DB, { name: "Lotte Voorbeeld", sport: "Triathlon", externalIds: [{ scheme: "world-triathlon", value: "390011" }] });
+
+    await worldCupRun();
+
+    const html = await (await get(`/athletes/${lotte}`)).text();
+    const results = html.slice(html.indexOf("<h2>Results</h2>"));
+    expect(results).toContain("Mixed Relay");
+    expect(results).toContain("6th");
+    expect(results).toContain("01:22:05");
+    const team = results.match(/href="\/teams\/([^"]+)"[^>]*>Belgium · Mixed Relay</)?.[1];
+    expect(team).toBeDefined();
+    const page = await (await get(`/teams/${team}`)).text();
+    for (const name of ["Lotte Voorbeeld", "Jules Voorbeeld", "Mira Exemplaar", "Arno Specimen"]) expect(page).toContain(name);
+    expect(page).not.toContain("Tom Exemplar");
   });
 });

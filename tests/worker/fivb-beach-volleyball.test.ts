@@ -2,21 +2,28 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
-import { BEACH_EUROS_RUN, beachEurosRun } from "../fixtures/sources/fivb-beach-volleyball";
+import { BEACH_EUROS_RUN, BEACH_LEUVEN_RUN, beachEurosRun, beachLeuvenRun } from "../fixtures/sources/fivb-beach-volleyball";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, setSource } from "../support/seed";
 import { deliverIngestJobs, get } from "../support/worker";
 
 // Spec #20, Ingest; ticket #42: beach volleyball through the FIVB VIS web
-// service, against a recorded run during the 2026 European Championships.
-// Pair results wait for Teams (#27): this source brings competitions and entry lists.
+// service, against recorded runs during the 2026 European Championships
+// (competitions and entry lists) and after BPT Futures Leuven (pair results,
+// ticket #27: each pair is its own Team).
 const BEACH = "fivb-beach-volleyball";
 const job = { kind: "fetch-source", source: BEACH } as const;
 
 async function eurosRun() {
   fixClock(BEACH_EUROS_RUN.now);
   stubOutboundFetch(beachEurosRun);
+  return deliverIngestJobs([job]);
+}
+
+async function leuvenRun() {
+  fixClock(BEACH_LEUVEN_RUN.now);
+  stubOutboundFetch(beachLeuvenRun);
   return deliverIngestJobs([job]);
 }
 
@@ -77,5 +84,48 @@ describe("FIVB beach volleyball source", () => {
 
     expect(result.explicitAcks).toEqual(["msg-1"]);
     expect((await sourceRow()).blockedAt).toBe(BEACH_EUROS_RUN.now);
+  });
+
+  describe("after a tournament", () => {
+    beforeEach(async () => {
+      await setSource(env.DB, BEACH, { lastSuccessAt: BEACH_LEUVEN_RUN.lastSuccessAt });
+    });
+
+    it("writes each Belgian pair's final rank to that pair's Team, shown on both players' Athlete pages", async () => {
+      const gilles = await seedAthlete(env.DB, { name: "Gilles Vandecaveye", sport: "Beach volleyball", dateOfBirth: "1995-08-28" });
+      const louis = await seedAthlete(env.DB, { name: "Louis Vandecaveye", sport: "Beach volleyball", dateOfBirth: "1992-08-31" });
+
+      const result = await leuvenRun();
+
+      expect(result.explicitAcks).toEqual(["msg-1"]);
+      for (const athlete of [gilles, louis]) {
+        const html = await (await get(`/athletes/${athlete}`)).text();
+        const results = html.slice(html.indexOf("<h2>Results</h2>"));
+        expect(results).toContain("BPT Futures Leuven");
+        expect(results).toContain("1st");
+        expect(results).toMatch(/href="\/teams\/[^"]+"[^>]*>Gilles Vandecaveye \/ Louis Vandecaveye</);
+      }
+    });
+
+    it("makes every partnership its own Team, in the men's and the women's event", async () => {
+      await leuvenRun();
+
+      const teams = await getDb(env.DB)
+        .select({ name: schema.team.name, event: schema.team.event, kind: schema.team.kind })
+        .from(schema.team)
+        .orderBy(schema.team.name);
+      expect(teams).toEqual([
+        { name: "Berre Peters / Wout Nuyttens", event: "Men", kind: "partnership" },
+        { name: "Casper Willems / Arne Darras", event: "Men", kind: "partnership" },
+        { name: "Daan Hendrikx / Christophe Witvrouwen", event: "Men", kind: "partnership" },
+        { name: "Gilles Vandecaveye / Louis Vandecaveye", event: "Men", kind: "partnership" },
+        { name: "Kyan Vercauteren / Joppe Van Langendonck", event: "Men", kind: "partnership" },
+        { name: "Lisa Van Den Vonder / Louka Maertens", event: "Women", kind: "partnership" },
+        { name: "Louis Laenen / Jordan Pirick", event: "Men", kind: "partnership" },
+        { name: "Youna Coens / Lente Thant", event: "Women", kind: "partnership" },
+      ]);
+      const places = await getDb(env.DB).select({ place: schema.result.place }).from(schema.result);
+      expect(places.map((p) => p.place).sort((a, b) => a! - b!)).toEqual([1, 3, 9, 13, 13, 13, 17, 21]);
+    });
   });
 });
