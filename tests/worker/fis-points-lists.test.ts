@@ -120,7 +120,7 @@ describe("FIS points-list sources", () => {
   it("sends a Belgian it cannot match to the merge queue", async () => {
     await runAlpine();
 
-    const queue = await (await get("/curate/merge-queue")).text();
+    const queue = await (await get("/curate/run/merge-queue")).text();
     expect(queue).toContain("Nicolas Hotermans");
     expect(queue).toContain("31 Jan 2002");
     expect(queue).toContain("FIS 60297");

@@ -14,6 +14,8 @@ Set by the walking skeleton (#21). Every later ticket follows them. Vocabulary: 
 | `app/context.ts` | `cloudflareContext` (bindings) and `dbFrom(context)` for loaders and actions. |
 | `app/clock.ts` | `now()`: the only place the I/O shell reads the time. |
 | `app/ingest/` | Queue consumer, raw-copy keeping, the source run (`source-run.ts`), the adapter seam (`source-adapter.ts`), the Belgian-row writer (`belgian-rows.ts`) and merge-queue resolution. Source adapters go in `app/ingest/sources/<source>.ts`, registered in `app/ingest/sources/index.ts`. See "Sources and adapters". |
+| `app/curate/` | The Run sheet's steps (loader, action, component per step) and its session log. See "The Run sheet". |
+| `app/owner.ts` | Owner-only gate for every `/curate` route, called first by the fetch handler. |
 | `app/format.ts` | Shared display formats (dates, ordinals). |
 | `app/backup/` | Weekly D1 export to R2 (`backups/`, last 12), run by the scheduled handler on its own cron. |
 | `app/offline.tsx`, `pwa/service-worker.ts`, `public/` | Installable app: service worker (built by vite-plugin-pwa, own `tsconfig.pwa.json`), offline fallback pages, icons. The manifest is in `vite.config.ts`. |
@@ -87,7 +89,7 @@ Set by the first Automatic source, ISU speed skating (#23). Every later Automati
 1. stamps `lastAttemptAt`;
 2. calls the adapter with a `SourceRun`;
 3. on success stamps `lastSuccessAt`, and `lastChangeAt` when any row was inserted or changed;
-4. on `SourceBlocked` (401, 403, 451 or a Cloudflare bot challenge) sets `blockedAt` / `blockedReason` and acks: a refusal is never retried, the source is Assisted until the owner retries it ("Fetch now" on `/curate/sources` clears the block);
+4. on `SourceBlocked` (401, 403, 451 or a Cloudflare bot challenge) sets `blockedAt` / `blockedReason` and acks: a refusal is never retried, the source is Assisted until the owner retries it ("Fetch now" or "Retry fetch now" in the Run sheet's Source health step, `/curate/run/source-health`, clears the block);
 5. on any other error stamps `lastFailureAt` / `lastError` and rethrows, so the job is retried.
 
 **The adapter seam** (`app/ingest/source-adapter.ts`). An adapter is `{ run(run: SourceRun) }` and knows only its source's URLs and payloads:
@@ -98,7 +100,7 @@ Set by the first Automatic source, ISU speed skating (#23). Every later Automati
 - The writer keeps Belgian rows only (`person.nationality === "BEL"`), but filter early anyway. It matches identities with `identityMatch` (IF ID, then name + date of birth), remembers the IF ID on a name + date-of-birth match, moves "Athlete since" back for an earlier performance, and sends anything unmatched to the merge queue with its results attached.
 - Adapters never touch D1, R2, identity rules or health.
 
-**Merge queue.** An unmatched person becomes one `merge_queue_item` per IF ID (`scheme` + `value`); their results wait on it (`result.mergeQueueItemId`). `resolveMergeQueueItem(d1, itemId, resolution)` in `app/ingest/merge-queue.ts` links them to an Athlete, creates a new Athlete (from the item, "Athlete since" from its earliest result) or marks them "not an Athlete"; later runs then match on the IF ID, or keep attaching to the not-an-Athlete item. `/curate/merge-queue` is the bare page for it until the Run sheet (#24) takes over.
+**Merge queue.** An unmatched person becomes one `merge_queue_item` per IF ID (`scheme` + `value`); their results wait on it (`result.mergeQueueItemId`). `resolveMergeQueueItem(d1, itemId, resolution)` in `app/ingest/merge-queue.ts` links them to an Athlete, creates a new Athlete (from the item, "Athlete since" from its earliest result) or marks them "not an Athlete"; later runs then match on the IF ID, or keep attaching to the not-an-Athlete item. The Run sheet's Merge queue step (`/curate/run/merge-queue`) is the owner's page for it.
 
 **Results and Upcoming.** Until Teams and Entries arrive (#27), a `result` belongs to an Athlete (or a merge-queue item) and names its event as text; team events (ISU team pursuit) are not ingested yet. An `entrant` is an Athlete named on a competition's entry list; the Athlete page lists those competitions that have not ended yet under Upcoming.
 
@@ -106,7 +108,15 @@ Set by the first Automatic source, ISU speed skating (#23). Every later Automati
 
 ## Offline reading and curation routes
 
-The service worker caches every page and its React Router data (`<path>.data`) as it is viewed, network first, and precaches the app shell. **Curation routes must live under `/curate`** (`CURATION_PATH` in `app/domain/offline-reading.ts`): they are never cached, and offline the root layout replaces them with an offline message, so the owner never fills in a stale form. Anything else counts as a reader page. Static files are served as named (`assets.html_handling: "none"`). The service worker is registered in production builds only.
+The service worker caches every page and its React Router data (`<path>.data`) as it is viewed, network first, and precaches the app shell. **Curation routes must live under `/curate`** (`CURATION_PATH` in `app/domain/offline-reading.ts`): they are never cached, and offline the root layout replaces them with an offline message, so the owner never fills in a stale form. Anything else counts as a reader page.
+
+**Curation is owner-only.** The fetch handler refuses every `/curate` path (and its `.data` request, in any case or encoding: `isCurationPath`) with a 403 unless Cloudflare Access's `Cf-Access-Authenticated-User-Email` is `OWNER_EMAIL` (a var per environment in `wrangler.jsonc`; see `app/owner.ts`). The local dev copy (`APP_ENV` "dev") has no Access in front, so a request without that header counts as the owner's there; deployed copies fail closed. In tests, `signedInAs(email)` from `tests/support/worker.ts` sends the header, and `getDeployed(path)` runs a request as a deployed copy would. Static files are served as named (`assets.html_handling: "none"`). The service worker is registered in production builds only.
+
+## The Run sheet (curation workspace)
+
+Set by #24. The weekly session is `/curate/run/<step>` (`app/routes/curate.run.tsx`); `/curate` opens its first step. The steps, their order, time estimates, per-item minutes and one-line purposes are data in `WEEKLY_RUN_SHEET` (`app/domain/run-sheet.ts`); `runSheetProgress` decides ✓ (empty or passed) and the estimated time left.
+
+**Adding a step's items** (#25, #26, …): put the step's loader, action and component in `app/curate/<step>.tsx` (see `source-health.tsx`, `merge-queue.tsx`): `load…(db, now)` returns the items plus `open` (the item count), `actOn…(…)` does one owner action and returns the session-log message. Then in `curate.run.tsx` add the open count to `loadSteps`, dispatch the step's intents in `action`, and render the component. Every action is logged through `logAction` (`app/curate/session.ts`); "next" with items left logs a pass, which ticks the step for the rest of the session. A session opens with its first logged action and closes on "Finish session" (the last step's Next).
 
 ## Cron triggers
 
@@ -124,4 +134,4 @@ With the Cloudflare Vite plugin, the environment is chosen at **build** time (`C
 
 Placeholders in `wrangler.jsonc` (marked `PLACEHOLDER`) must be replaced before the first deploy: the custom domain (`bsh.example.com`, `test.bsh.example.com`) and the D1 database ids.
 
-Cloudflare Access is configured in the Zero Trust dashboard, not in code: one self-hosted application per copy covering the whole domain, an email allowlist policy with one-time PIN login, and (later) a Bypass policy for the iCal feed path only.
+Cloudflare Access is configured in the Zero Trust dashboard, not in code: one self-hosted application per copy covering the whole domain, an email allowlist policy with one-time PIN login, and (later) a Bypass policy for the iCal feed path only. The owner's Access email goes in `OWNER_EMAIL` (placeholder `owner@example.com` in `env.test` and `env.live`).
