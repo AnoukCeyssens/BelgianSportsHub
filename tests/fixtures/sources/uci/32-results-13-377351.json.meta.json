@@ -1,0 +1,8 @@
+{
+  "url": "https://dataride.uci.ch/iframe/Results/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:27:03.076Z",
+  "requestBody": "disciplineId=13&eventId=377351&take=1000&skip=0&page=1&pageSize=1000",
+  "trimmedByHand": "Kept the first three rows and every Belgian; 'total' is as received."
+}

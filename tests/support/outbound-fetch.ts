@@ -10,14 +10,18 @@ export type RecordedResponse = {
   body: BodyInit;
   status?: number;
   contentType?: string | null;
+  /** For a recorded POST: the form it sent, url-encoded. A request matches on URL and this body. */
+  requestBody?: string;
 };
 
 export function stubOutboundFetch(responses: RecordedResponse[]) {
-  const byUrl = new Map(responses.map((r) => [r.url, r]));
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+  const key = (url: string, requestBody?: string | null) => (requestBody ? `POST ${url} ${requestBody}` : url);
+  const byRequest = new Map(responses.map((r) => [key(r.url, r.requestBody), r]));
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
-    const hit = byUrl.get(url);
-    if (!hit) throw new Error(`Unstubbed outbound fetch: ${url}`);
+    const requestBody = typeof init?.body === "string" ? init.body : null;
+    const hit = byRequest.get(key(url, requestBody));
+    if (!hit) throw new Error(`Unstubbed outbound fetch: ${requestBody ? `POST ${url} ${requestBody}` : url}`);
     const headers = new Headers(hit.contentType ? { "content-type": hit.contentType } : undefined);
     // Binary bodies (FIS ZIPs) come with their length, as a real download does.
     if (hit.body instanceof Uint8Array) headers.set("content-length", String(hit.body.byteLength));

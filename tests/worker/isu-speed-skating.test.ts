@@ -169,6 +169,19 @@ describe("ISU speed skating source", () => {
     expect(competition.url).toBe("https://api.isuresults.eu/events/?category=senior&endGte=2026-11-12&pageSize=200");
   });
 
+  it("files each competition under its series, so the next edition can find the previous one", async () => {
+    await runWorldCup1();
+
+    const rows = await getDb(env.DB).select({ ref: schema.competition.sourceRef, series: schema.competition.series }).from(schema.competition);
+    const series = Object.fromEntries(rows.map((r) => [r.ref, r.series]));
+    // World Cup legs recur by venue city; sponsor names and leg numbers change every season.
+    expect(series["2027_CHN_0001"]).toBe("isu:world-cup:beijing");
+    expect(series["2027_CAN_0003"]).toBe("isu:world-cup:calgary");
+    // Europeans and Worlds are separate Championships.
+    expect(series["2027_NED_0002"]).toBe("isu:european-championships");
+    expect(series["2027_CHN_0002"]).toBe("isu:world-championships");
+  });
+
   it("writes Belgian rows only", async () => {
     await runWorldCup1();
 
@@ -203,9 +216,9 @@ describe("ISU speed skating source", () => {
 
     expect(result.explicitAcks).toEqual(["msg-1"]);
     const competitions = await getDb(env.DB)
-      .select({ name: schema.competition.name, kind: schema.competition.kind, zone: schema.competition.venueZone })
+      .select({ name: schema.competition.name, kind: schema.competition.kind, zone: schema.competition.venueZone, series: schema.competition.series })
       .from(schema.competition);
-    expect(competitions).toEqual([{ name: "Olympic Games Milano Cortina", kind: "games", zone: "Europe/Rome" }]);
+    expect(competitions).toEqual([{ name: "Olympic Games Milano Cortina", kind: "games", zone: "Europe/Rome", series: "olympic-games" }]);
   });
 
   it("flags a source that refuses the Worker as blocked (dropped to Assisted), without retrying it", async () => {

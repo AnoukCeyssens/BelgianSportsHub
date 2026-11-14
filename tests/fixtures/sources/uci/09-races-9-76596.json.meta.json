@@ -1,0 +1,7 @@
+{
+  "url": "https://dataride.uci.ch/iframe/Races/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:26:44.416Z",
+  "requestBody": "disciplineId=9&competitionId=76596&take=100&skip=0&page=1&pageSize=100&sort%5B0%5D%5Bfield%5D=Index&sort%5B0%5D%5Bdir%5D=asc"
+}

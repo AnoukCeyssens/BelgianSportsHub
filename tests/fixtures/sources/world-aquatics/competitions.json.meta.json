@@ -1,0 +1,6 @@
+{
+  "url": "https://api.worldaquatics.com/fina/competitions?pageSize=100&venueDateFrom=2026-10-02T00:00:00%2B00:00&venueDateTo=2026-11-01T23:59:59%2B00:00&group=FINA&sort=dateFrom,asc",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T12:07:35.400Z"
+}

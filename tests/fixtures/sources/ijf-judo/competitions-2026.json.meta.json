@@ -1,0 +1,7 @@
+{
+  "url": "https://data.ijf.org/api/get_json?params[action]=competition.get_list&params[year]=2026",
+  "status": 200,
+  "contentType": "application/json",
+  "recordedAt": "2026-11-14T11:55:45.058Z",
+  "trimmedByHand": "Kept the competitions starting from 15 Oct 2026 only."
+}

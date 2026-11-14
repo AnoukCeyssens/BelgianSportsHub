@@ -4,7 +4,7 @@ import { getDb, schema } from "~/db/client";
 import { ISU_WORLD_CUP_1_RUN, isuWorldCup1Run } from "../fixtures/sources/isu-speed-skating";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
-import { clearIngestedData, seedAthlete, seedMergeQueueItem, seedSource, setSource } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedMergeQueueItem, seedSource, setSource } from "../support/seed";
 import { get, getDeployed, OWNER_EMAIL, post, signedInAs } from "../support/worker";
 
 // Spec #20, stories 98–103 and 106; ticket #24: the weekly Run sheet shell,
@@ -59,6 +59,9 @@ describe("Run sheet", () => {
       lastFailureAt: "2026-11-14T04:00:00.000Z",
       lastError: "HTTP 500",
     });
+    // A Belgian is entered at a UCI race this week, so the blocked (Assisted) UCI source is due for a paste.
+    const race = await seedCompetition(env.DB, { name: "UCI Track Nations Cup", sport: "Track cycling", source: "uci", startDate: "2026-11-13", endDate: "2026-11-15" });
+    await seedEntrant(env.DB, race, await seedAthlete(env.DB, { name: "Lindsay De Vylder", sport: "Track cycling" }));
   }
 
   it("opens on the first step, Source health", async () => {

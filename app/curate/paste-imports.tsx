@@ -8,8 +8,10 @@
 // unmatched identities land in the merge queue (step 4) in the same session.
 import { and, asc, eq } from "drizzle-orm";
 import { Form, Link } from "react-router";
+import { participationsBetween } from "~/calendar/participations";
 import { type Db, schema } from "~/db/client";
 import {
+  BELGIAN_ZONE,
   belgianPastedRows,
   columnMapping,
   identityMatch,
@@ -49,11 +51,27 @@ const KINDS: Record<CompetitionKind, string> = { championship: "Championship", g
 
 type SourceRow = typeof schema.source.$inferSelect;
 
-/** The Assisted sources due this week (configured Assisted, or blocked). */
+/** How far around today a competition counts as "this week" for a paste import. */
+const PARTICIPATION_WINDOW_DAYS = 7;
+
+const shiftDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * The Assisted sources due this week (configured Assisted, or blocked) that
+ * have a Belgian Participation this week (spec #20, story 104): a confirmed
+ * or likely competition within a week either side of today, from that source
+ * or in its sport.
+ */
 export async function loadPasteImports(db: Db, now: Date) {
-  const sources = await db.select().from(schema.source).orderBy(asc(schema.source.name));
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: BELGIAN_ZONE }).format(now);
+  const [sources, nearby] = await Promise.all([
+    db.select().from(schema.source).orderBy(asc(schema.source.name)),
+    participationsBetween(db, shiftDays(today, -PARTICIPATION_WINDOW_DAYS), shiftDays(today, PARTICIPATION_WINDOW_DAYS)),
+  ]);
+  const belgian = nearby.filter((c) => c.participation.status !== "none");
+  const hasParticipation = (s: SourceRow) => belgian.some((c) => c.source === s.key || (s.sport !== null && c.sport === s.sport));
   const imports = sources
-    .filter((s) => pasteImportDue({ ...s, tier: s.tier as SourceTier }, now))
+    .filter((s) => pasteImportDue({ ...s, tier: s.tier as SourceTier }, now) && hasParticipation(s))
     .map((s) => ({ key: s.key, name: s.name, sport: s.sport, blocked: s.blockedAt !== null, lastPastedAt: s.lastPastedAt }));
   return { imports, open: imports.length };
 }

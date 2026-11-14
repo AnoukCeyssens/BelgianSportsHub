@@ -5,7 +5,7 @@ import { getDb, schema } from "~/db/client";
 import pastedTable from "../fixtures/sources/paste/short-track-wt3-1000m-women.tsv?raw";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
-import { clearIngestedData, seedAthlete, seedSource } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedSource } from "../support/seed";
 import { get } from "../support/worker";
 
 // Spec #20, stories 4, 92 and 104; ticket #25: the Run sheet's Paste imports
@@ -80,6 +80,9 @@ describe("Paste imports step", () => {
     await seedSource(env.DB, "isu-speed-skating", { name: "ISU speed skating", lastSuccessAt: "2026-11-14T04:00:00.000Z" });
     vos = await seedAthlete(env.DB, { name: "Hanne Vos", sport: "Short track", externalIds: [{ scheme: "isu", value: "SR-20451" }] });
     peeters = await seedAthlete(env.DB, { name: "Ella Peeters", sport: "Short track", dateOfBirth: "2002-05-06" });
+    // A Belgian Participation in short track this week (the entry list names Hanne Vos), so its source is due.
+    const thisWeek = await seedCompetition(env.DB, { name: "Short Track World Tour, Montréal", sport: "Short track", startDate: "2026-11-13", endDate: "2026-11-15" });
+    await seedEntrant(env.DB, thisWeek, vos);
   });
 
   it("lists the Assisted sources due this week as rows to open", async () => {
@@ -89,6 +92,23 @@ describe("Paste imports step", () => {
     expect(text(html)).not.toMatch(/ISU speed skating Open/);
     expect(html).toContain(`href="${STEP}?source=${SOURCE}"`);
     expect(railStep(text(html), "Paste imports")).toBe("1");
+  });
+
+  it("leaves out a due Assisted source without a Belgian Participation this week", async () => {
+    await seedSource(env.DB, "fie", { name: "FIE fencing", tier: "assisted", cadenceDays: 7, sport: "Fencing" });
+    // Its competition is three weeks away: not this week.
+    const later = await seedCompetition(env.DB, { name: "Fencing World Cup, Tbilisi", sport: "Fencing", source: "fie", startDate: "2026-12-04", endDate: "2026-12-06" });
+    await seedEntrant(env.DB, later, peeters);
+
+    const html = text(await (await get(STEP)).text());
+
+    expect(html).toContain("ISU short track");
+    expect(html).not.toContain("FIE fencing");
+    expect(railStep(html, "Paste imports")).toBe("1");
+
+    // Once one of its competitions with a Belgian is within a week, it is due.
+    fixClock("2026-11-28T10:00:00.000Z");
+    expect(text(await (await get(STEP)).text())).toContain("FIE fencing");
   });
 
   it("keeps the pasted table as received in R2", async () => {
@@ -136,7 +156,7 @@ describe("Paste imports step", () => {
     const db = getDb(env.DB);
     const raw = new URL(importer, "https://bsh.test").searchParams.get("raw")!;
     const results = await db.select().from(schema.result);
-    const competitions = await db.select().from(schema.competition);
+    const competitions = await db.select().from(schema.competition).where(eq(schema.competition.source, SOURCE));
     const items = await db.select().from(schema.mergeQueueItem);
     expect(results.map((r) => r.rawCopyId)).toEqual([raw, raw, raw]);
     expect(competitions.map((c) => c.rawCopyId)).toEqual([raw]);

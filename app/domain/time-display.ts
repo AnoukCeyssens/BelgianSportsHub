@@ -34,7 +34,7 @@ export function toDisplayTime(venueLocal: string, venueZone: string, venueLabel:
 }
 
 /** The instant at which the clock in `zone` reads `wallClock` ("YYYY-MM-DDTHH:mm"). */
-function zonedWallClockToInstant(wallClock: string, zone: string): Date {
+export function zonedWallClockToInstant(wallClock: string, zone: string): Date {
   const asIfUtc = Date.parse(`${wallClock}:00Z`);
   if (Number.isNaN(asIfUtc)) throw new RangeError(`Invalid venue-local time: ${wallClock}`);
   // Offset of the zone near that moment; a second pass settles DST edges.

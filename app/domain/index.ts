@@ -17,6 +17,17 @@ export {
 } from "./source-health";
 export { runSheetProgress, WEEKLY_RUN_SHEET, type RunSheetProgress, type RunSheetStep } from "./run-sheet";
 export {
+  LIKELY_REVIEW_WEEKS,
+  needsLikelyReview,
+  onCalendar,
+  participation,
+  type OwnerParticipationDecision,
+  type Participation,
+  type ParticipationFacts,
+  type ParticipationReason,
+  type ParticipationStatus,
+} from "./participation";
+export {
   belgianPastedRows,
   columnMapping,
   mappingToSave,
@@ -30,3 +41,5 @@ export {
 } from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
 export { athleteMedals, belgiumMedals, teamIdentity, type MedalCount, type MedalEntry, type MedalResult, type TeamIdentity, type TeamKind, type TeamMember } from "./teams";
+export { currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
+export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";

@@ -68,8 +68,29 @@
     {
       "idx": 9,
       "version": "6",
-      "when": 1794659219234,
-      "tag": "0009_teams_and_rosters",
+      "when": 1794658773104,
+      "tag": "0009_participation",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1794659237655,
+      "tag": "0010_championship_standards",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794659520383,
+      "tag": "0011_undocumented_json_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794659634624,
+      "tag": "0012_teams_and_rosters",
       "breakpoints": true
     }
   ]

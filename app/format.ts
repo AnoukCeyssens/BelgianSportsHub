@@ -44,3 +44,10 @@ export function medalsText(m: { gold: number; silver: number; bronze: number }) 
   const parts = (["gold", "silver", "bronze"] as const).filter((c) => m[c] > 0).map((c) => `${m[c]} ${c}`);
   return parts.length > 0 ? `Medals: ${parts.join(" · ")}` : null;
 }
+
+/** "22 Nov", "20–22 Nov", "28 Nov–6 Dec" for a competition's days. */
+export function formatDayRange(start: string, end: string) {
+  if (start === end) return formatDay(start);
+  if (start.slice(0, 7) === end.slice(0, 7)) return `${Number(start.slice(8))}–${formatDay(end)}`;
+  return `${formatDay(start)}–${formatDay(end)}`;
+}
