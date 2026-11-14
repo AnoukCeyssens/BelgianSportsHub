@@ -9,6 +9,9 @@
 //    run; Belgian rows only;
 // 3. for each such event running now or starting within two weeks: its
 //    competitors list, as the entry list behind Upcoming.
+// 4. the World Cup standings that the competitions read in step 2 count for
+//    (ticket #33): one ranking snapshot per Belgian skater, and per nation
+//    for the team events (Belgium's default Team), as of the run's day.
 // Team results (team pursuit, team sprint) go to Belgium's Team for the event,
 // with the skaters the result credits as its roster.
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
@@ -69,10 +72,15 @@ type IsuTeam = { country: string; members: { member: { skater?: IsuSkater } }[] 
 /** ISU result status codes; DNS (4) and Withdrawn (5) are not performances. */
 const STATUS: Record<number, ResultStatus | null> = { 0: "finished", 1: "eliminated", 2: "DNF", 3: "DSQ", 4: null, 5: null };
 
+type IsuWorldCup = { identifier: string; name: string; stages: { competitions: string[] }[] };
+type IsuStanding = { rank: number | null; totalPoints: number | null; skater?: IsuSkater; country?: string };
+
 export const isuSpeedSkating: SourceAdapter = {
   async run(run) {
     const today = isoDate(run.now);
     const windowStart = run.since ? addDays(isoDate(run.since), -1) : addDays(today, -FIRST_RUN_LOOKBACK_DAYS);
+    /** The competitions whose results were read in this run, as World Cup stages list them; per season. */
+    const read = new Map<string, Set<string>>();
 
     for (const event of await events(run, windowStart)) {
       const kind = competitionKind(event);
@@ -91,15 +99,50 @@ export const isuSpeedSkating: SourceAdapter = {
         rawCopyId: event.rawCopyId,
       });
 
-      if (event.start <= today) await results(run, event, competitionId);
+      if (event.start <= today) {
+        const urls = await results(run, event, competitionId);
+        const season = seasonOf(event.start);
+        if (urls.length > 0) read.set(season, new Set([...(read.get(season) ?? []), ...urls]));
+      }
       if (event.end >= today && event.start <= addDays(today, ENTRY_LIST_HORIZON_DAYS)) {
         const competitors = await run.fetch(`${API}/events/${event.isuId}/competitors/`);
         const people = (JSON.parse(competitors.text) as IsuCompetitor[]).flatMap((c) => (c.skater ? [person(c.skater)] : []));
         await run.rows.entrants(competitionId, people.filter(isBelgian), competitors.rawCopyId);
       }
     }
+    for (const [season, urls] of read) await worldCupStandings(run, season, urls);
   },
 };
+
+/** The ISU season an event belongs to, by the year it ends in (July to June): 2026-11-13 → "2027". */
+function seasonOf(date: string): string {
+  const [year, month] = date.split("-").map(Number);
+  return String(month >= 7 ? year + 1 : year);
+}
+
+/** The standings of the season's senior World Cups that one of these competitions counts for. */
+async function worldCupStandings(run: SourceRun, season: string, competitionUrls: Set<string>) {
+  const list = await run.fetch(`${API}/worldcups/?season=${season}&level=senior`);
+  const asOf = isoDate(run.now, "Europe/Brussels");
+  for (const cup of (JSON.parse(list.text) as Page<IsuWorldCup>).results) {
+    if (!cup.stages.some((s) => s.competitions.some((c) => competitionUrls.has(c)))) continue;
+    const fetched = await run.fetch(`${API}/worldcups/${cup.identifier}/standings/?pageSize=200`);
+    const ranking = cup.name;
+    // Team events rank nations: Belgium's default Team in the event ("ISU World Cup Team Pursuit Women" → "Team Pursuit Women").
+    const event = cup.name.replace(/^ISU World Cup /, "");
+    for (const s of (JSON.parse(fetched.text) as Page<IsuStanding>).results) {
+      if (s.rank === null) continue;
+      const common = { ranking, sport: SPORT, asOf, position: s.rank, points: s.totalPoints === null ? null : String(s.totalPoints), rawCopyId: fetched.rawCopyId };
+      if (s.skater) {
+        const p = person(s.skater);
+        if (isBelgian(p)) await run.rows.ranking({ ...common, person: p });
+      } else if (s.country === "BEL") {
+        const teamId = await run.rows.team({ sport: SPORT, event, members: null, rawCopyId: fetched.rawCopyId });
+        await run.rows.ranking({ ...common, teamId });
+      }
+    }
+  }
+}
 
 async function events(run: SourceRun, endGte: string) {
   const all: (IsuEvent & { rawCopyId: string })[] = [];
@@ -113,12 +156,15 @@ async function events(run: SourceRun, endGte: string) {
   return all;
 }
 
-async function results(run: SourceRun, event: IsuEvent, competitionId: string) {
+/** Writes the results of the event's competitions official since the last run; returns those competitions' URLs. */
+async function results(run: SourceRun, event: IsuEvent, competitionId: string): Promise<string[]> {
   const list = await run.fetch(`${API}/events/${event.isuId}/competitions/`);
   const competitions = JSON.parse(list.text) as IsuCompetition[];
+  const read: string[] = [];
   for (const c of competitions) {
     if (!c.isOfficial) continue;
     if (run.since && c.lastUpdate && Date.parse(c.lastUpdate) < run.since.getTime()) continue;
+    read.push(`${API}/events/${event.isuId}/competitions/${c.scheduleNumber}/`);
     const fetched = await run.fetch(`${API}/events/${event.isuId}/competitions/${c.scheduleNumber}/results/`);
     const date = event.track ? isoDate(new Date(c.start), event.track.timeZone) : c.start.slice(0, 10);
     for (const r of JSON.parse(fetched.text) as IsuResult[]) {
@@ -152,6 +198,7 @@ async function results(run: SourceRun, event: IsuEvent, competitionId: string) {
       await run.rows.result({ ...common, person: p });
     }
   }
+  return read;
 }
 
 function competitionKind(event: IsuEvent): CompetitionKind | null {

@@ -153,6 +153,23 @@ export type TeamInput = {
 };
 
 /**
+ * One Belgian row of a ranking list (ticket #33): a person (matched to an
+ * Athlete, else left out: rankings never create Athletes), or a Team from
+ * `team()` (a pair's partnership, or the default Team for a nation ranking).
+ */
+export type RankingInput = {
+  /** The ranking as the source names it, stable from season to season: "ISU World Cup 1500m Men". */
+  ranking: string;
+  sport: string;
+  /** YYYY-MM-DD the list is as of: its publication date, or the run's Belgian date when it has none. */
+  asOf: string;
+  position: number;
+  /** Ranking points as published, when the list has them. */
+  points: string | null;
+  rawCopyId: string;
+} & ({ person: Person } | { teamId: string });
+
+/**
  * Where an adapter puts what it parsed. Only performances count as results:
  * an adapter leaves out DNS and withdrawals. Non-Belgian people are ignored
  * here, but adapters should filter by nationality early to keep work small.
@@ -166,6 +183,11 @@ export type BelgianRows = {
   teamResult(input: TeamResultInput): Promise<void>;
   /** Finds or creates the Team a ranking row belongs to (pair → its partnership, nation → the default Team); returns its id. */
   team(input: TeamInput): Promise<string>;
+  /**
+   * Stores one Belgian ranking snapshot (one per ranking, Entry and day) and
+   * moves the tracks that follow this ranking to the new position.
+   */
+  ranking(input: RankingInput): Promise<void>;
   /** Replaces a competition's entry list: the Belgians it names who are already Athletes. */
   entrants(competitionId: string, people: Person[], rawCopyId: string): Promise<void>;
 };

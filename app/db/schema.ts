@@ -626,4 +626,50 @@ export const qualificationTrack = sqliteTable("qualification_track", {
   /** Belgian date of the last check, and of the last change to needed / has / state. */
   checkedOn: text("checked_on").notNull(),
   changedOn: text("changed_on").notNull(),
+  /**
+   * The ranking this track follows (ticket #33), as its snapshots name it:
+   * source key and ranking name (e.g. "isu-speed-skating" / "ISU World Cup
+   * 1500m Men"). Each new snapshot of the Entry's Athlete or Team on it
+   * updates `has` (and `state` once the window has closed). Null: by hand only.
+   */
+  rankingSource: text("ranking_source"),
+  ranking: text("ranking"),
+  /** What it had before its last change to `has` (the Qualification review shows "was → now"); null before any change. */
+  previousHas: text("previous_has"),
 });
+
+/**
+ * One ranking snapshot (spec #20, Data model; ticket #33): where a Belgian
+ * Athlete or Team stood on one ranking list as a source published it on one
+ * day. Rankings published per pair belong to that pair's Team; nation
+ * rankings to Belgium's default Team in the event (story 15). Rankings never
+ * create Athletes: rows for people not matched to an Athlete are left out.
+ */
+export const rankingSnapshot = sqliteTable(
+  "ranking_snapshot",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    /** Source key, e.g. "isu-speed-skating". */
+    source: text("source").notNull(),
+    /** The ranking as the source names it, stable from season to season: "ISU World Cup 1500m Men". */
+    ranking: text("ranking").notNull(),
+    sport: text("sport").notNull(),
+    /** Exactly one of the two is set. */
+    athleteId: text("athlete_id").references(() => athlete.id),
+    teamId: text("team_id").references(() => team.id),
+    position: integer("position").notNull(),
+    /** Ranking points as published, when the list has them. */
+    points: text("points"),
+    /** YYYY-MM-DD the list is as of (its publication date, or the day it was read). */
+    asOf: text("as_of").notNull(),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+    /** ISO instant the snapshot was first stored. */
+    recordedAt: text("recorded_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("ranking_snapshot_athlete").on(t.source, t.ranking, t.athleteId, t.asOf),
+    uniqueIndex("ranking_snapshot_team").on(t.source, t.ranking, t.teamId, t.asOf),
+  ],
+);

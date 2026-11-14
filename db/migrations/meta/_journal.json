@@ -134,6 +134,13 @@
       "when": 1794666940641,
       "tag": "0018_live_day_pass",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794667441353,
+      "tag": "0019_ranking_snapshots",
+      "breakpoints": true
     }
   ]
 }

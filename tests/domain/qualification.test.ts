@@ -3,6 +3,9 @@ import {
   inContention,
   olympicCycleOf,
   qualificationTargets,
+  rankedTrack,
+  rankingPlaces,
+  suggestStatus,
   trackProgress,
   windowCountdown,
   type QualificationStatus,
@@ -146,5 +149,249 @@ describe("qualificationTargets: the next Olympics and the next Championship for 
   ])("$name", ({ sport, withEntries, now, expected }) => {
     const targets = qualificationTargets({ sport, competitions: all, withEntries: new Set(withEntries) }, new Date(now));
     expect({ olympics: targets.olympics?.id ?? null, championship: targets.championship?.id ?? null }).toEqual(expected);
+  });
+});
+
+// Ticket #33: trackers and rankings suggest a status; the owner confirms it
+// (spec #20, stories 83, 85 and 87; GLOSSARY "Qualification status").
+const met = { state: "met" } as const;
+const notMet = { state: "not-met" } as const;
+const pending = { state: "pending" } as const;
+const place = (kind: "noc-owned" | "named", state: string, entryId: string | null = null) => ({ kind, state, entryId });
+
+describe("suggestStatus: the Qualification status trackers and rankings suggest for one Entry", () => {
+  it.each([
+    {
+      name: "three Belgians meet the criteria for two NOC-owned places: Eligible",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 3 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "allocated"), place("noc-owned", "allocated")],
+      expected: "eligible",
+    },
+    {
+      name: "two Belgians for two NOC-owned places: Qualified",
+      entry: { id: "e1", status: "eligible", target: "games", windowClosed: false, belgianCandidates: 2 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "accepted"), place("noc-owned", "allocated")],
+      expected: "qualified",
+    },
+    {
+      name: "the only Belgian candidate for one NOC-owned place: Qualified",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 1 },
+      tracks: [met, pending],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "allocated")],
+      expected: "qualified",
+    },
+    {
+      name: "a declined or lost place does not count: two candidates for the one place left",
+      entry: { id: "e1", status: "qualified", target: "games", windowClosed: false, belgianCandidates: 2 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "allocated"), place("noc-owned", "declined"), place("noc-owned", "lost")],
+      expected: "eligible",
+    },
+    {
+      name: "NOC-owned places only held on today's list (Provisional): On track while there are enough",
+      entry: { id: "e1", status: "at-risk", target: "games", windowClosed: false, belgianCandidates: 1 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "provisional")],
+      expected: "on-track",
+    },
+    {
+      name: "more candidates than Provisional NOC-owned places: Eligible",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 2 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "provisional")],
+      expected: "eligible",
+    },
+    {
+      name: "a named place allocated to this Entry: Qualified, whatever the tracks say",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending],
+      ranking: null,
+      quotaPlaces: [place("named", "allocated", "e1")],
+      expected: "qualified",
+    },
+    {
+      name: "a named place still Provisional: On track",
+      entry: { id: "e1", status: "at-risk", target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending],
+      ranking: null,
+      quotaPlaces: [place("named", "provisional", "e1")],
+      expected: "on-track",
+    },
+    {
+      name: "another Entry's named place is not this Entry's",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending],
+      ranking: { position: 40, places: 24 },
+      quotaPlaces: [place("named", "allocated", "e2")],
+      expected: "at-risk",
+    },
+    {
+      name: "criteria met at the Games but no place recorded yet: On track",
+      entry: { id: "e1", status: "at-risk", target: "games", windowClosed: false, belgianCandidates: 1 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [],
+      expected: "on-track",
+    },
+    {
+      name: "a Championship has no quota places: meeting a track is Qualified",
+      entry: { id: "e1", status: "on-track", target: "championship", windowClosed: false, belgianCandidates: 3 },
+      tracks: [met, notMet],
+      ranking: null,
+      quotaPlaces: [],
+      expected: "qualified",
+    },
+    {
+      name: "inside the ranking places if qualifying closed today: On track",
+      entry: { id: "e1", status: "at-risk", target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending],
+      ranking: { position: 18, places: 24 },
+      quotaPlaces: [],
+      expected: "on-track",
+    },
+    {
+      name: "level with the last ranking place: On track",
+      entry: { id: "e1", status: null, target: "championship", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending],
+      ranking: { position: 24, places: 24 },
+      quotaPlaces: [],
+      expected: "on-track",
+    },
+    {
+      name: "outside the ranking places: At risk",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending],
+      ranking: { position: 31, places: 24 },
+      quotaPlaces: [],
+      expected: "at-risk",
+    },
+    {
+      name: "outside the places once the window has closed: Not in contention",
+      entry: { id: "e1", status: "at-risk", target: "games", windowClosed: true, belgianCandidates: 0 },
+      tracks: [notMet],
+      ranking: { position: 31, places: 24 },
+      quotaPlaces: [],
+      expected: "not-in-contention",
+    },
+    {
+      name: "every track missed while the window is open: At risk",
+      entry: { id: "e1", status: "on-track", target: "championship", windowClosed: false, belgianCandidates: 0 },
+      tracks: [notMet, notMet],
+      ranking: null,
+      quotaPlaces: [],
+      expected: "at-risk",
+    },
+    {
+      name: "every track missed and the window closed: Not in contention",
+      entry: { id: "e1", status: "at-risk", target: "championship", windowClosed: true, belgianCandidates: 0 },
+      tracks: [notMet],
+      ranking: null,
+      quotaPlaces: [],
+      expected: "not-in-contention",
+    },
+    {
+      name: "a ranking without a number of places says nothing; tracks still open: no suggestion",
+      entry: { id: "e1", status: "on-track", target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [pending, notMet],
+      ranking: { position: 12, places: null },
+      quotaPlaces: [],
+      expected: null,
+    },
+    {
+      name: "no tracks and no ranking: no suggestion",
+      entry: { id: "e1", status: null, target: "games", windowClosed: false, belgianCandidates: 0 },
+      tracks: [],
+      ranking: null,
+      quotaPlaces: [],
+      expected: null,
+    },
+    {
+      name: "Selected is the selector's word: rankings never move it",
+      entry: { id: "e1", status: "selected", target: "games", windowClosed: false, belgianCandidates: 3 },
+      tracks: [met],
+      ranking: { position: 40, places: 24 },
+      quotaPlaces: [place("noc-owned", "allocated")],
+      expected: "selected",
+    },
+    {
+      name: "Not selected stays (a place passed to another partnership)",
+      entry: { id: "e1", status: "not-selected", target: "games", windowClosed: false, belgianCandidates: 1 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [place("noc-owned", "allocated")],
+      expected: "not-selected",
+    },
+    {
+      name: "Withdrawn stays",
+      entry: { id: "e1", status: "withdrawn", target: "championship", windowClosed: false, belgianCandidates: 1 },
+      tracks: [met],
+      ranking: null,
+      quotaPlaces: [],
+      expected: "withdrawn",
+    },
+  ] as const)("$name", ({ entry, tracks, ranking, quotaPlaces, expected }) => {
+    expect(suggestStatus(entry, tracks, ranking, quotaPlaces)).toBe(expected);
+  });
+});
+
+describe("rankedTrack: a ranking-linked track after a new ranking snapshot", () => {
+  it.each([
+    {
+      name: "inside the places while the window is open: pending, the position held",
+      track: { needed: "Top 24", has: "#31", state: "pending" },
+      snapshot: { position: 18, points: "412" },
+      windowClosed: false,
+      expected: { has: "#18 · 412 pts", state: "pending" },
+    },
+    {
+      name: "outside the places while open: still pending",
+      track: { needed: "Top 24", has: "#18 · 412 pts", state: "pending" },
+      snapshot: { position: 31, points: null },
+      windowClosed: false,
+      expected: { has: "#31", state: "pending" },
+    },
+    {
+      name: "inside the places when the window has closed: met",
+      track: { needed: "top 30", has: "#31", state: "pending" },
+      snapshot: { position: 30, points: "88" },
+      windowClosed: true,
+      expected: { has: "#30 · 88 pts", state: "met" },
+    },
+    {
+      name: "outside when closed: not met",
+      track: { needed: "Top 24", has: "#18", state: "pending" },
+      snapshot: { position: 25, points: null },
+      windowClosed: true,
+      expected: { has: "#25", state: "not-met" },
+    },
+    {
+      name: "no number of places in what is needed: the state stays the owner's",
+      track: { needed: "Ranked by the federation", has: "–", state: "met" },
+      snapshot: { position: 7, points: null },
+      windowClosed: true,
+      expected: { has: "#7", state: "met" },
+    },
+  ] as const)("$name", ({ track, snapshot, windowClosed, expected }) => {
+    expect(rankedTrack(track, snapshot, windowClosed)).toEqual(expected);
+  });
+});
+
+describe("rankingPlaces: how many ranking places a track's needed text names", () => {
+  it.each([
+    { needed: "Top 24", expected: 24 },
+    { needed: "top 30 of the World Cup", expected: 30 },
+    { needed: "Top-16 SOQC", expected: 16 },
+    { needed: "6 500 pts", expected: null },
+    { needed: "Criteria TBA", expected: null },
+  ])("$needed → $expected", ({ needed, expected }) => {
+    expect(rankingPlaces(needed)).toBe(expected);
   });
 });
