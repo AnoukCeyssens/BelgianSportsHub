@@ -126,7 +126,7 @@ export const source = sqliteTable("source", {
  */
 export const runSheetSession = sqliteTable("run_sheet_session", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  /** "weekly" (the Live day pass comes later). */
+  /** "weekly" or "live" (the Live day pass). */
   sheet: text("sheet").notNull(),
   startedAt: text("started_at").notNull(),
   finishedAt: text("finished_at"),
@@ -488,6 +488,65 @@ export const sessionRound = sqliteTable("session_round", {
   round: text("round").notNull(),
   position: integer("position").notNull(),
 });
+
+/**
+ * An Entry's round attachment (spec #20, Data model; stories 56 and 58;
+ * ticket #38): what the Live day pass learnt about an Entry in one round of
+ * its event, keyed by the round's name so it outlives timetable versions.
+ * The outcome moves later rounds on ("advanced") or drops them
+ * ("eliminated"); the optional heat or match detail (any of it may be
+ * missing) shows on the day view and, once given, means a start list names
+ * the Entry in that round.
+ */
+export const entryRound = sqliteTable(
+  "entry_round",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    entryId: text("entry_id")
+      .notNull()
+      .references(() => entry.id, { onDelete: "cascade" }),
+    /** The round as the timetable names it, e.g. "Semi-finals". */
+    round: text("round").notNull(),
+    /** "advanced" | "eliminated" (RoundOutcome); null while not known. */
+    outcome: text("outcome"),
+    /** Heat, race, group or table, as the start list names it. */
+    heat: text("heat"),
+    lane: text("lane"),
+    /** The opponent in a match, e.g. "LI Wen (CHN)". */
+    opponent: text("opponent"),
+    /** Exact start, venue-local "HH:mm", when the start list gives one. */
+    startsAt: text("starts_at"),
+    /** ISO instant the owner last looked for heat or match detail (saved, or none published). */
+    detailCheckedAt: text("detail_checked_at"),
+    /** ISO instant of the owner's last change. */
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("entry_round_round").on(t.entryId, t.round)],
+);
+
+/**
+ * The other nations' medal counts at a competition, as the owner last pasted
+ * them from the official medal table (ticket #38). Belgium's own row is
+ * never stored: it is counted from Belgian results (`belgiumMedals`).
+ */
+export const medalStanding = sqliteTable(
+  "medal_standing",
+  {
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id, { onDelete: "cascade" }),
+    nation: text("nation").notNull(),
+    gold: integer("gold").notNull(),
+    silver: integer("silver").notNull(),
+    bronze: integer("bronze").notNull(),
+    /** ISO instant of the paste. */
+    pastedAt: text("pasted_at").notNull(),
+    rawCopyId: text("raw_copy_id")
+      .notNull()
+      .references(() => rawCopy.id),
+  },
+  (t) => [primaryKey({ columns: [t.competitionId, t.nation] })],
+);
 
 /**
  * The owner's curated facts behind the Active rule (GLOSSARY "Active",

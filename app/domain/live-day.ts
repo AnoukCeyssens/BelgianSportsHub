@@ -3,29 +3,80 @@
 import { wallClockIn } from "./time-display";
 
 /**
- * "scheduled": the round the Entry starts in; "if-through": a later round,
- * reached only by advancing (#38 moves it on, or drops it, from results and
- * start lists); "match-tbd": a pool or preliminary match whose opponent and
- * time wait for the draw.
+ * "scheduled": a round the Entry competes in (the one it starts in, or one a
+ * result or start list shows it reached); "if-through": a later round,
+ * reached only by advancing; "match-tbd": a pool or preliminary match whose
+ * opponent and time wait for the draw.
  */
 export type RoundState = "scheduled" | "if-through" | "match-tbd";
 
+/** What a round's result said about the Entry: through to the next round, or out. */
+export type RoundOutcome = "advanced" | "eliminated";
+
+/**
+ * What is known about an Entry in one round (ticket #38): its outcome there,
+ * and whether a start list, heat draw or match detail names it in the round.
+ */
+export type RoundProgress = { round: string; outcome: RoundOutcome | null; listed: boolean };
+
+/** The Entry's final classification in the event (a `result` row), when there is one. */
+export type EventResult = { date: string; status: string };
+
+export type EntryProgress = { rounds: readonly RoundProgress[]; result: EventResult | null };
+
 const POOL = /^(pool|group|preliminar)/i;
+
+const NO_PROGRESS: EntryProgress = { rounds: [], result: null };
 
 /**
  * The rounds of its event an Entry is placed in, in time order: every round
  * from the one it starts in (`firstRound`, after a bye; the first round when
- * null or not in the timetable).
+ * null or not in the timetable). Later rounds are "if through" until a result
+ * or start list shows the Entry reached them, and drop once it is out: after
+ * the round it was eliminated in, or after the date of a final
+ * classification that is not a finish. A finished classification means every
+ * round up to its date was reached.
  */
-export function roundsFor<R extends { round: string }>(entry: { firstRound: string | null }, rounds: readonly R[]): (R & { state: RoundState })[] {
+export function roundsFor<R extends { round: string; date: string }>(
+  entry: { firstRound: string | null },
+  rounds: readonly R[],
+  progress: EntryProgress = NO_PROGRESS,
+): (R & { state: RoundState; outcome: RoundOutcome | null })[] {
   const from = Math.max(0, rounds.findIndex((r) => r.round === entry.firstRound));
   const attached = rounds.slice(from);
-  const opening = attached.find((r) => !POOL.test(r.round))?.round;
-  const startsInPool = attached.length > 0 && POOL.test(attached[0].round);
-  return attached.map((r) => ({
-    ...r,
-    state: POOL.test(r.round) ? "match-tbd" : r.round === opening && !startsInPool ? "scheduled" : "if-through",
-  }));
+  // A round may span several Sessions: progress is per round name, in order.
+  const names = [...new Set(attached.map((r) => r.round))];
+  const step = (round: string) => names.indexOf(round);
+  let reached = 0;
+  let outAfter = Infinity;
+  const outcomes = new Map<string, RoundOutcome>();
+  const listed = new Set<string>();
+  for (const p of progress.rounds) {
+    const i = step(p.round);
+    if (i < 0) continue;
+    if (p.listed) listed.add(p.round);
+    if (p.outcome) outcomes.set(p.round, p.outcome);
+    if (p.listed || p.outcome) reached = Math.max(reached, i);
+    if (p.outcome === "advanced") reached = Math.max(reached, i + 1);
+    if (p.outcome === "eliminated") outAfter = Math.min(outAfter, i);
+  }
+  const result = progress.result;
+  if (result?.status === "finished") {
+    for (const r of attached) if (r.date <= result.date) reached = Math.max(reached, step(r.round));
+  }
+  const kept = attached.filter((r) => step(r.round) <= outAfter && (!result || r.date <= result.date));
+  return kept.map((r) => {
+    const i = step(r.round);
+    // A pool match stays TBD until its draw is known or the pool is behind the Entry.
+    const state: RoundState = POOL.test(r.round)
+      ? listed.has(r.round) || outcomes.has(r.round) || i < reached
+        ? "scheduled"
+        : "match-tbd"
+      : i <= reached
+        ? "scheduled"
+        : "if-through";
+    return { ...r, state, outcome: outcomes.get(r.round) ?? null };
+  });
 }
 
 export type LiveDay = { date: string; day: number; marked: boolean };

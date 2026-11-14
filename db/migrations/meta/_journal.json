@@ -120,6 +120,13 @@
       "when": 1794666050539,
       "tag": "0016_active_rule",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794666516210,
+      "tag": "0017_live_day_pass",
+      "breakpoints": true
     }
   ]
 }
