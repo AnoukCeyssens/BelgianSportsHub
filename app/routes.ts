@@ -7,4 +7,5 @@ export default [
   route("calendar", "routes/calendar.tsx"),
   route("championship", "routes/championship.tsx"),
   route("games", "routes/games.tsx"),
+  route("curation/roster-seed", "routes/curation.roster-seed.tsx"),
 ] satisfies RouteConfig;

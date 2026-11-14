@@ -1,0 +1,6 @@
+{
+  "url": "https://query.wikidata.org/sparql?format=json&query=SELECT+%3Fitem+%3FteamBelgium+%3Folympedia+%3FworldAthletics+WHERE+%7B%0A++%3Fitem+wdt%3AP10963+%3FteamBelgium+.%0A++OPTIONAL+%7B+%3Fitem+wdt%3AP8286+%3Folympedia+%7D%0A++OPTIONAL+%7B+%3Fitem+wdt%3AP1146+%3FworldAthletics+%7D%0A%7D",
+  "status": 200,
+  "contentType": "application/sparql-results+json;charset=utf-8",
+  "recordedAt": "2026-11-14T11:27:43.325Z"
+}

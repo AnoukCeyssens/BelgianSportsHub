@@ -10,8 +10,8 @@ describe("Athlete tab", () => {
       sport: "Athletics",
       dateOfBirth: "1994-08-19",
       externalIds: [
-        { scheme: "world-athletics", value: "14290553" },
-        { scheme: "wikidata", value: "Q2370613" },
+        { scheme: "world-athletics", value: "14428253" },
+        { scheme: "wikidata", value: "Q4167514" },
       ],
     });
 
@@ -22,8 +22,8 @@ describe("Athlete tab", () => {
     expect(html).toContain("<h1>Nafissatou Thiam</h1>");
     expect(html).toContain("Athletics");
     expect(html).toContain("born 19 Aug 1994");
-    expect(html).toContain("World Athletics 14290553");
-    expect(html).toContain("Wikidata Q2370613");
+    expect(html).toContain("World Athletics 14428253");
+    expect(html).toContain("Wikidata Q4167514");
   });
 
   it("lists the seeded Athletes, linking to each Athlete page", async () => {
