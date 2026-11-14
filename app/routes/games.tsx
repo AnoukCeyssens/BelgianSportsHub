@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { data, Link } from "react-router";
+import { data, Link, redirect } from "react-router";
 import { sportColour } from "~/calendar/sport-colours";
 import { now } from "~/clock";
 import { PhaseBar } from "~/competition/phase-bar";
@@ -7,7 +7,19 @@ import { gamesPhaseInputs } from "~/competition/phase-inputs";
 import { loadPhasePanel, PhasePanel } from "~/competition/phase-panels";
 import { cloudflareContext, dbFrom } from "~/context";
 import { schema } from "~/db/client";
-import { belgianDate, chosenSports, combinedPhaseInputs, currentPhase, PHASE_LABELS, PHASES, phaseToShow, toggledSports, type Phase } from "~/domain";
+import {
+  belgianDate,
+  chosenSports,
+  combinedPhaseInputs,
+  currentPhase,
+  PHASE_LABELS,
+  PHASES,
+  phaseToShow,
+  REFERENCE_GAMES,
+  referenceGamesOf,
+  toggledSports,
+  type Phase,
+} from "~/domain";
 import { formatDayRange } from "~/format";
 import { isOwner } from "~/owner";
 import type { Route } from "./+types/games";
@@ -33,8 +45,12 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const upcoming = all.filter((g) => g.endDate >= belgianDate(at));
   const games = params.competitionId ? all.find((g) => g.id === params.competitionId) : upcoming[0];
   if (params.competitionId && !games) throw data("No such Games", { status: 404 });
+  // A reference Games (Paris 2024, Milano-Cortina 2026) is history: no Phases.
+  const reference = games ? referenceGamesOf(games) : null;
+  if (reference) throw redirect(`/reference/${reference.key}`);
   const others = upcoming.filter((g) => g.id !== games?.id).map((g) => ({ id: g.id, name: g.name }));
-  if (!games) return { games: null, others };
+  const references = REFERENCE_GAMES.map((g) => ({ key: g.key, name: g.name }));
+  if (!games) return { games: null, others, references };
 
   const search = new URL(request.url).searchParams;
   const { whole, sports } = await gamesPhaseInputs(db, games);
@@ -62,6 +78,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       endDate: games.endDate,
     },
     others,
+    references,
     current,
     shown,
     // A Live day's link: `{day}` stands for its date.
@@ -94,10 +111,11 @@ export default function Games({ loaderData }: Route.ComponentProps) {
         <h1>Games</h1>
         <p className="meta">LA 2028 and French Alps 2030, phase by phase.</p>
         <p className="sub">No Games dates recorded yet.</p>
+        <References games={loaderData.references} />
       </>
     );
   }
-  const { games, others, current, shown, phaseHrefs, dayHref, chips, sports, panel, owner } = loaderData;
+  const { games, others, references, current, shown, phaseHrefs, dayHref, chips, sports, panel, owner } = loaderData;
   return (
     <>
       <h1>{games.name}</h1>
@@ -146,6 +164,22 @@ export default function Games({ loaderData }: Route.ComponentProps) {
           <Link to={`/curate/games/${games.id}/standards`}>Record standards</Link>
         </p>
       ) : null}
+      <References games={references} />
     </>
+  );
+}
+
+/** The reference Games (history, Belgian results only), as the baseline for the cycles. */
+function References({ games }: { games: { key: string; name: string }[] }) {
+  return (
+    <p className="sub">
+      {"Reference: "}
+      {games.map((g, i) => (
+        <span key={g.key}>
+          {i > 0 ? " · " : null}
+          <Link to={`/reference/${g.key}`}>{g.name}</Link>
+        </span>
+      ))}
+    </p>
   );
 }

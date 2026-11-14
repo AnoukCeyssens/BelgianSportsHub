@@ -72,4 +72,22 @@ describe("FIVB volleyball source", () => {
     expect(source.lastChangeAt).toBe(VOLLEYBALL_EUROVOLLEY_RUN.now);
     expect(source.blockedAt).toBeNull();
   });
+
+  it("writes Belgium's final place at an ended tournament to the national Team, with the registered Belgians as its roster", async () => {
+    const debouck = await seedAthlete(env.DB, { name: "Noor Debouck", sport: "Volleyball", dateOfBirth: "2005-06-09" });
+
+    await euroVolleyRun();
+
+    const html = await (await get(`/athletes/${debouck}`)).text();
+    const results = html.slice(html.indexOf("<h2>Results</h2>"));
+    expect(results).toContain("CEV EuroVolley 2026 | Women");
+    expect(results).toContain("9th");
+    const team = results.match(/href="\/teams\/([^"]+)"[^>]*>Belgium · Women</)?.[1];
+    expect(team).toBeDefined();
+    const roster = await (await get(`/teams/${team}`)).text();
+    for (const name of ["Saar Bertels", "Noor Debouck", "Janne Deleu", "Nel Demeyer"]) expect(roster).toContain(name);
+    expect(roster).not.toContain("Marie Bruckner");
+    // The men's EuroVolley has not started: no result, no Team.
+    expect(await getDb(env.DB).$count(schema.result)).toBe(1);
+  });
 });

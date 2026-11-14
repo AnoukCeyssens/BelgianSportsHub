@@ -4,7 +4,7 @@
 // column mapping, with the timetable column roles. "Read" keeps the paste (or
 // the fetched plain HTML page) as a raw copy; the review lists each event
 // with its rounds and offers the Belgian Entries to name per event (Athletes
-// of that sport, the competition's entrants, the Entries already named), each
+// and Teams of that sport, the competition's entrants, the Entries already named), each
 // with the round it starts in after a bye. "Store" keeps the version stamp,
 // names the Entries and replaces the previous version's Sessions with this
 // version's Sessions, keeping only the rounds of events with a Belgian Entry.
@@ -94,8 +94,12 @@ export async function loadTimetableReview(env: Pick<Env, "DB" | "RAW">, db: Db, 
   const rounds = await withKnownSports(db, competition, readTimetable(table, roles, competition).rounds);
   const events = eventsOf(rounds);
 
-  const [athletes, entrants, entries] = await Promise.all([
+  const [athletes, teams, entrants, entries] = await Promise.all([
     db.select({ id: schema.athlete.id, name: schema.athlete.name, sport: schema.athlete.sport }).from(schema.athlete).orderBy(asc(schema.athlete.name)),
+    db
+      .select({ id: schema.team.id, name: schema.team.name, sport: schema.team.sport, event: schema.team.event })
+      .from(schema.team)
+      .orderBy(asc(schema.team.name)),
     db.select({ athleteId: schema.entrant.athleteId }).from(schema.entrant).where(eq(schema.entrant.competitionId, competition.id)),
     db.select().from(schema.entry).where(eq(schema.entry.competitionId, competition.id)),
   ]);
@@ -112,15 +116,23 @@ export async function loadTimetableReview(env: Pick<Env, "DB" | "RAW">, db: Db, 
     roundCount: rounds.length,
     events: events.map((e) => {
       const named = entries.filter((x) => x.event === e.event && x.sport.toLowerCase() === e.sport.toLowerCase());
-      const candidates = athletes.filter(
-        (a) => a.sport.toLowerCase() === e.sport.toLowerCase() || entrantIds.has(a.id) || named.some((n) => n.athleteId === a.id),
-      );
+      const sameSport = (sport: string) => sport.toLowerCase() === e.sport.toLowerCase();
+      const candidate = (who: string, name: string, entry: (typeof named)[number] | undefined) => ({
+        who,
+        name,
+        named: entry !== undefined,
+        firstRound: entry?.firstRound ?? null,
+      });
       return {
         ...e,
-        candidates: candidates.map((a) => {
-          const entry = named.find((n) => n.athleteId === a.id);
-          return { who: `athlete:${a.id}`, name: a.name, named: entry !== undefined, firstRound: entry?.firstRound ?? null };
-        }),
+        candidates: [
+          ...teams
+            .filter((t) => sameSport(t.sport) || named.some((n) => n.teamId === t.id))
+            .map((t) => candidate(`team:${t.id}`, `${t.name} (Team · ${t.event})`, named.find((n) => n.teamId === t.id))),
+          ...athletes
+            .filter((a) => sameSport(a.sport) || entrantIds.has(a.id) || named.some((n) => n.athleteId === a.id))
+            .map((a) => candidate(`athlete:${a.id}`, a.name, named.find((n) => n.athleteId === a.id))),
+        ],
       };
     }),
   };
@@ -461,7 +473,7 @@ function Review({ review }: { review: TimetableReviewData }) {
             <legend>
               <b>{e.event}</b> <span className="sub">{`${e.rounds.join(" · ")}${review.events.some((x) => x.sport !== e.sport) ? ` · ${e.sport}` : ""}`}</span>
             </legend>
-            {e.candidates.length === 0 ? <p className="sub">No Belgian Athlete of this sport known.</p> : null}
+            {e.candidates.length === 0 ? <p className="sub">No Belgian Athlete or Team of this sport known.</p> : null}
             {e.candidates.map((c) => (
               <label key={c.who} className="entry-pick">
                 <input type="checkbox" name={`entry.${i}`} value={c.who} defaultChecked={c.named} />

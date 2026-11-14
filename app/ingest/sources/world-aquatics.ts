@@ -6,13 +6,15 @@
 // 1. the World Aquatics competitions ending since the last run (a year back
 //    on the first run) up to two weeks ahead: one request;
 // 2. for each Championship, the Games or World Cup leg that has started: its
-//    disciplines, then the results of each individual discipline whose every
-//    heat is official; Belgian rows only.
+//    disciplines, then the results of each discipline whose every heat is
+//    official; Belgian rows only.
 // Swim times count from any sanctioned meet, but only the Championships and
 // the named top series are ingested (spec #20, story 95). European
 // Championships are run by European Aquatics, not here. Relays, synchronised
-// diving, duets and teams wait for Teams (#27). No structured entry lists, so
-// there is no Upcoming.
+// diving, duets and teams are Teams (ADR 0001): a relay or an artistic
+// swimming team is Belgium's Team for the event, each synchro pair or duet its
+// own Team; the roster is whoever the result credits, reserves left out. No
+// structured entry lists, so there is no Upcoming.
 import type { CompetitionKind, Person, ResultStatus, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://api.worldaquatics.com/fina";
@@ -46,6 +48,12 @@ type DisciplineResults = {
 
 type SwimResult = {
   PersonId: string;
+  /** Relays: each swimmer's leg. */
+  SubResults?: { PersonId: string; FirstName: string; LastName: string; NAT: string }[] | null;
+  /** Synchro, duets and teams: the athletes, by GMS ID only. */
+  Competitors?: { GmsId: string; FirstName: string; LastName: string; NAT: string; Reserve?: boolean }[] | null;
+  /** Judged events. */
+  TotalPoints?: string | null;
   FirstName: string;
   LastName: string;
   NAT: string;
@@ -56,7 +64,7 @@ type SwimResult = {
   ScoringAbbr?: string | null;
 };
 
-/** Individual sport disciplines only: relays and pairs or teams wait for Teams (#27). */
+/** Relays, synchronised diving, duets and teams: their results are Team results. */
 const TEAM_EVENT = /relay|synchro|duet|team/i;
 
 export const worldAquatics: SourceAdapter = {
@@ -89,10 +97,13 @@ export const worldAquatics: SourceAdapter = {
       const events = JSON.parse(listed.text) as Events;
       const course = events.PoolConfiguration === "25m" ? " (25m)" : "";
       for (const discipline of events.Sports.flatMap((s) => s.DisciplineList)) {
-        if (TEAM_EVENT.test(discipline.DisciplineName)) continue;
         if (discipline.HeatList.length === 0 || discipline.HeatList.some((h) => h.ResultStatus !== "OFFICIAL")) continue;
         const fetched = await run.fetch(`${API}/events/${discipline.Id}`);
         const body = JSON.parse(fetched.text) as DisciplineResults;
+        if (TEAM_EVENT.test(discipline.DisciplineName)) {
+          await teamResults(run, { competitionId, competitionRef: c.id, disciplineId: discipline.Id, event: `${body.DisciplineName}${course}`, rawCopyId: fetched.rawCopyId }, body);
+          continue;
+        }
         for (const [personId, { heat, r }] of lastSwims(body)) {
           const status = statusOf(r);
           if (!status) continue;
@@ -113,6 +124,61 @@ export const worldAquatics: SourceAdapter = {
   },
 };
 
+type TeamContext = { competitionId: string; competitionRef: number; disciplineId: string; event: string; rawCopyId: string };
+
+/**
+ * Each Belgian Team's last swim or routine in the discipline (a final over a
+ * heat), with everyone it credits across rounds as the roster: relay swimmers
+ * by World Aquatics person ID, artistic swimmers and divers by GMS ID (their
+ * rows carry no person ID). Reserves are left out.
+ */
+async function teamResults(run: SourceRun, ctx: TeamContext, body: DisciplineResults) {
+  const teams = new Map<string, { heat: DisciplineResults["Heats"][number]; r: SwimResult; roster: Map<string, Person> }>();
+  for (const heat of body.Heats) {
+    if (heat.IsSummary) continue;
+    for (const r of heat.Results) {
+      if (r.NAT !== "BEL") continue;
+      const members = teamMembers(r);
+      // A relay is one Team whatever its swimmers; a duet or synchro pair is told apart by its members.
+      const key = r.SubResults ? "relay" : members.map((m) => m.ifId.value).toSorted().join("+");
+      const seen = teams.get(key);
+      const roster = seen?.roster ?? new Map<string, Person>();
+      for (const m of statusOf(r) ? members : []) roster.set(m.ifId.value, m);
+      if (!seen || heat.UtcDateTime > seen.heat.UtcDateTime) teams.set(key, { heat, r, roster });
+    }
+  }
+  for (const [key, { heat, r, roster }] of teams) {
+    const status = statusOf(r);
+    if (!status || roster.size === 0) continue;
+    await run.rows.teamResult({
+      competitionId: ctx.competitionId,
+      nationality: "BEL",
+      event: ctx.event,
+      // Technical and free routines are one event for the Team: the duet stays the same partnership.
+      teamEvent: ctx.event.replace(/ (Technical|Free|Acrobatic)\b/, ""),
+      date: heat.Date,
+      place: status === "finished" ? r.Rank : null,
+      status,
+      performance: status === "finished" ? (r.Time ?? r.TotalPoints ?? null) : null,
+      sourceRef: `${ctx.competitionRef}/${ctx.disciplineId}/BEL/${key}`,
+      rawCopyId: ctx.rawCopyId,
+      roster: [...roster.values()],
+    });
+  }
+}
+
+function teamMembers(r: SwimResult): Person[] {
+  if (r.SubResults) return r.SubResults.filter((m) => m.NAT === "BEL").map(person);
+  return (r.Competitors ?? [])
+    .filter((m) => m.NAT === "BEL" && !m.Reserve)
+    .map((m) => ({
+      name: `${m.FirstName} ${m.LastName}`,
+      dateOfBirth: null,
+      nationality: m.NAT,
+      ifId: { scheme: "world-aquatics-gms", value: m.GmsId },
+    }));
+}
+
 async function competitions(run: SourceRun, from: string, to: string) {
   const url =
     `${API}/competitions?pageSize=100&venueDateFrom=${addDays(from, -LIST_LEAD_DAYS)}T00:00:00%2B00:00` +
@@ -126,7 +192,8 @@ async function competitions(run: SourceRun, from: string, to: string) {
 function competitionKind(type: string): CompetitionKind | null {
   if (/youth|junior|masters/i.test(type)) return null;
   if (/^Olympic Games/i.test(type)) return "games";
-  if (/^World (Aquatics|Swimming) Championships/i.test(type)) return "championship";
+  // The long-course Worlds are typed plain "World Championships".
+  if (/^World (Aquatics |Swimming )?Championships/i.test(type)) return "championship";
   if (/^(Swimming|Diving|Open Water Swimming|Artistic Swimming) World Cup$/i.test(type)) return "circuit";
   return null;
 }
@@ -149,10 +216,10 @@ function statusOf(r: SwimResult): ResultStatus | null {
   if (r.ScoringAbbr === "DNS") return null;
   if (r.ScoringAbbr === "DSQ" || r.ScoringAbbr === "DQ") return "DSQ";
   if (r.ScoringAbbr === "DNF") return "DNF";
-  return r.Rank === null && r.Time === null ? null : "finished";
+  return r.Rank === null && r.Time === null && !r.TotalPoints ? null : "finished";
 }
 
-function person(r: SwimResult): Person {
+function person(r: { PersonId: string; FirstName: string; LastName: string; NAT: string }): Person {
   return {
     name: `${r.FirstName} ${r.LastName}`,
     dateOfBirth: null,

@@ -1,8 +1,8 @@
 // The owner's answer to a merge-queue item (spec #20, stories 3 and 6): link
 // the incoming identity to an existing Athlete, create a new Athlete from it,
 // or mark it "not an Athlete". Linking or creating moves the item's results
-// to the Athlete and remembers the IF ID, so later runs match on it.
-import { asc, eq } from "drizzle-orm";
+// (and its places on Team rosters) to the Athlete and remembers the IF ID, so later runs match on it.
+import { and, asc, eq, ne } from "drizzle-orm";
 import { now } from "~/clock";
 import { getDb, schema } from "~/db/client";
 
@@ -20,13 +20,26 @@ export async function resolveMergeQueueItem(d1: D1Database, itemId: string, reso
   }
 
   // The first senior international performance among the item's results starts the record.
-  const [first] = await db
+  // Team results count too: those of every Team whose roster credits the item.
+  const [ownFirst] = await db
     .select({ date: schema.result.date, competition: schema.competition.name })
     .from(schema.result)
     .innerJoin(schema.competition, eq(schema.result.competitionId, schema.competition.id))
     .where(eq(schema.result.mergeQueueItemId, item.id))
     .orderBy(asc(schema.result.date))
     .limit(1);
+  const [teamFirst] = await db
+    .select({ date: schema.result.date, competition: schema.competition.name })
+    .from(schema.rosterMember)
+    .innerJoin(
+      schema.result,
+      and(eq(schema.result.teamId, schema.rosterMember.teamId), eq(schema.result.competitionId, schema.rosterMember.competitionId)),
+    )
+    .innerJoin(schema.competition, eq(schema.result.competitionId, schema.competition.id))
+    .where(and(eq(schema.rosterMember.mergeQueueItemId, item.id), ne(schema.result.status, "DNS")))
+    .orderBy(asc(schema.result.date))
+    .limit(1);
+  const first = [ownFirst, teamFirst].filter((x) => x !== undefined).toSorted((a, b) => a.date.localeCompare(b.date))[0];
 
   let athleteId: string;
   if (resolution.kind === "create") {
@@ -62,6 +75,10 @@ export async function resolveMergeQueueItem(d1: D1Database, itemId: string, reso
     .update(schema.result)
     .set({ athleteId, mergeQueueItemId: null })
     .where(eq(schema.result.mergeQueueItemId, item.id));
+  await db
+    .update(schema.rosterMember)
+    .set({ athleteId, mergeQueueItemId: null })
+    .where(eq(schema.rosterMember.mergeQueueItemId, item.id));
   await db
     .update(schema.mergeQueueItem)
     .set({ status: resolution.kind === "create" ? "created" : "linked", athleteId, resolvedAt })

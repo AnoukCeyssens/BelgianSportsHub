@@ -10,7 +10,10 @@
 //    weeks: its competitors list. That one payload carries both the entry list
 //    (behind Upcoming) and, per weight category, the final places once the
 //    category is decided.
-// Team events wait for Teams (#27).
+// Mixed team events are not ingested: Judobase keeps them as separate
+// competitions (e.g. "... Mixed Teams", is_teams 1) that its competition list
+// does not return, and their competitors list gives no team place. Belgium has
+// fielded no mixed team at the Games or the Worlds since 2024.
 import type { CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 
 const API = "https://data.ijf.org/api/get_json";

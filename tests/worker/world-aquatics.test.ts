@@ -2,7 +2,14 @@ import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
-import { AQUATICS_ASTANA_RUN, aquaticsAstanaRun } from "../fixtures/sources/world-aquatics";
+import {
+  AQUATICS_ASTANA_RUN,
+  AQUATICS_DOHA_RUN,
+  AQUATICS_PARIS_DUETS_RUN,
+  aquaticsAstanaRun,
+  aquaticsDohaRun,
+  aquaticsParisDuetsRun,
+} from "../fixtures/sources/world-aquatics";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
 import { clearIngestedData, seedAthlete, setSource } from "../support/seed";
@@ -66,6 +73,54 @@ describe("World Aquatics source", () => {
       .select({ name: schema.competition.name, kind: schema.competition.kind })
       .from(schema.competition);
     expect(competitions).toEqual([{ name: "World Aquatics Swimming World Cup 2026, Astana", kind: "circuit" }]);
+  });
+
+  it("writes a relay to Belgium's relay Team, with the swimmers the result credits as its roster", async () => {
+    fixClock(AQUATICS_DOHA_RUN.now);
+    await setSource(env.DB, AQUATICS, { lastSuccessAt: AQUATICS_DOHA_RUN.lastSuccessAt });
+    const dumont = await seedAthlete(env.DB, {
+      name: "Valentine Dumont",
+      sport: "Aquatics",
+      externalIds: [{ scheme: "world-aquatics", value: "02ad0ca4-0e67-4bdd-a8a3-ff24ffc0fa77" }],
+    });
+    stubOutboundFetch(aquaticsDohaRun);
+
+    const result = await deliverIngestJobs([job]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    const html = await (await get(`/athletes/${dumont}`)).text();
+    const results = html.slice(html.indexOf("<h2>Results</h2>"));
+    expect(results).toContain("World Aquatics Championships - Doha 2024");
+    expect(results).toContain("Women&#x27;s 4x200m Freestyle Relay");
+    expect(results).toContain("15th");
+    expect(results).toContain("8:06.56");
+    const team = results.match(/href="\/teams\/([^"]+)"[^>]*>Belgium · Women&#x27;s 4x200m Freestyle Relay</)?.[1];
+    expect(team).toBeDefined();
+    const page = await (await get(`/teams/${team}`)).text();
+    for (const name of ["Valentine Dumont", "Camille HENVEAUX", "Lucie HANQUET", "Lotte VANHAUWAERT"]) expect(page).toContain(name);
+    expect(page).not.toContain("YANG");
+    expect(await getDb(env.DB).$count(schema.result)).toBe(1);
+  });
+
+  it("makes each Belgian duet its own Team, leaving reserves off the roster", async () => {
+    fixClock(AQUATICS_PARIS_DUETS_RUN.now);
+    await setSource(env.DB, AQUATICS, { lastSuccessAt: AQUATICS_PARIS_DUETS_RUN.lastSuccessAt });
+    stubOutboundFetch(aquaticsParisDuetsRun);
+
+    const result = await deliverIngestJobs([job]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    const teams = await getDb(env.DB)
+      .select({ name: schema.team.name, event: schema.team.event, kind: schema.team.kind, place: schema.result.place, performance: schema.result.performance })
+      .from(schema.team)
+      .innerJoin(schema.result, eq(schema.result.teamId, schema.team.id))
+      .orderBy(schema.team.name);
+    expect(teams).toEqual([
+      { name: "Julie COONINX / Lara DRIJKONINGEN", event: "Women's Duet", kind: "partnership", place: 28, performance: "128.8825" },
+      { name: "Laura VERGNION / Melina WERT", event: "Women's Duet", kind: "partnership", place: 22, performance: "168.8530" },
+    ]);
+    expect(await getDb(env.DB).$count(schema.rosterMember)).toBe(4);
+    expect(await (await get("/curate/run/merge-queue")).text()).toContain("Laura VERGNION");
   });
 
   it("flags the source as blocked (Assisted) when World Aquatics refuses the Worker", async () => {

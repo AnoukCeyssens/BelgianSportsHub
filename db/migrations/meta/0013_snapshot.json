@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e8de412d-839e-4065-acef-3b09270e3e50",
+  "id": "e043f58a-9fc4-4a3f-8ea5-ea5868729d8e",
   "prevId": "610fb428-27ba-49c8-b342-4201d8e28bd8",
   "tables": {
     "athlete": {
@@ -462,125 +462,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "entry": {
-      "name": "entry",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "competition_id": {
-          "name": "competition_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sport": {
-          "name": "sport",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event": {
-          "name": "event",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "athlete_id": {
-          "name": "athlete_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "team_id": {
-          "name": "team_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "first_round": {
-          "name": "first_round",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "source_url": {
-          "name": "source_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "checked_on": {
-          "name": "checked_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "entry_athlete": {
-          "name": "entry_athlete",
-          "columns": [
-            "competition_id",
-            "event",
-            "athlete_id"
-          ],
-          "isUnique": true
-        },
-        "entry_team": {
-          "name": "entry_team",
-          "columns": [
-            "competition_id",
-            "event",
-            "team_id"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "entry_competition_id_competition_id_fk": {
-          "name": "entry_competition_id_competition_id_fk",
-          "tableFrom": "entry",
-          "tableTo": "competition",
-          "columnsFrom": [
-            "competition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "entry_athlete_id_athlete_id_fk": {
-          "name": "entry_athlete_id_athlete_id_fk",
-          "tableFrom": "entry",
-          "tableTo": "athlete",
-          "columnsFrom": [
-            "athlete_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "games_sport_window": {
       "name": "games_sport_window",
       "columns": {
@@ -936,6 +817,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "event": {
           "name": "event",
           "type": "text",
@@ -1043,9 +931,159 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "result_team_id_team_id_fk": {
+          "name": "result_team_id_team_id_fk",
+          "tableFrom": "result",
+          "tableTo": "team",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "result_raw_copy_id_raw_copy_id_fk": {
           "name": "result_raw_copy_id_raw_copy_id_fk",
           "tableFrom": "result",
+          "tableTo": "raw_copy",
+          "columnsFrom": [
+            "raw_copy_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "roster_member": {
+      "name": "roster_member",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "competition_id": {
+          "name": "competition_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "athlete_id": {
+          "name": "athlete_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "merge_queue_item_id": {
+          "name": "merge_queue_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "raw_copy_id": {
+          "name": "raw_copy_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "roster_member_athlete": {
+          "name": "roster_member_athlete",
+          "columns": [
+            "team_id",
+            "competition_id",
+            "athlete_id"
+          ],
+          "isUnique": true
+        },
+        "roster_member_merge_queue_item": {
+          "name": "roster_member_merge_queue_item",
+          "columns": [
+            "team_id",
+            "competition_id",
+            "merge_queue_item_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "roster_member_team_id_team_id_fk": {
+          "name": "roster_member_team_id_team_id_fk",
+          "tableFrom": "roster_member",
+          "tableTo": "team",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "roster_member_competition_id_competition_id_fk": {
+          "name": "roster_member_competition_id_competition_id_fk",
+          "tableFrom": "roster_member",
+          "tableTo": "competition",
+          "columnsFrom": [
+            "competition_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "roster_member_athlete_id_athlete_id_fk": {
+          "name": "roster_member_athlete_id_athlete_id_fk",
+          "tableFrom": "roster_member",
+          "tableTo": "athlete",
+          "columnsFrom": [
+            "athlete_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "roster_member_merge_queue_item_id_merge_queue_item_id_fk": {
+          "name": "roster_member_merge_queue_item_id_merge_queue_item_id_fk",
+          "tableFrom": "roster_member",
+          "tableTo": "merge_queue_item",
+          "columnsFrom": [
+            "merge_queue_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "roster_member_raw_copy_id_raw_copy_id_fk": {
+          "name": "roster_member_raw_copy_id_raw_copy_id_fk",
+          "tableFrom": "roster_member",
           "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"
@@ -1161,165 +1199,6 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "session": {
-      "name": "session",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "competition_id": {
-          "name": "competition_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "timetable_version_id": {
-          "name": "timetable_version_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sport": {
-          "name": "sport",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "date": {
-          "name": "date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "venue_zone": {
-          "name": "venue_zone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "session_competition_id_competition_id_fk": {
-          "name": "session_competition_id_competition_id_fk",
-          "tableFrom": "session",
-          "tableTo": "competition",
-          "columnsFrom": [
-            "competition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "session_timetable_version_id_timetable_version_id_fk": {
-          "name": "session_timetable_version_id_timetable_version_id_fk",
-          "tableFrom": "session",
-          "tableTo": "timetable_version",
-          "columnsFrom": [
-            "timetable_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "session_round": {
-      "name": "session_round",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event": {
-          "name": "event",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "round": {
-          "name": "round",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "session_round_session_id_session_id_fk": {
-          "name": "session_round_session_id_session_id_fk",
-          "tableFrom": "session_round",
-          "tableTo": "session",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -1453,8 +1332,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "timetable_version": {
-      "name": "timetable_version",
+    "team": {
+      "name": "team",
       "columns": {
         "id": {
           "name": "id",
@@ -1463,74 +1342,69 @@
           "notNull": true,
           "autoincrement": false
         },
-        "competition_id": {
-          "name": "competition_id",
+        "key": {
+          "name": "key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "version": {
-          "name": "version",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "published_on": {
-          "name": "published_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "source_url": {
-          "name": "source_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "column_mapping": {
-          "name": "column_mapping",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "stored_at": {
-          "name": "stored_at",
+        "sport": {
+          "name": "sport",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "event": {
+          "name": "event",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dissolved_on": {
+          "name": "dissolved_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "raw_copy_id": {
           "name": "raw_copy_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "team_key_unique": {
+          "name": "team_key_unique",
+          "columns": [
+            "key"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
-        "timetable_version_competition_id_competition_id_fk": {
-          "name": "timetable_version_competition_id_competition_id_fk",
-          "tableFrom": "timetable_version",
-          "tableTo": "competition",
-          "columnsFrom": [
-            "competition_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "timetable_version_raw_copy_id_raw_copy_id_fk": {
-          "name": "timetable_version_raw_copy_id_raw_copy_id_fk",
-          "tableFrom": "timetable_version",
+        "team_raw_copy_id_raw_copy_id_fk": {
+          "name": "team_raw_copy_id_raw_copy_id_fk",
+          "tableFrom": "team",
           "tableTo": "raw_copy",
           "columnsFrom": [
             "raw_copy_id"

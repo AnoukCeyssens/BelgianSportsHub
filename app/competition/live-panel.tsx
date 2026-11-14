@@ -46,9 +46,10 @@ export async function loadLiveDay(db: Db, competition: CompetitionRow, now: Date
   const [rounds, entries, version] = await Promise.all([
     db.select().from(schema.sessionRound).where(inArray(schema.sessionRound.sessionId, sessions.map((x) => x.id))).orderBy(asc(schema.sessionRound.position)),
     db
-      .select({ entry: schema.entry, athlete: schema.athlete.name })
+      .select({ entry: schema.entry, athlete: schema.athlete.name, team: schema.team.name })
       .from(schema.entry)
       .leftJoin(schema.athlete, eq(schema.entry.athleteId, schema.athlete.id))
+      .leftJoin(schema.team, eq(schema.entry.teamId, schema.team.id))
       .where(eq(schema.entry.competitionId, competition.id)),
     db.query.timetableVersion.findFirst({ where: eq(schema.timetableVersion.id, sessions[0].timetableVersionId) }),
   ]);
@@ -60,11 +61,11 @@ export async function loadLiveDay(db: Db, competition: CompetitionRow, now: Date
   const label = venueLabel(competition.city);
   const placed = entries
     .filter(({ entry }) => chosen.length === 0 || chosen.includes(entry.sport))
-    .flatMap(({ entry, athlete }) =>
+    .flatMap(({ entry, athlete, team }) =>
       roundsFor(
         entry,
         timed.filter((r) => r.event === entry.event && r.session.sport === entry.sport),
-      ).map((r) => ({ r, entry, who: athlete ?? "Team" })),
+      ).map((r) => ({ r, entry, who: athlete ?? team ?? "" })),
     );
 
   const days = liveDays(competition.startDate, competition.endDate, placed.map((p) => p.r.session.date));

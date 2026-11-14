@@ -7,7 +7,7 @@
 //   the same series;
 // - in contention: not tracked yet (Qualification status, #32);
 // - the owner's word: `participation_curation`.
-import { and, asc, eq, gte, inArray, isNotNull, lt, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lt, lte, or, sql } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 import { participation, type OwnerParticipationDecision, type Participation, type ParticipationReason } from "~/domain";
 
@@ -44,11 +44,13 @@ export async function participationsBetween(db: Db, from: string, to: string): P
       .from(schema.entrant)
       .innerJoin(schema.athlete, eq(schema.entrant.athleteId, schema.athlete.id))
       .where(inArray(schema.entrant.competitionId, ids)),
+    // A result names a Belgian Entry: an Athlete or a Team (ADR 0001).
     db
-      .select({ competitionId: schema.result.competitionId, name: schema.athlete.name })
+      .select({ competitionId: schema.result.competitionId, name: sql<string>`coalesce(${schema.athlete.name}, ${schema.team.name})` })
       .from(schema.result)
-      .innerJoin(schema.athlete, eq(schema.result.athleteId, schema.athlete.id))
-      .where(inArray(schema.result.competitionId, ids)),
+      .leftJoin(schema.athlete, eq(schema.result.athleteId, schema.athlete.id))
+      .leftJoin(schema.team, eq(schema.result.teamId, schema.team.id))
+      .where(and(inArray(schema.result.competitionId, ids), or(isNotNull(schema.athlete.id), isNotNull(schema.team.id)))),
     db.select().from(schema.participationCuration).where(inArray(schema.participationCuration.competitionId, ids)),
     previousEditionsWithBelgians(db, competitions),
   ]);
@@ -111,7 +113,12 @@ async function previousEditionsWithBelgians(db: Db, competitions: (typeof schema
           await db
             .selectDistinct({ id: schema.result.competitionId })
             .from(schema.result)
-            .where(and(inArray(schema.result.competitionId, editionIds), isNotNull(schema.result.athleteId)))
+            .where(
+              and(
+                inArray(schema.result.competitionId, editionIds),
+                or(isNotNull(schema.result.athleteId), isNotNull(schema.result.teamId)),
+              ),
+            )
         ).map((r) => r.id),
   );
   for (const comp of withSeries) {

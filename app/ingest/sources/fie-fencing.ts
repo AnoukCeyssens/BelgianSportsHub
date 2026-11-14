@@ -6,14 +6,17 @@
 // 1. the competitions page: the latest tournaments and the next ones;
 // 2. for each senior World Cup, Grand Prix, Championship or Games that ended
 //    since the last run (or is running): its tournament page, with its events;
-// 3. for each individual senior event that has started: its results page,
+// 3. for each senior event (individual or team) that has started: its results page,
 //    written once the event is decided (someone is ranked first).
 // The results page carries the top 24 of the final ranking, the pool ranking
 // and the direct-elimination table; a Belgian outside the top 24 gets the
 // round they went out in, without a place. The competitions page shows a
 // limited number of past tournaments, so the first run's backfill is only as
-// deep as that page. Team events wait for Teams (#27). There are no full
-// entry lists in the page state, so there is no Upcoming.
+// deep as that page. A senior team event's results page ranks nations, not
+// fencers: Belgium's place (or the round its team went out in) goes to
+// Belgium's default Team for the event, without a roster, as the page credits
+// no fencers. There are no full entry lists in the page state, so there is no
+// Upcoming.
 import type { CompetitionKind, Person, SourceAdapter, SourceRun } from "../source-adapter";
 
 const SITE = "https://fie.org";
@@ -99,7 +102,7 @@ export const fieFencing: SourceAdapter = {
         .filter((q) => q.queryKey[0] === "tournaments" && q.queryKey[1] === t.id)
         .flatMap((q) => (q.state.data?.body as { events?: FieEvent[] })?.events ?? []);
       for (const e of events) {
-        if (e.isTeam || e.category !== "S" || e.startDate > today) continue;
+        if (e.category !== "S" || e.startDate > today) continue;
         const fetched = await run.fetch(`${SITE}/tournaments/${season}/${t.id}/event/${e.competitionId}/results`);
         const cached = queries(fetched.text);
         const body = <T>(...key: unknown[]) =>
@@ -109,6 +112,29 @@ export const fieFencing: SourceAdapter = {
         if (!ranking.some((r) => r.rank === 1)) continue;
         const pools = body<{ rows?: PoolRow[] }>("competitions", "pool", "results", e.competitionId)?.rows ?? [];
         const tableau = body<{ tableau?: Tableau }>("competitions", "results", "tableau", e.competitionId)?.tableau ?? [];
+        const event = `${e.gender === "M" ? "Men" : "Women"}'s ${WEAPONS[e.weapon] ?? e.weapon}`;
+
+        if (e.isTeam) {
+          // Teams are nations: the ranking and the table name Belgium, never its fencers.
+          const top = ranking.find((r) => r.fencer.countryCode === "BEL");
+          const teamId = top?.fencer.id ?? pools.find((r) => r.nationality === "BEL")?.fencerId;
+          if (teamId === undefined) continue;
+          const out = top?.rank ? null : wentOut(teamId, undefined, tableau);
+          if (!top?.rank && !out) continue;
+          await run.rows.teamResult({
+            competitionId,
+            nationality: "BEL",
+            event: `${event} Team`,
+            date: e.endDate,
+            place: top?.rank ?? null,
+            status: top?.rank ? "finished" : "eliminated",
+            performance: out,
+            sourceRef: `${t.id}/${e.competitionId}/BEL`,
+            rawCopyId: fetched.rawCopyId,
+            roster: [],
+          });
+          continue;
+        }
 
         for (const belgian of belgians(ranking, pools)) {
           const top = ranking.find((r) => r.fencer.id === belgian.id);
@@ -118,7 +144,7 @@ export const fieFencing: SourceAdapter = {
           await run.rows.result({
             competitionId,
             person: belgian,
-            event: `${e.gender === "M" ? "Men" : "Women"}'s ${WEAPONS[e.weapon] ?? e.weapon}`,
+            event,
             date: e.endDate,
             place: top?.rank ?? null,
             status: top?.rank ? "finished" : "eliminated",

@@ -1,0 +1,7 @@
+{
+  "url": "https://www.fivb.org/Vis2009/XmlRequest.asmx?Request=%3CRequest%20Type%3D%22GetBeachTournamentList%22%20Fields%3D%22No%20Code%20Name%20Type%20Gender%20StartDateMainDraw%20EndDateMainDraw%20CountryCode%20Status%22%3E%3CFilter%20FirstDate%3D%222026-07-12%22%20LastDate%3D%222026-07-28%22%2F%3E%3C%2FRequest%3E",
+  "status": 200,
+  "contentType": "application/xml",
+  "recordedAt": "2026-11-14T12:24:33.837Z",
+  "trimmedByHand": "Only both BPT Futures Leuven draws and a CEV test competition kept."
+}

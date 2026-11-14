@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { fixClock } from "../support/clock";
-import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant } from "../support/seed";
+import { clearIngestedData, seedAthlete, seedCompetition, seedEntrant, seedTeam } from "../support/seed";
 import { get, post } from "../support/worker";
 
 // Spec #20, stories 47, 55–57, 59, 61, 63 and 110; GLOSSARY "Session";
@@ -59,7 +59,8 @@ const SHORT_TRACK_V1 = [
   "Sun 17 Jan\t15:00\tWomen's 500 m final",
 ].join("\n");
 
-type Stored = { version: string; text: string; entries: Record<string, { athleteId: string; firstRound?: string }[]>; venueZone?: string };
+/** An Entry to tick: "athlete:<id>" or "team:<id>". */
+type Stored = { version: string; text: string; entries: Record<string, { who: string; firstRound?: string }[]>; venueZone?: string };
 
 /** Reads a timetable in the Schedules step and stores it with the Belgian Entries named per event, as the review offers them. */
 async function storeTimetable(competitionId: string, t: Stored) {
@@ -75,8 +76,8 @@ async function storeTimetable(competitionId: string, t: Stored) {
   for (const [name, event] of events) {
     const i = name.slice("event.".length);
     for (const e of t.entries[event] ?? []) {
-      ticks.push([`entry.${i}`, `athlete:${e.athleteId}`]);
-      if (e.firstRound) ticks.push([`firstRound.${i}.athlete:${e.athleteId}`, e.firstRound]);
+      ticks.push([`entry.${i}`, e.who]);
+      if (e.firstRound) ticks.push([`firstRound.${i}.${e.who}`, e.firstRound]);
     }
   }
   return postForm(SCHEDULES, [["intent", "store-timetable"], ...hidden.filter(([name]) => name !== "intent"), ...ticks]);
@@ -123,7 +124,7 @@ describe("Sessions and the Live day view", () => {
     const stored = await storeTimetable(europeans, {
       version: "v1",
       text: SHORT_TRACK_V1,
-      entries: { "Women's 500 m": [{ athleteId: desmet }], "Women's 1000 m": [{ athleteId: desmet }, { athleteId: vanRuijven }] },
+      entries: { "Women's 500 m": [{ who: `athlete:${desmet}` }], "Women's 1000 m": [{ who: `athlete:${desmet}` }, { who: `athlete:${vanRuijven}` }] },
     });
     expect(stored.status).toBe(303);
 
@@ -142,7 +143,7 @@ describe("Sessions and the Live day view", () => {
   });
 
   it("goes Live at the first Session, not at midnight", async () => {
-    await storeTimetable(europeans, { version: "v1", text: SHORT_TRACK_V1, entries: { "Women's 500 m": [{ athleteId: desmet }] } });
+    await storeTimetable(europeans, { version: "v1", text: SHORT_TRACK_V1, entries: { "Women's 500 m": [{ who: `athlete:${desmet}` }] } });
 
     fixClock("2027-01-15T11:59:00.000Z"); // 12:59 in Gdańsk
     expect(panel(await page(`/championship/${europeans}`))?.phase).not.toBe("Live");
@@ -154,7 +155,7 @@ describe("Sessions and the Live day view", () => {
     await storeTimetable(europeans, {
       version: "v1",
       text: SHORT_TRACK_V1,
-      entries: { "Women's 500 m": [{ athleteId: desmet }], "Women's 1000 m": [{ athleteId: vanRuijven }] },
+      entries: { "Women's 500 m": [{ who: `athlete:${desmet}` }], "Women's 1000 m": [{ who: `athlete:${vanRuijven}` }] },
     });
     fixClock("2027-01-16T10:00:00.000Z"); // day 2, 11:00 in Gdańsk
 
@@ -174,7 +175,7 @@ describe("Sessions and the Live day view", () => {
     await storeTimetable(europeans, {
       version: "v1",
       text: SHORT_TRACK_V1,
-      entries: { "Women's 500 m": [{ athleteId: desmet, firstRound: "Quarter-finals" }] },
+      entries: { "Women's 500 m": [{ who: `athlete:${desmet}`, firstRound: "Quarter-finals" }] },
     });
     fixClock("2027-01-16T10:00:00.000Z");
 
@@ -183,11 +184,11 @@ describe("Sessions and the Live day view", () => {
   });
 
   it("re-importing replaces the previous version", async () => {
-    await storeTimetable(europeans, { version: "v1", text: SHORT_TRACK_V1, entries: { "Women's 500 m": [{ athleteId: desmet }] } });
+    await storeTimetable(europeans, { version: "v1", text: SHORT_TRACK_V1, entries: { "Women's 500 m": [{ who: `athlete:${desmet}` }] } });
     await storeTimetable(europeans, {
       version: "v2",
       text: SHORT_TRACK_V1.replace("Fri 15 Jan\t13:00\tWomen's 500 m heats", "Fri 15 Jan\t13:30\tWomen's 500 m heats"),
-      entries: { "Women's 500 m": [{ athleteId: desmet }] },
+      entries: { "Women's 500 m": [{ who: `athlete:${desmet}` }] },
     });
     fixClock("2027-01-15T13:00:00.000Z"); // 14:00 in Gdańsk on day 1
 
@@ -198,7 +199,7 @@ describe("Sessions and the Live day view", () => {
 
   it("pre-ticks the stored Entries when the next version is read", async () => {
     await seedEntrant(env.DB, europeans, relay);
-    await storeTimetable(europeans, { version: "v1", text: SHORT_TRACK_V1, entries: { "Women's 500 m": [{ athleteId: desmet }] } });
+    await storeTimetable(europeans, { version: "v1", text: SHORT_TRACK_V1, entries: { "Women's 500 m": [{ who: `athlete:${desmet}` }] } });
 
     const read = await post(SCHEDULES, { intent: "read-timetable", competition: europeans, version: "v2", publishedOn: "", sourceUrl: "", venueZone: "", text: SHORT_TRACK_V1 });
     const review = await page(read.headers.get("location")!);
@@ -230,7 +231,7 @@ describe("Sessions at the Games", () => {
     }
     la = (await getDb(env.DB).query.competition.findFirst({ where: (c, { eq }) => eq(c.sourceRef, "la-2028") }))!.id;
     thiam = await seedAthlete(env.DB, { name: "Nafissatou Thiam", sport: "Athletics" });
-    lions = await seedAthlete(env.DB, { name: "Red Lions", sport: "Hockey" });
+    lions = await seedTeam(env.DB, { name: "Red Lions", sport: "Hockey", event: "Men" });
   });
 
   const BY_EVENT = [
@@ -244,7 +245,7 @@ describe("Sessions at the Games", () => {
     const stored = await storeTimetable(la, {
       version: "V4.1",
       text: BY_EVENT,
-      entries: { "Women's Heptathlon": [{ athleteId: thiam }], "Men's": [{ athleteId: lions }] },
+      entries: { "Women's Heptathlon": [{ who: `athlete:${thiam}` }], "Men's": [{ who: `team:${lions}` }] },
     });
     expect(stored.status).toBe(303);
   }

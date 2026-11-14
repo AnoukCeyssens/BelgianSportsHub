@@ -99,11 +99,47 @@ export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promi
   return row.id;
 }
 
+/** A Team as an import or the owner would have created it (no results). */
+export async function seedTeam(d1: D1Database, t: { name: string; sport: string; event: string; kind?: "default" | "partnership" }): Promise<string> {
+  const [row] = await getDb(d1)
+    .insert(schema.team)
+    .values({ key: `${t.sport}:${t.event}:${crypto.randomUUID()}`, name: t.name, sport: t.sport, event: t.event, kind: t.kind ?? "default" })
+    .returning({ id: schema.team.id });
+  return row.id;
+}
+
 /** Names an Athlete on a competition's entry list. */
 export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
   const db = getDb(d1);
   const competition = await db.query.competition.findFirst({ where: eq(schema.competition.id, competitionId) });
   await db.insert(schema.entrant).values({ competitionId, athleteId, rawCopyId: competition!.rawCopyId });
+}
+
+type TeamResultSeed = { competitionId: string; sport: string; event: string; place: number; roster: string[] };
+
+/** Gives Belgium's default Team for the event a finished result, with these Athletes on its roster. Returns the Team's id. */
+export async function seedTeamResult(d1: D1Database, r: TeamResultSeed): Promise<string> {
+  const db = getDb(d1);
+  const competition = (await db.query.competition.findFirst({ where: eq(schema.competition.id, r.competitionId) }))!;
+  const [team] = await db
+    .insert(schema.team)
+    .values({ key: `${r.sport}|${r.event}`, name: `Belgium · ${r.event}`, sport: r.sport, event: r.event, kind: "default" })
+    .returning({ id: schema.team.id });
+  await db.insert(schema.result).values({
+    competitionId: r.competitionId,
+    teamId: team.id,
+    event: r.event,
+    date: competition.endDate,
+    place: r.place,
+    status: "finished",
+    source: competition.source,
+    sourceRef: crypto.randomUUID(),
+    rawCopyId: competition.rawCopyId,
+  });
+  for (const athleteId of r.roster) {
+    await db.insert(schema.rosterMember).values({ teamId: team.id, competitionId: r.competitionId, athleteId, rawCopyId: competition.rawCopyId });
+  }
+  return team.id;
 }
 
 /** A Belgian result of the Athlete at the competition. */
@@ -146,7 +182,9 @@ export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
     schema.participationCuration,
     schema.gamesSportWindow,
     schema.entrant,
+    schema.rosterMember,
     schema.result,
+    schema.team,
     schema.mergeQueueItem,
     schema.competition,
     schema.athleteExternalId,

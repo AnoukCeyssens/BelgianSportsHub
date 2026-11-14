@@ -8,9 +8,11 @@
 //    Olympic qualification tournaments, the CEV European Championships) that
 //    starts within two weeks, its player registrations: the competition is
 //    kept when Belgians are registered, and they are its entry list behind
-//    Upcoming until it ends.
-// A volleyball result belongs to the national team (ADR 0001): results and
-// rankings wait for Teams (#27) and rankings ingest (#33).
+//    Upcoming until it ends;
+// 3. for each such tournament that has ended, its final ranking: Belgium's
+//    place is a result of Belgium's national Team for the event (ADR 0001),
+//    with the registered Belgians (the squad list) as its roster.
+// Rankings wait for rankings ingest (#33).
 import type { CompetitionKind, SourceAdapter } from "../source-adapter";
 import { addDays, isoDate } from "./dates";
 import { elements, visPerson, visUrl } from "./fivb-vis";
@@ -30,6 +32,7 @@ const KIND_BY_TYPE: Record<string, CompetitionKind> = {
   "15": "championship", // World Cup: the FIVB's world title event from 2027
 };
 const CONTINENTAL_CHAMPIONSHIP = "10";
+const EVENT_BY_GENDER: Record<string, string> = { "0": "Men", "1": "Women" };
 const EUROPEAN = /\bCEV\b|Euro/i;
 
 export const fivbVolleyball: SourceAdapter = {
@@ -73,7 +76,28 @@ export const fivbVolleyball: SourceAdapter = {
         sourceRef: t.No,
         rawCopyId: list.rawCopyId,
       });
-      if (t.EndDate >= today) await run.rows.entrants(competitionId, belgians, registrations.rawCopyId);
+      if (t.EndDate >= today) {
+        await run.rows.entrants(competitionId, belgians, registrations.rawCopyId);
+        continue;
+      }
+      const ranking = await run.fetch(
+        visUrl(`<Request Type="GetVolleyTournamentRanking" NoTournament="${t.No}" Fields="Rank TeamName TeamCode NoTeam Position"/>`),
+      );
+      const belgium = elements(ranking.text, "VolleyballTournamentRanking").find((r) => r.TeamCode === "BEL");
+      const place = Number(belgium?.Rank);
+      if (!belgium?.Rank || !Number.isInteger(place)) continue;
+      await run.rows.teamResult({
+        competitionId,
+        nationality: "BEL",
+        event: EVENT_BY_GENDER[t.Gender] ?? "Volleyball",
+        date: t.EndDate,
+        place,
+        status: "finished",
+        performance: null,
+        sourceRef: `${t.No}/${belgium.NoTeam}`,
+        rawCopyId: ranking.rawCopyId,
+        roster: belgians,
+      });
     }
   },
 };

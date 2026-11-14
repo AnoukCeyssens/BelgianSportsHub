@@ -1,0 +1,8 @@
+{
+  "url": "https://dataride.uci.ch/iframe/Results/",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "recordedAt": "2026-11-14T12:38:41.625Z",
+  "requestBody": "disciplineId=9&eventId=385101&take=1000&skip=0&page=1&pageSize=1000",
+  "trimmedByHand": "Kept the winning team's rows and Belgium's; 'total' is as received."
+}

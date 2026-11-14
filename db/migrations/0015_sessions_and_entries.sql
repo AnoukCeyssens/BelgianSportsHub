@@ -9,7 +9,8 @@ CREATE TABLE `entry` (
 	`source_url` text,
 	`checked_on` text NOT NULL,
 	FOREIGN KEY (`competition_id`) REFERENCES `competition`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`athlete_id`) REFERENCES `athlete`(`id`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (`athlete_id`) REFERENCES `athlete`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`team_id`) REFERENCES `team`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `entry_athlete` ON `entry` (`competition_id`,`event`,`athlete_id`);--> statement-breakpoint
