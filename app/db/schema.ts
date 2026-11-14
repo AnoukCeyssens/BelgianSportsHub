@@ -273,6 +273,11 @@ export const result = sqliteTable(
     mergeQueueItemId: text("merge_queue_item_id").references(() => mergeQueueItem.id),
     /** Event as the source titles it, e.g. "1000m Women". */
     event: text("event").notNull(),
+    /**
+     * The event's sport where the competition spans several (a reference
+     * Games' owner row, ticket #46); null means the competition's own sport.
+     */
+    sport: text("sport"),
     /** YYYY-MM-DD, venue-local. */
     date: text("date").notNull(),
     /** Official classification place; null when there is none. */

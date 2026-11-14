@@ -20,6 +20,7 @@ import {
   pasteImportDue,
   readHtmlTable,
   readPastedTable,
+  REFERENCE_GAMES,
   type KnownIdentity,
   type PasteColumnRole,
   type PastedResultRow,
@@ -27,6 +28,7 @@ import {
   type SavedColumnMapping,
   type SourceTier,
 } from "~/domain";
+import { referenceGamesRow } from "~/competition/reference-games";
 import { formatInstant } from "~/format";
 import { belgianRows } from "~/ingest/belgian-rows";
 import { knownIdentities } from "~/ingest/identities";
@@ -164,15 +166,21 @@ async function read(env: Pick<Env, "DB" | "RAW">, source: SourceRow, form: FormD
 
 async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, form: FormData, now: Date) {
   const field = (name: string) => String(form.get(name) ?? "").trim();
-  const competitionName = field("competition");
-  const startDate = field("startDate");
-  const endDate = field("endDate");
-  const kind = field("kind") as CompetitionKind;
   const sport = field("sport") || source.sport;
+  // A reference Games (Paris 2024, Milano-Cortina 2026, ticket #46) is the owner's one row; any other competition is the source's.
+  const reference = field("reference") ? REFERENCE_GAMES.find((g) => g.key === field("reference")) : undefined;
+  if (field("reference") && !reference) throw new Response("No such reference Games", { status: 400 });
+  const competitionName = reference?.name ?? field("competition");
+  const startDate = reference?.startDate ?? field("startDate");
+  const endDate = reference?.endDate ?? field("endDate");
+  const kind = (reference ? "games" : field("kind")) as CompetitionKind;
   if (!competitionName || !startDate || !endDate || !(kind in KINDS) || !sport) {
     throw new Response("Competition, kind, sport and dates are required", { status: 400 });
   }
   const date = field("date") || endDate;
+  if (reference && (date < startDate || date > endDate)) {
+    throw new Response(`The event day must lie within ${reference.name}`, { status: 400 });
+  }
 
   const { copy, table } = await readRawCopy(env, db, source.key, field("raw"));
   const roles = rolesFrom(form, table.head.length) ?? columnMapping(table.head, null).roles;
@@ -183,25 +191,29 @@ async function confirm(env: Pick<Env, "DB" | "RAW">, db: Db, source: SourceRow, 
   const scheme = idSchemeOf(source);
   const identities = await identitiesOf(env.DB, db, scheme, rows);
   const writer = belgianRows(env.DB, source.key, now);
-  const competitionRef = `${slug(competitionName)}:${startDate}`;
-  const competitionId = await writer.competition({
-    name: competitionName,
-    sport,
-    kind,
-    startDate,
-    endDate,
-    city: null,
-    country: null,
-    venueZone: null,
-    sourceRef: competitionRef,
-    rawCopyId: copy.id,
-  });
+  const competitionRef = reference ? reference.key : `${slug(competitionName)}:${startDate}`;
+  const competitionId = reference
+    ? await referenceGamesRow(env, reference, now)
+    : await writer.competition({
+        name: competitionName,
+        sport,
+        kind,
+        startDate,
+        endDate,
+        city: null,
+        country: null,
+        venueZone: null,
+        sourceRef: competitionRef,
+        rawCopyId: copy.id,
+      });
   for (const row of rows) {
     const event = row.event ?? field("event");
     await writer.result({
       competitionId,
       person: { name: row.name, dateOfBirth: row.dateOfBirth, nationality: "BEL", ifId: { scheme, value: row.ifId! } },
       event,
+      // The reference Games' row spans every sport: each result names its own.
+      ...(reference ? { sport } : {}),
       date,
       place: row.place,
       status: row.status,
@@ -450,8 +462,19 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
           </table>
           <div className="maps">
             <label>
+              Reference Games
+              <select name="reference" defaultValue="">
+                <option value="">(none: name the competition)</option>
+                {REFERENCE_GAMES.map((g) => (
+                  <option key={g.key} value={g.key}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Competition
-              <input name="competition" required />
+              <input name="competition" />
             </label>
             <label>
               Kind
@@ -469,11 +492,11 @@ function ReadTable({ source, read }: { source: PasteImporterData["source"]; read
             </label>
             <label>
               First day
-              <input type="date" name="startDate" required />
+              <input type="date" name="startDate" />
             </label>
             <label>
               Last day
-              <input type="date" name="endDate" required />
+              <input type="date" name="endDate" />
             </label>
             {read.roles.includes("event") ? null : (
               <label>

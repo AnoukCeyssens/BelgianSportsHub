@@ -99,6 +99,7 @@ export function belgianRows(d1: D1Database, source: string, now: Date): BelgianR
         athleteId,
         mergeQueueItemId: athleteId ? null : item!.id,
         event: input.event,
+        sport: input.sport ?? null,
         date: input.date,
         place: input.place,
         status: input.status,

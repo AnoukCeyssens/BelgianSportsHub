@@ -42,4 +42,14 @@ export {
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
 export { combinedPhaseInputs, currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
 export { icalFeed, icalFold, icalText, type IcalCalendar, type IcalEvent } from "./ical";
-export { chosenSports, GAMES_SOURCE, standardsForSports, toggledSports, TRACKED_GAMES, type TrackedGames } from "./games";
+export {
+  chosenSports,
+  GAMES_SOURCE,
+  REFERENCE_GAMES,
+  referenceGamesOf,
+  standardsForSports,
+  toggledSports,
+  TRACKED_GAMES,
+  type ReferenceGames,
+  type TrackedGames,
+} from "./games";
