@@ -73,6 +73,8 @@ type CompetitionSeed = {
   endDate?: string;
   city?: string;
   series?: string;
+  /** IANA zone of the venue. */
+  venueZone?: string;
 };
 
 /** Adds a competition as its source would publish it (with a raw copy it came from). */
@@ -88,6 +90,7 @@ export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promi
       endDate: c.endDate ?? c.startDate,
       city: c.city,
       series: c.series,
+      venueZone: c.venueZone,
       source,
       sourceRef: crypto.randomUUID(),
       rawCopyId: await seedRawCopy(d1, source),

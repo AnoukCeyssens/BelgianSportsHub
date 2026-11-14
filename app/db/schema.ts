@@ -185,6 +185,16 @@ export const competition = sqliteTable(
      * (each its own Championship). Null when the source gives no way to tell.
      */
     series: text("series"),
+    /**
+     * Phase inputs (ticket #31), curated by the owner for Championships and
+     * the Games: when the qualification system or entry standards are
+     * expected (YYYY-MM-DD) and, once out, when they were published (Belgian
+     * date), where, and what they say (one line per event or track).
+     */
+    standardsExpectedOn: text("standards_expected_on"),
+    standardsPublishedOn: text("standards_published_on"),
+    standardsUrl: text("standards_url"),
+    standardsText: text("standards_text"),
     source: text("source").notNull(),
     /** The source's own ID for this competition. */
     sourceRef: text("source_ref").notNull(),

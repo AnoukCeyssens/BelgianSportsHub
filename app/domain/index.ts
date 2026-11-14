@@ -40,3 +40,4 @@ export {
   type SavedColumnMapping,
 } from "./paste-table";
 export { belgianDate, checklistDue, nextDueOn, type ChecklistCheck, type ChecklistDue } from "./monthly-checklist";
+export { currentPhase, PHASE_LABELS, PHASES, phaseToShow, type Phase, type PhaseInputs } from "./phase";
