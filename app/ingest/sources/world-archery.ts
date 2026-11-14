@@ -206,7 +206,8 @@ async function entryLists(run: SourceRun, today: string) {
     const entries =await run.fetch(`${API}/ENTRIES/?CompId=${c.ID}&Noc=BEL&RBP=All`);
     const people = (JSON.parse(entries.text) as Page<Entry>).items
       .filter((e) => e.Athlete.NOC === "BEL" && e.CatInd.some((cat) => cat.Code in EVENT_BY_CATEGORY))
-      .map((e) => person(e.Athlete));
+      // Each archer in the individual events the list names them in, as the results name them.
+      .map((e) => ({ ...person(e.Athlete), events: e.CatInd.flatMap((cat) => (EVENT_BY_CATEGORY[cat.Code] ? [EVENT_BY_CATEGORY[cat.Code]] : [])) }));
     await run.rows.entrants(competitionId, people, entries.rawCopyId);
   }
 }

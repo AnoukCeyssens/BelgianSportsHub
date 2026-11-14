@@ -134,6 +134,8 @@ export {
 export {
   BOIC,
   entryListSelection,
+  type EntryListEntry,
+  type ListedEntrant,
   namesFoundIn,
   SELECTION_LOOKAHEAD_WEEKS,
   selectionDue,
