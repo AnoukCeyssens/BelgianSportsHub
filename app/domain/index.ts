@@ -4,5 +4,14 @@ export { BELGIAN_ZONE, toDisplayTime, type DisplayTime } from "./time-display";
 export { isSeniorInternationalPerformance, type Performance } from "./senior-performance";
 export { identityMatch, normaliseName, type ExternalId, type IdentityMatch, type IncomingIdentity, type KnownIdentity } from "./identity-match";
 export { matchesNameSearch } from "./name-search";
-export { CURATION_PATH, offlineReading, type OfflineReading } from "./offline-reading";
-export { sourceHealth, type SourceHealth, type SourceState, type SourceTier } from "./source-health";
+export { CURATION_PATH, isCurationPath, offlineReading, type OfflineReading } from "./offline-reading";
+export {
+  sourceAttention,
+  sourceHealth,
+  type SourceAttentionState,
+  type SourceHealth,
+  type SourceProblem,
+  type SourceState,
+  type SourceTier,
+} from "./source-health";
+export { runSheetProgress, WEEKLY_RUN_SHEET, type RunSheetProgress, type RunSheetStep } from "./run-sheet";

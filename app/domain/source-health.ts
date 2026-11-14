@@ -42,3 +42,35 @@ export function sourceHealth(source: SourceState, now: Date): SourceHealth {
     blocked,
   };
 }
+
+export type SourceAttentionState = SourceState & {
+  lastFailureAt: string | null;
+  lastError: string | null;
+  /** When the owner last acknowledged (or retried) the source's problem. */
+  acknowledgedAt: string | null;
+};
+
+export type SourceProblem = { kind: "blocked" | "failing" | "stale"; since: string };
+
+/**
+ * Spec #20, story 103: whether a source needs an action card in the Run
+ * sheet's Source health step. A problem stays open until the owner
+ * acknowledges it (or retries); a newer failure, block or staleness opens it
+ * again.
+ */
+export function sourceAttention(source: SourceAttentionState, now: Date): { problem: SourceProblem | null; open: boolean } {
+  const problem = sourceProblem(source, now);
+  const open = problem !== null && (source.acknowledgedAt === null || Date.parse(source.acknowledgedAt) < Date.parse(problem.since));
+  return { problem, open };
+}
+
+function sourceProblem(source: SourceAttentionState, now: Date): SourceProblem | null {
+  if (source.blockedAt !== null) return { kind: "blocked", since: source.blockedAt };
+  if (source.tier !== "automatic") return null;
+  if (source.lastError !== null && source.lastFailureAt !== null) return { kind: "failing", since: source.lastFailureAt };
+  if (sourceHealth(source, now).stale) {
+    const from = Date.parse(source.lastSuccessAt ?? source.addedAt);
+    return { kind: "stale", since: new Date(from + 2 * source.cadenceDays * DAY_MS).toISOString() };
+  }
+  return null;
+}

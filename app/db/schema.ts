@@ -93,6 +93,40 @@ export const source = sqliteTable("source", {
   /** Set when the source refused a Worker request; it is then Assisted until cleared. */
   blockedAt: text("blocked_at"),
   blockedReason: text("blocked_reason"),
+  /**
+   * When the owner last acknowledged the source's problem in the Run sheet
+   * (acknowledge, keep on Assisted, or retry). A newer problem reopens it.
+   */
+  acknowledgedAt: text("acknowledged_at"),
+});
+
+/**
+ * One curation session on a Run sheet (spec #20, Curation workspace). Open
+ * until the owner finishes it on the last step; the next visit starts a new one.
+ */
+export const runSheetSession = sqliteTable("run_sheet_session", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  /** "weekly" (the Live day pass comes later). */
+  sheet: text("sheet").notNull(),
+  startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at"),
+});
+
+/**
+ * The session log: every action the owner took in a session, in order. A
+ * "pass" entry marks a step the owner moved on from (✓ in the rail).
+ */
+export const runSheetLog = sqliteTable("run_sheet_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => runSheetSession.id),
+  at: text("at").notNull(),
+  /** Run sheet step key, e.g. "source-health". */
+  step: text("step").notNull(),
+  /** e.g. "pass", "acknowledge", "retry", "link". */
+  action: text("action").notNull(),
+  message: text("message").notNull(),
 });
 
 /** A competition as a source publishes it: a Championship, the Games, or a circuit event. */

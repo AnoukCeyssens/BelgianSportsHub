@@ -9,6 +9,7 @@
 // docs/agents/conventions.md, "Deploying"):
 //   - "bsh.example.com"        → the real custom domain
 //   - "REPLACE_WITH_*_D1_ID"   → ids printed by `wrangler d1 create`
+//   - "owner@example.com"      → the owner's Cloudflare Access email (OWNER_EMAIL)
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "belgian-sports-hub",
@@ -22,7 +23,8 @@
   // Static files (build/client) are served as named: the service worker precaches
   // offline.html and offline-curation.html by those exact URLs.
   "assets": { "html_handling": "none" },
-  "vars": { "APP_ENV": "dev" },
+  // OWNER_EMAIL: the one Cloudflare Access identity allowed into /curate (app/owner.ts).
+  "vars": { "APP_ENV": "dev", "OWNER_EMAIL": "owner@localhost" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -43,7 +45,7 @@
       "workers_dev": false,
       "preview_urls": false,
       "routes": [{ "pattern": "test.bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
-      "vars": { "APP_ENV": "test" },
+      "vars": { "APP_ENV": "test", "OWNER_EMAIL": "owner@example.com" }, // PLACEHOLDER owner email
       "triggers": { "crons": [] },
       "d1_databases": [
         {
@@ -65,7 +67,7 @@
       "workers_dev": false,
       "preview_urls": false,
       "routes": [{ "pattern": "bsh.example.com", "custom_domain": true }], // PLACEHOLDER domain
-      "vars": { "APP_ENV": "live" },
+      "vars": { "APP_ENV": "live", "OWNER_EMAIL": "owner@example.com" }, // PLACEHOLDER owner email
       // Daily ingest (the scheduled handler queues one job per due source) and the
       // weekly D1 export to R2 under backups/, last 12 kept (app/backup/weekly-backup.ts).
       "triggers": { "crons": ["0 4 * * *", "0 3 * * 1"] },
