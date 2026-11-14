@@ -162,6 +162,8 @@ export default function Games({ loaderData }: Route.ComponentProps) {
       {owner && (shown === "standards" || shown === "qualification") ? (
         <p className="sub">
           <Link to={`/curate/games/${games.id}/standards`}>Record standards</Link>
+          {" · "}
+          <Link to={`/curate/games/${games.id}/qualification`}>Edit qualification</Link>
         </p>
       ) : null}
       <References games={references} />

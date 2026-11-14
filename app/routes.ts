@@ -20,6 +20,8 @@ export default [
   route("curate/merge-queue", "routes/curate.merge-queue.tsx"),
   route("curate/championships/:competitionId/standards", "routes/curate.championship-standards.tsx"),
   route("curate/games/:competitionId/standards", "routes/curate.championship-standards.tsx", { id: "games-standards" }),
+  route("curate/championships/:competitionId/qualification", "routes/curate.qualification.tsx"),
+  route("curate/games/:competitionId/qualification", "routes/curate.qualification.tsx", { id: "games-qualification" }),
   route("curate/athletes/:entryId/status", "routes/curate.entry-status.tsx"),
   route("curate/teams/:entryId/status", "routes/curate.entry-status.tsx", { id: "team-status" }),
 ] satisfies RouteConfig;
