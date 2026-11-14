@@ -10,6 +10,10 @@
 // 2. outdoor competitions running now or starting within two weeks: one
 //    request; for each European or world event among them, its Belgian entries
 //    as the entry list behind Upcoming.
+// 3. once a week, after Monday's issue (the first run after Monday noon UTC):
+//    the world rankings, Belgians only, per senior category (WORLDRANKINGS
+//    with Country=BEL): one ranking snapshot per known archer, and per team
+//    category one for Belgium's default Team (ticket #33).
 // Senior recurve and compound only (the Olympic and LA28 divisions); para,
 // youth and masters categories are left out. The API gives no date of birth,
 // so a Belgian not yet known by World Archery ID waits in the merge queue.
@@ -110,6 +114,7 @@ export const worldArchery: SourceAdapter = {
     await results(run, from, today);
     await teamResults(run, from, today);
     await entryLists(run, today);
+    if (rankingsIssuedSince(run)) await worldRankings(run);
   },
 };
 
@@ -229,4 +234,55 @@ function person(a: WaAthlete): Person {
     nationality: a.NOC,
     ifId: { scheme: SCHEME, value: String(a.Id) },
   };
+}
+
+type Ranked = {
+  Rnk: number;
+  Cat: string;
+  Points: number | null;
+  RnkDtIssued: string;
+  Athlete?: { Id: string; FName: string; GName: string; WNameOrd: boolean; NOC: string };
+  Team?: { NOC: string };
+};
+
+/** World rankings are issued on Mondays: fetch them on the first run after Monday noon (UTC), or on the first run ever. */
+function rankingsIssuedSince(run: SourceRun): boolean {
+  if (!run.since) return true;
+  const day = run.now.getUTCDay();
+  const monday = new Date(Date.UTC(run.now.getUTCFullYear(), run.now.getUTCMonth(), run.now.getUTCDate() - ((day + 6) % 7), 12));
+  return run.since < monday && run.now >= monday;
+}
+
+async function worldRankings(run: SourceRun) {
+  for (const [cat, event] of Object.entries(EVENT_BY_CATEGORY)) {
+    const fetched = await run.fetch(`${API}/WORLDRANKINGS/?CatCode=${cat}&Country=BEL&RBP=All`);
+    for (const r of (JSON.parse(fetched.text) as { items: Ranked[] }).items) {
+      if (!r.Athlete || r.Athlete.NOC !== "BEL") continue;
+      await run.rows.ranking({
+        ranking: `World Archery world ranking · ${event}`,
+        sport: SPORT,
+        asOf: r.RnkDtIssued,
+        position: r.Rnk,
+        points: r.Points === null ? null : String(r.Points),
+        person: person(r.Athlete),
+        rawCopyId: fetched.rawCopyId,
+      });
+    }
+  }
+  for (const [cat, event] of Object.entries(TEAM_EVENT_BY_CATEGORY)) {
+    const fetched = await run.fetch(`${API}/WORLDRANKINGS/?CatCode=${cat}&Country=BEL&Team=true&RBP=All`);
+    for (const r of (JSON.parse(fetched.text) as { items: Ranked[] }).items) {
+      if (r.Team?.NOC !== "BEL") continue;
+      const teamId = await run.rows.team({ sport: SPORT, event, members: null, rawCopyId: fetched.rawCopyId });
+      await run.rows.ranking({
+        ranking: `World Archery world ranking · ${event}`,
+        sport: SPORT,
+        asOf: r.RnkDtIssued,
+        position: r.Rnk,
+        points: r.Points === null ? null : String(r.Points),
+        teamId,
+        rawCopyId: fetched.rawCopyId,
+      });
+    }
+  }
 }

@@ -14,6 +14,26 @@ import julyCompetitions from "./competitions-from-2026-07-01.json?raw";
 import julyCompetitionsMeta from "./competitions-from-2026-07-01.json.meta.json";
 import madridEntries from "./madrid-entries-bel.json?raw";
 import madridEntriesMeta from "./madrid-entries-bel.json.meta.json";
+import rankingsRM from "./rankings-RM.json?raw";
+import rankingsRMMeta from "./rankings-RM.json.meta.json";
+import rankingsRW from "./rankings-RW.json?raw";
+import rankingsRWMeta from "./rankings-RW.json.meta.json";
+import rankingsCM from "./rankings-CM.json?raw";
+import rankingsCMMeta from "./rankings-CM.json.meta.json";
+import rankingsCW from "./rankings-CW.json?raw";
+import rankingsCWMeta from "./rankings-CW.json.meta.json";
+import teamRankingsRM from "./team-rankings-RM.json?raw";
+import teamRankingsRMMeta from "./team-rankings-RM.json.meta.json";
+import teamRankingsRW from "./team-rankings-RW.json?raw";
+import teamRankingsRWMeta from "./team-rankings-RW.json.meta.json";
+import teamRankingsCM from "./team-rankings-CM.json?raw";
+import teamRankingsCMMeta from "./team-rankings-CM.json.meta.json";
+import teamRankingsCW from "./team-rankings-CW.json?raw";
+import teamRankingsCWMeta from "./team-rankings-CW.json.meta.json";
+import teamRankingsRX from "./team-rankings-RX.json?raw";
+import teamRankingsRXMeta from "./team-rankings-RX.json.meta.json";
+import teamRankingsCX from "./team-rankings-CX.json?raw";
+import teamRankingsCXMeta from "./team-rankings-CX.json.meta.json";
 
 /**
  * The first run, on 14 Nov 2026 (no earlier success, so one year back):
@@ -25,12 +45,26 @@ import madridEntriesMeta from "./madrid-entries-bel.json.meta.json";
  *   men 11th at the European Championships and three World Cup stages, plus
  *   U18/U21 and "Other International Event" rows;
  * - outdoor competitions from 14 to 28 Nov: national events and the Asia Cup
- *   in Hangzhou, none a European or world event, so no entry list is fetched.
+ *   in Hangzhou, none a European or world event, so no entry list is fetched;
+ * - the world rankings issued 9 Nov 2026, Belgians only (ticket #33): recurve
+ *   men (Jarno De Smedt 53rd, 89.75 pts, …), recurve women, compound men
+ *   (Julien Fraipont 64th, …) and women; Belgium's teams 22nd (recurve men),
+ *   43rd (compound men) and 65th (recurve mixed), none in the other three.
  */
 export const archeryFirstRun: RecordedResponse[] = [
   { ...firstRunResultsMeta, body: firstRunResults },
   { ...firstRunTeamResultsMeta, body: firstRunTeamResults },
   { ...novemberCompetitionsMeta, body: novemberCompetitions },
+  { ...rankingsRMMeta, body: rankingsRM },
+  { ...rankingsRWMeta, body: rankingsRW },
+  { ...rankingsCMMeta, body: rankingsCM },
+  { ...rankingsCWMeta, body: rankingsCW },
+  { ...teamRankingsRMMeta, body: teamRankingsRM },
+  { ...teamRankingsRWMeta, body: teamRankingsRW },
+  { ...teamRankingsCMMeta, body: teamRankingsCM },
+  { ...teamRankingsCWMeta, body: teamRankingsCW },
+  { ...teamRankingsRXMeta, body: teamRankingsRX },
+  { ...teamRankingsCXMeta, body: teamRankingsCX },
 ];
 export const ARCHERY_FIRST_RUN = { now: "2026-11-14T04:00:00.000Z" };
 

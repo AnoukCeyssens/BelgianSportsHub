@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb, schema } from "~/db/client";
 import { FIS_ALPINE_RUN, FIS_SNOWBOARD_RUN, fisAlpineRun, fisSnowboardRun } from "../fixtures/sources/fis-points-lists";
+import { ARCHERY_FIRST_RUN, ARCHERY_JULY_2026_RUN, archeryFirstRun, archeryJuly2026Run } from "../fixtures/sources/world-archery";
 import { ISU_TEAM_PURSUIT_RUN, ISU_WORLD_CUP_1_RUN, isuTeamPursuitRun, isuWorldCup1Run } from "../fixtures/sources/isu-speed-skating";
 import { fixClock } from "../support/clock";
 import { stubOutboundFetch } from "../support/outbound-fetch";
@@ -385,5 +386,40 @@ describe("Rankings ingest (FIS points lists)", () => {
     const rankings = (await snapshots()).map((s) => `${s.ranking} #${s.position} (${s.points}) ${s.asOf}`);
     expect(rankings.length).toBeGreaterThan(0);
     expect(rankings.every((r) => r.startsWith("FIS points list · ") && r.endsWith(" 2026-11-05"))).toBe(true);
+  });
+});
+
+describe("Rankings ingest (World Archery world rankings)", () => {
+  beforeEach(async () => {
+    await clearIngestedData(env);
+  });
+
+  it("stores the week's world ranking of each known Belgian archer and of Belgium's teams", async () => {
+    await seedAthlete(env.DB, { name: "Jarno De Smedt", sport: "Archery", externalIds: [{ scheme: "world-archery", value: "20515" }] });
+    await seedAthlete(env.DB, { name: "Julien Fraipont", sport: "Archery", externalIds: [{ scheme: "world-archery", value: "6827" }] });
+    await setSource(env.DB, "world-archery", { lastSuccessAt: null, blockedAt: null, blockedReason: null });
+    fixClock(ARCHERY_FIRST_RUN.now);
+    stubOutboundFetch(archeryFirstRun);
+
+    await deliverIngestJobs([{ kind: "fetch-source", source: "world-archery" }]);
+
+    expect((await snapshots()).map(({ who, ranking, position, points, asOf }) => `${who}: ${ranking} #${position} (${points}) ${asOf}`)).toEqual([
+      "Julien Fraipont: World Archery world ranking · Compound Men #64 (71) 2026-11-09",
+      "Belgium · Compound Men Team: World Archery world ranking · Compound Men Team #43 (48) 2026-11-09",
+      "Jarno De Smedt: World Archery world ranking · Recurve Men #53 (89.75) 2026-11-09",
+      "Belgium · Recurve Men Team: World Archery world ranking · Recurve Men Team #22 (111.5) 2026-11-09",
+      "Belgium · Recurve Mixed Team: World Archery world ranking · Recurve Mixed Team #65 (34) 2026-11-09",
+    ]);
+  });
+
+  it("reads the rankings once a week: a Wednesday run after Tuesday's fetches none", async () => {
+    await setSource(env.DB, "world-archery", { lastSuccessAt: ARCHERY_JULY_2026_RUN.lastSuccessAt, blockedAt: null, blockedReason: null });
+    fixClock(ARCHERY_JULY_2026_RUN.now);
+    stubOutboundFetch(archeryJuly2026Run);
+
+    const result = await deliverIngestJobs([{ kind: "fetch-source", source: "world-archery" }]);
+
+    expect(result.explicitAcks).toEqual(["msg-1"]);
+    expect(await snapshots()).toEqual([]);
   });
 });
