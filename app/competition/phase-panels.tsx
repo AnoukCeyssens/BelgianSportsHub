@@ -1,6 +1,7 @@
 import type { Db } from "~/db/client";
 import { belgianDate, PHASE_LABELS, standardsForSports, type Phase } from "~/domain";
 import { formatDate } from "~/format";
+import { LiveDayPanel, loadLiveDay, type LiveDayView } from "./live-panel";
 import type { CompetitionRow } from "./phase-inputs";
 
 // What each Phase shows on a competition page (spec #20, stories 43–48;
@@ -26,7 +27,7 @@ export type PhasePanelData =
   | { phase: "standards"; standards: PublishedStandards }
   | { phase: "qualification"; standards: PublishedStandards }
   | { phase: "selection" }
-  | { phase: "live" }
+  | { phase: "live"; day: LiveDayView | null }
   | { phase: "after" };
 
 /** A Games' sports and the chosen chips; none chosen means All sports. A Championship has none. */
@@ -34,19 +35,22 @@ export type SportChips = { sports: readonly string[]; chosen: readonly string[] 
 
 const NO_CHIPS: SportChips = { sports: [], chosen: [] };
 
+/** `day` is the Live day asked for (`?day=`), venue-local YYYY-MM-DD. */
 export async function loadPhasePanel(
-  _db: Db,
+  db: Db,
   competition: CompetitionRow,
   phase: Phase,
   now: Date,
   chips: SportChips = NO_CHIPS,
+  day: string | null = null,
 ): Promise<PhasePanelData> {
   switch (phase) {
     case "standards":
     case "qualification":
       return { phase, standards: standardsOf(competition, now, chips) };
-    case "selection":
     case "live":
+      return { phase, day: await loadLiveDay(db, competition, now, chips.chosen, day) };
+    case "selection":
     case "after":
       return { phase };
   }
@@ -66,7 +70,8 @@ function standardsOf(c: CompetitionRow, now: Date, chips: SportChips): Published
     : { expectedOn: c.standardsExpectedOn, publishedOn: null, url: null, lines: [] };
 }
 
-export function PhasePanel({ data }: { data: PhasePanelData }) {
+/** `dayHref` links a Live day (`?day=`), keeping the page's other choices. */
+export function PhasePanel({ data, dayHref }: { data: PhasePanelData; dayHref: (date: string) => string }) {
   return (
     <section className="phase" aria-label={PHASE_LABELS[data.phase]}>
       {data.phase === "standards" ? <Standards standards={data.standards} /> : null}
@@ -82,7 +87,7 @@ export function PhasePanel({ data }: { data: PhasePanelData }) {
         </>
       ) : null}
       {data.phase === "selection" ? <p className="sub">No Selection recorded yet.</p> : null}
-      {data.phase === "live" ? <p className="sub">No Sessions recorded yet.</p> : null}
+      {data.phase === "live" ? data.day ? <LiveDayPanel view={data.day} dayHref={dayHref} /> : <p className="sub">No Sessions recorded yet.</p> : null}
       {data.phase === "after" ? <p className="sub">No outcomes compared yet.</p> : null}
     </section>
   );

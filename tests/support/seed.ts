@@ -99,6 +99,15 @@ export async function seedCompetition(d1: D1Database, c: CompetitionSeed): Promi
   return row.id;
 }
 
+/** A Team as an import or the owner would have created it (no results). */
+export async function seedTeam(d1: D1Database, t: { name: string; sport: string; event: string; kind?: "default" | "partnership" }): Promise<string> {
+  const [row] = await getDb(d1)
+    .insert(schema.team)
+    .values({ key: `${t.sport}:${t.event}:${crypto.randomUUID()}`, name: t.name, sport: t.sport, event: t.event, kind: t.kind ?? "default" })
+    .returning({ id: schema.team.id });
+  return row.id;
+}
+
 /** Names an Athlete on a competition's entry list. */
 export async function seedEntrant(d1: D1Database, competitionId: string, athleteId: string) {
   const db = getDb(d1);
@@ -166,6 +175,10 @@ export async function seedParticipationCuration(
 export async function clearIngestedData(env: Pick<Env, "DB" | "RAW">) {
   const db = getDb(env.DB);
   for (const table of [
+    schema.sessionRound,
+    schema.session,
+    schema.timetableVersion,
+    schema.entry,
     schema.participationCuration,
     schema.gamesSportWindow,
     schema.entrant,

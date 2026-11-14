@@ -390,3 +390,96 @@ export const participationCuration = sqliteTable("participation_curation", {
   /** ISO instant of the owner's last check. */
   checkedAt: text("checked_at").notNull(),
 });
+
+/**
+ * An Entry (GLOSSARY "Entry", ADR 0001): an Athlete or a Team competing for
+ * Belgium in one event at one competition. Named by the owner per event when
+ * storing a timetable in the Schedules step (ticket #37); Selection (#34)
+ * adds its status. Exactly one of `athleteId` / `teamId` is set.
+ */
+export const entry = sqliteTable(
+  "entry",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    competitionId: text("competition_id")
+      .notNull()
+      .references(() => competition.id, { onDelete: "cascade" }),
+    sport: text("sport").notNull(),
+    /** Event as the timetable names it, e.g. "Women's 500 m". */
+    event: text("event").notNull(),
+    athleteId: text("athlete_id").references(() => athlete.id),
+    /** Set instead of `athleteId` for a multi-athlete Entry (a Team, #27). */
+    teamId: text("team_id").references(() => team.id),
+    /** The round the Entry starts in after a bye; null when it starts in the event's first round. */
+    firstRound: text("first_round"),
+    /** Where the owner read the Entry (the timetable version's source), and the Belgian date of the last check. */
+    sourceUrl: text("source_url"),
+    checkedOn: text("checked_on").notNull(),
+  },
+  (t) => [
+    uniqueIndex("entry_athlete").on(t.competitionId, t.event, t.athleteId),
+    uniqueIndex("entry_team").on(t.competitionId, t.event, t.teamId),
+  ],
+);
+
+/**
+ * One version of a competition's timetable (spec #20, story 61), as pasted
+ * (or fetched, #39). Storing a new version replaces the previous version's
+ * Sessions; the version rows stay as the history of changes.
+ */
+export const timetableVersion = sqliteTable("timetable_version", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  competitionId: text("competition_id")
+    .notNull()
+    .references(() => competition.id, { onDelete: "cascade" }),
+  /** The organiser's version stamp, e.g. "v4.1". */
+  version: text("version").notNull(),
+  /** YYYY-MM-DD the organiser published it, when known. */
+  publishedOn: text("published_on"),
+  /** Where it was published, when known (a pasted PDF's URL). */
+  sourceUrl: text("source_url"),
+  /** Role per lower-cased header, reused for the next version (and for other competitions from the same source). */
+  columnMapping: text("column_mapping", { mode: "json" }).$type<Record<string, string>>(),
+  /** ISO instant the owner stored it. */
+  storedAt: text("stored_at").notNull(),
+  rawCopyId: text("raw_copy_id")
+    .notNull()
+    .references(() => rawCopy.id),
+});
+
+/**
+ * A Session (GLOSSARY "Session"): a timed block of a competition's schedule
+ * with one or more event rounds. Times are venue-local wall-clock times plus
+ * the venue's IANA zone. Only Sessions with a round of an event with a
+ * Belgian Entry are kept (spec #20, story 63).
+ */
+export const session = sqliteTable("session", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  competitionId: text("competition_id")
+    .notNull()
+    .references(() => competition.id, { onDelete: "cascade" }),
+  timetableVersionId: text("timetable_version_id")
+    .notNull()
+    .references(() => timetableVersion.id),
+  /** The organiser's code (LA28 "ATH02"); null when the timetable has no blocks. */
+  code: text("code"),
+  sport: text("sport").notNull(),
+  /** YYYY-MM-DD, venue-local. */
+  date: text("date").notNull(),
+  /** "YYYY-MM-DDTHH:mm", venue-local; null when no time is published. */
+  startsAt: text("starts_at"),
+  endsAt: text("ends_at"),
+  /** IANA zone of the venue. */
+  venueZone: text("venue_zone").notNull(),
+});
+
+/** An event round in a Session, in the order the timetable lists it. */
+export const sessionRound = sqliteTable("session_round", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => session.id, { onDelete: "cascade" }),
+  event: text("event").notNull(),
+  round: text("round").notNull(),
+  position: integer("position").notNull(),
+});

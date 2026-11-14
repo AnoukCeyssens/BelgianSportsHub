@@ -48,7 +48,7 @@ function offsetMs(epochMs: number, zone: string): number {
 }
 
 /** "YYYY-MM-DDTHH:mm" as read on a clock in `zone`. */
-function wallClockIn(instant: Date, zone: string): string {
+export function wallClockIn(instant: Date, zone: string): string {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat("en-GB", {
       timeZone: zone,

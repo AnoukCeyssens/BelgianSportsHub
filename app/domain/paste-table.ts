@@ -60,14 +60,22 @@ function guessColumnRole(header: string): PasteColumnRole {
   return GUESSES.find(([pattern]) => pattern.test(h))?.[1] ?? "ignore";
 }
 
-/** Each column's role: from the source's saved mapping where it knows the header, guessed otherwise. */
-export function columnMapping(head: readonly string[], saved: SavedColumnMapping | null): { roles: PasteColumnRole[]; fromSaved: boolean } {
-  const roles = head.map((h) => saved?.[h.trim().toLowerCase()] ?? guessColumnRole(h));
+/**
+ * Each column's role: from the source's saved mapping where it knows the
+ * header, guessed otherwise. Results tables by default; other kinds of table
+ * (timetables, #37) pass their own guess.
+ */
+export function columnMapping<Role extends string = PasteColumnRole>(
+  head: readonly string[],
+  saved: Partial<Record<string, Role>> | null,
+  guess: (header: string) => Role = guessColumnRole as (header: string) => Role,
+): { roles: Role[]; fromSaved: boolean } {
+  const roles = head.map((h) => saved?.[h.trim().toLowerCase()] ?? guess(h));
   return { roles, fromSaved: saved !== null && head.every((h) => h.trim().toLowerCase() in saved) };
 }
 
 /** The mapping to save for a source: role per header. */
-export function mappingToSave(head: readonly string[], roles: readonly PasteColumnRole[]): SavedColumnMapping {
+export function mappingToSave<Role extends string = PasteColumnRole>(head: readonly string[], roles: readonly Role[]): Record<string, Role | "ignore"> {
   return Object.fromEntries(head.map((h, i) => [h.trim().toLowerCase(), roles[i] ?? "ignore"]));
 }
 

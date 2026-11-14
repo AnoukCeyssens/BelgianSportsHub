@@ -4,18 +4,19 @@
 // - standards published: the owner's record on `competition` (ticket #31);
 // - first Selected Entry: null until Selections exist; #34 fills it with the
 //   Belgian date of the earliest Selection naming an Entry;
-// - first Session start: null until Sessions exist; #37 fills it with the
-//   earliest Session's venue-local start (midnight venue time on day one is
-//   the rule's fallback, so no Session is needed for Live).
+// - first Session start: the earliest timed Session's venue-local start
+//   (#37), per competition and, at the Games, per sport; null without one
+//   (midnight venue time on day one is the rule's fallback).
 // Add an input here (one batched query per input), never in a page.
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, min } from "drizzle-orm";
 import { type Db, schema } from "~/db/client";
 import { combinedPhaseInputs, currentPhase, type Phase, type PhaseInputs } from "~/domain";
 
 export type CompetitionRow = typeof schema.competition.$inferSelect;
 
 /** The phase inputs of each competition, by id. */
-export async function phaseInputsFor(_db: Db, competitions: readonly CompetitionRow[]): Promise<Map<string, PhaseInputs>> {
+export async function phaseInputsFor(db: Db, competitions: readonly CompetitionRow[]): Promise<Map<string, PhaseInputs>> {
+  const firstSessions = await firstSessionStarts(db, competitions.map((c) => c.id));
   return new Map(
     competitions.map((c) => [
       c.id,
@@ -25,10 +26,21 @@ export async function phaseInputsFor(_db: Db, competitions: readonly Competition
         venueZone: c.venueZone,
         standardsPublishedOn: c.standardsPublishedOn,
         firstSelectedOn: null,
-        firstSessionStart: null,
+        firstSessionStart: firstSessions.get(c.id) ?? null,
       },
     ]),
   );
+}
+
+/** The earliest timed Session's venue-local start, by competition id (or by "<competition id>:<sport>"). */
+async function firstSessionStarts(db: Db, ids: readonly string[], bySport = false): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const s = schema.session;
+  const where = and(inArray(s.competitionId, [...ids]), isNotNull(s.startsAt));
+  const rows = bySport
+    ? await db.select({ competitionId: s.competitionId, sport: s.sport, first: min(s.startsAt) }).from(s).where(where).groupBy(s.competitionId, s.sport)
+    : await db.select({ competitionId: s.competitionId, sport: s.competitionId, first: min(s.startsAt) }).from(s).where(where).groupBy(s.competitionId);
+  return new Map(rows.filter((r) => r.first !== null).map((r) => [bySport ? `${r.competitionId}:${r.sport}` : r.competitionId, r.first!]));
 }
 
 /** The current phase of each competition with the given ids, by id. */
@@ -43,21 +55,30 @@ export type GamesSport = { sport: string; firstDay: string; lastDay: string; inp
 
 /**
  * A Games' phase inputs (ticket #35): one set per sport (that sport's first
- * and last day from `games_sport_window`; #34 and #37 add its own first
- * Selection and first Session) and the Games as a whole, which combines its
- * own dates with every sport's (Live at the first day or Session in any
- * sport). Sports in alphabetical order.
+ * and last day from `games_sport_window` and its own first Session, #37; #34
+ * adds its own first Selection) and the Games as a whole, which combines its
+ * own dates and Sessions with every sport's (Live at the first day or Session
+ * in any sport). Sports in alphabetical order.
  */
 export async function gamesPhaseInputs(db: Db, games: CompetitionRow): Promise<{ whole: PhaseInputs; sports: GamesSport[] }> {
   const own = (await phaseInputsFor(db, [games])).get(games.id)!;
   const w = schema.gamesSportWindow;
-  const windows = await db.select().from(w).where(eq(w.competitionId, games.id)).orderBy(asc(w.sport));
+  const [windows, firstSessions] = await Promise.all([
+    db.select().from(w).where(eq(w.competitionId, games.id)).orderBy(asc(w.sport)),
+    firstSessionStarts(db, [games.id], true),
+  ]);
   const sports = windows.map((s) => ({
     sport: s.sport,
     firstDay: s.firstDay,
     lastDay: s.lastDay,
-    // The Games' standards and venue; the sport's own days. Its own first Selection (#34) and first Session (#37) go here.
-    inputs: { ...own, startDate: s.firstDay, endDate: s.lastDay, firstSelectedOn: null, firstSessionStart: null },
+    // The Games' standards and venue; the sport's own days and first Session. Its own first Selection (#34) goes here.
+    inputs: {
+      ...own,
+      startDate: s.firstDay,
+      endDate: s.lastDay,
+      firstSelectedOn: null,
+      firstSessionStart: firstSessions.get(`${games.id}:${s.sport}`) ?? null,
+    },
   }));
   return { whole: combinedPhaseInputs([own, ...sports.map((s) => s.inputs)]), sports };
 }

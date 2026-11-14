@@ -4,6 +4,7 @@ import { MergeQueueStep, actOnMergeQueueItem, loadMergeQueue } from "~/curate/me
 import { PasteImportsStep, actOnPasteImport, loadPasteImporter, loadPasteImports } from "~/curate/paste-imports";
 import { MonthlyChecklistStep, actOnChecklist, loadMonthlyChecklist } from "~/curate/monthly-checklist";
 import { SchedulesStep, actOnSchedules, loadSchedules } from "~/curate/schedules";
+import { actOnTimetable, loadTimetableReview } from "~/curate/timetables";
 import { SelectionsLikelyStep, actOnLikely, loadSelectionsLikely } from "~/curate/selections-likely";
 import { currentSession, finishSession, logAction } from "~/curate/session";
 import { SourceHealthStep, actOnSource, loadSourceHealth } from "~/curate/source-health";
@@ -85,6 +86,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     mergeQueue: params.step === "merge-queue" ? mergeQueue : null,
     selectionsLikely: params.step === "selections-likely" ? selectionsLikely : null,
     schedules: params.step === "schedules" ? schedules : null,
+    timetableReview:
+      params.step === "schedules" ? await loadTimetableReview(context.get(cloudflareContext).env, db, new URL(request.url).searchParams) : null,
     monthlyChecklist: params.step === "monthly-checklist" ? monthlyChecklist : null,
   };
 }
@@ -116,6 +119,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   else if (step.key === "manual-results") message = await actOnManualResult(env, intent, form, at);
   else if (step.key === "merge-queue") message = await actOnMergeQueueItem(env.DB, db, intent, form);
   else if (step.key === "selections-likely") message = await actOnLikely(db, intent, form, at);
+  else if (step.key === "schedules" && intent.endsWith("-timetable")) ({ message, to } = await actOnTimetable(env, intent, form, at));
   else if (step.key === "schedules") message = await actOnSchedules(env, intent, form, at);
   else if (step.key === "monthly-checklist") message = await actOnChecklist(db, intent, form, at);
   else throw new Response(`Unknown action ${intent}`, { status: 400 });
@@ -136,6 +140,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
     mergeQueue,
     selectionsLikely,
     schedules,
+    timetableReview,
     monthlyChecklist,
   } = loaderData;
   const total = progress.steps.length;
@@ -171,7 +176,7 @@ export default function RunSheet({ loaderData }: Route.ComponentProps) {
         {manualResults ? <ManualResultsStep data={manualResults} /> : null}
         {mergeQueue ? <MergeQueueStep data={mergeQueue} /> : null}
         {selectionsLikely ? <SelectionsLikelyStep data={selectionsLikely} /> : null}
-        {schedules ? <SchedulesStep data={schedules} /> : null}
+        {schedules ? <SchedulesStep data={schedules} review={timetableReview} /> : null}
         {monthlyChecklist ? <MonthlyChecklistStep data={monthlyChecklist} /> : null}
         {step.open === 0 ? <p className="donebox">✓ Nothing left in this step.</p> : null}
         <Form method="post" className="foot">

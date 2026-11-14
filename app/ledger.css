@@ -114,6 +114,16 @@ td.when { width: 96px; white-space: nowrap; }
 .phases .now { display: block; font-size: 9px; font-weight: 400; color: var(--gold); }
 .phases a.on .now { color: var(--accent); }
 .phase { margin-top: 10px; }
+/* Live day picker and day view (#37): marked days carry a red dot; later rounds are greyed "if through". */
+.days { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; margin: 8px 0 4px; }
+.days .day { display: inline-block; text-align: center; padding: 4px 7px; border: 1px solid var(--ink); margin: 0 3px 4px 0; text-decoration: none; color: var(--ink); font-size: 11px; min-width: 42px; }
+.days .day b { display: block; font-size: 12px; }
+.days .day.on { background: var(--ink); color: var(--paper); }
+.days .day.has::after { content: "•"; display: block; line-height: 0.6; color: #b3261e; }
+tr.if-through td { color: #999; }
+tr.if-through td a { color: #999; }
+.timetable-event { border: 0; border-top: 1px solid var(--rule-soft); padding: 6px 0; margin: 0; }
+.timetable-event .entry-pick { display: block; font-size: 14px; margin: 3px 0; }
 .standards { margin: 6px 0; padding-left: 18px; }
 .standards li { padding: 2px 0; }
 .standards-form label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0; }
